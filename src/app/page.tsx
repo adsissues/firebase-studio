@@ -13,7 +13,7 @@ import { useState } from 'react'; // Import useState
 import { useToast } from "@/hooks/use-toast"; // Import useToast
 import { QueryClient, QueryClientProvider, useQuery, useMutation } from '@tanstack/react-query';
 import { db } from '@/lib/firebase/firebase'; // Import Firestore instance
-import { collection, getDocs, addDoc, updateDoc, doc, increment, query, where, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, doc, increment } from 'firebase/firestore'; // Removed unused imports
 import { Skeleton } from '@/components/ui/skeleton'; // Import Skeleton for loading state
 
 // Create a client
@@ -24,33 +24,60 @@ function StockManagementPage() {
   const { toast } = useToast(); // Initialize toast
 
   // Fetch stock items from Firestore using React Query
-  const { data: stockItems = [], isLoading: isLoadingItems, error: fetchError } = useQuery<StockItem[]>({
+  const { data: stockItems = [], isLoading: isLoadingItems, error: fetchError, refetch } = useQuery<StockItem[]>({ // Destructure refetch
     queryKey: ['stockItems'],
     queryFn: async () => {
-      const itemsCol = collection(db, 'stockItems');
-      const itemSnapshot = await getDocs(itemsCol);
-      const itemsList = itemSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      } as StockItem));
-      // Ensure numeric types are correctly parsed if necessary (Firestore might store as number)
-       return itemsList.map(item => ({
-          ...item,
-          currentStock: Number(item.currentStock) || 0,
-          minStock: Number(item.minStock) || 0,
-       }));
+      console.log("Fetching stock items from Firestore..."); // Log fetch start
+      try {
+          const itemsCol = collection(db, 'stockItems');
+          const itemSnapshot = await getDocs(itemsCol);
+          const itemsList = itemSnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data(),
+          } as StockItem));
+          console.log(`Fetched ${itemsList.length} items.`); // Log fetch success
+          // Ensure numeric types and handle potential undefined/nulls robustly
+          return itemsList.map(item => ({
+              ...item,
+              currentStock: Number(item.currentStock) || 0,
+              minStock: Number(item.minStock) || 0,
+              // Ensure optional fields are present or undefined
+              barcode: item.barcode || undefined,
+              location: item.location || undefined,
+              description: item.description || undefined,
+              category: item.category || undefined,
+              supplier: item.supplier || undefined,
+              photoUrl: item.photoUrl || undefined,
+              locationCoords: item.locationCoords || undefined,
+          }));
+      } catch (err) {
+          console.error("Error fetching stock items:", err); // Log fetch error
+          throw err; // Re-throw error for React Query to handle
+      }
     },
   });
 
    // Mutation for adding a new item
    const addItemMutation = useMutation({
      mutationFn: async (newItemData: Omit<StockItem, 'id'>) => {
+       console.log("Adding new item to Firestore:", newItemData); // Log add start
        const itemsCol = collection(db, 'stockItems');
-       const docRef = await addDoc(itemsCol, newItemData);
+       // Remove undefined fields before sending to Firestore
+       const cleanData = Object.entries(newItemData).reduce((acc, [key, value]) => {
+            if (value !== undefined) {
+              acc[key as keyof typeof acc] = value;
+            }
+            return acc;
+          }, {} as Omit<StockItem, 'id'>);
+
+       const docRef = await addDoc(itemsCol, cleanData);
+       console.log("Item added with ID:", docRef.id); // Log add success
        return { id: docRef.id, ...newItemData }; // Return the new item with its ID
      },
      onSuccess: (newItem) => {
        queryClient.invalidateQueries({ queryKey: ['stockItems'] }); // Refetch items after adding
+       // Refetch explicitly after invalidation might be needed in some caching scenarios
+       // refetch();
        toast({
          variant: "default",
          title: "Item Added",
@@ -58,7 +85,7 @@ function StockManagementPage() {
        });
      },
      onError: (error) => {
-        console.error("Error adding item:", error);
+        console.error("Error adding item:", error); // Log add error
         toast({
            variant: "destructive",
            title: "Error Adding Item",
@@ -70,15 +97,18 @@ function StockManagementPage() {
    // Mutation for updating stock (stock out)
     const stockOutMutation = useMutation({
         mutationFn: async (data: StockOutFormData) => {
+             console.log("Processing stock out for item:", data.itemId, "Quantity:", data.quantity); // Log stock out start
             const itemDocRef = doc(db, 'stockItems', data.itemId);
             // Use Firestore transaction or batched write if more complex logic needed
             await updateDoc(itemDocRef, {
                 currentStock: increment(-data.quantity) // Atomically decrease stock
             });
+            console.log("Stock updated successfully for item:", data.itemId); // Log stock out success
             return data; // Return original data for onSuccess context
         },
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ['stockItems'] }); // Refetch items
+            // refetch();
             const updatedItem = stockItems.find(item => item.id === data.itemId); // Get item name for toast
             toast({
                 variant: "default",
@@ -87,7 +117,7 @@ function StockManagementPage() {
             });
         },
         onError: (error, data) => {
-            console.error("Error updating stock:", error);
+            console.error("Error updating stock:", error); // Log stock out error
             const updatedItem = stockItems.find(item => item.id === data.itemId);
             toast({
                 variant: "destructive",
@@ -103,34 +133,46 @@ function StockManagementPage() {
   };
 
   const handleStockOutSubmit = (data: StockOutFormData) => {
-     // Validation is now primarily handled within the StockOutForm
-     // Additional checks could be done here if needed before mutation
      stockOutMutation.mutate(data);
    };
 
   const handleAddItemSubmit = (data: AddItemFormData) => {
-      const newItemData: Omit<StockItem, 'id'> = {
-        itemName: data.itemName,
-        currentStock: data.currentStock,
-        minStock: data.minStock,
-        // Only include optional fields if they have a value
-        ...(data.barcode && { barcode: data.barcode }),
-        ...(data.location && { location: data.location }),
-      };
-      addItemMutation.mutate(newItemData);
+       // Data from form should already include optional fields correctly (or as undefined/null)
+       const newItemData: Omit<StockItem, 'id'> = {
+         itemName: data.itemName,
+         currentStock: data.currentStock,
+         minStock: data.minStock,
+         // Pass optional fields directly from form data
+         barcode: data.barcode,
+         location: data.location,
+         description: data.description,
+         category: data.category,
+         supplier: data.supplier,
+         photoUrl: data.photoUrl,
+         locationCoords: data.locationCoords,
+       };
+       addItemMutation.mutate(newItemData);
   };
 
 
-  // Filter items based on search query
-  const filteredItems = stockItems.filter((item) =>
-    item.itemName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter items based on search query (case-insensitive)
+    const filteredItems = stockItems.filter((item) => {
+        const query = searchQuery.toLowerCase();
+        return (
+            item.itemName.toLowerCase().includes(query) ||
+            (item.barcode && item.barcode.toLowerCase().includes(query)) ||
+            (item.category && item.category.toLowerCase().includes(query)) ||
+            (item.supplier && item.supplier.toLowerCase().includes(query)) ||
+            (item.location && item.location.toLowerCase().includes(query)) ||
+            (item.description && item.description.toLowerCase().includes(query))
+        );
+    });
 
   return (
     <div className="container mx-auto p-4 md:p-8">
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-primary">StockWatch</h1>
-        <p className="text-muted-foreground">Your Stock Management Dashboard</p>
+        <p className="text-muted-foreground">Your Enhanced Stock Management Dashboard</p>
       </header>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
@@ -144,15 +186,23 @@ function StockManagementPage() {
                 <ItemSearch
                     searchQuery={searchQuery}
                     onSearchChange={handleSearchChange}
+                    placeholder="Search by name, barcode, category, etc..." // Update placeholder
                   />
                 {isLoadingItems && (
                   <div className="space-y-4">
                     <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-40 w-full" />
+                    <Skeleton className="h-60 w-full" /> {/* Increased height for potentially larger table */}
                   </div>
                 )}
                 {fetchError && (
-                  <p className="text-destructive">Error loading stock items: {(fetchError as Error).message}</p>
+                   <Alert variant="destructive">
+                       <AlertTriangle className="h-4 w-4" />
+                       <AlertTitle>Error Loading Data</AlertTitle>
+                       <AlertDescription>
+                           Could not load stock items from the database. Please check your connection or try again later. ({(fetchError as Error).message})
+                           <Button variant="outline" size="sm" onClick={() => refetch()} className="ml-4">Retry</Button>
+                       </AlertDescription>
+                   </Alert>
                 )}
                 {!isLoadingItems && !fetchError && <StockDashboard items={filteredItems} />}
               </CardContent>
@@ -168,7 +218,7 @@ function StockManagementPage() {
               </TabsList>
               <TabsContent value="stock-out">
                  <Card className="shadow-md">
-                   <CardContent className="p-0 pt-6"> {/* Adjust padding */}
+                   <CardContent className="p-0 pt-0"> {/* Removed top padding */}
                      <StockOutForm
                         items={stockItems}
                         onSubmit={handleStockOutSubmit}
@@ -179,7 +229,7 @@ function StockManagementPage() {
               </TabsContent>
               <TabsContent value="add-item">
                  <Card className="shadow-md">
-                    <CardContent className="p-0 pt-6"> {/* Adjust padding */}
+                    <CardContent className="p-0 pt-0"> {/* Removed top padding */}
                       <AddItemForm
                         onSubmit={handleAddItemSubmit}
                         isLoading={addItemMutation.isPending} // Pass loading state
