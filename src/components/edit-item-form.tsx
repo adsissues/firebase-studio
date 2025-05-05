@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from 'react';
@@ -56,20 +57,24 @@ const formSchema = z.object({
 });
 
 // Type for the form data - identical to AddItemFormData essentially
-export type EditItemFormData = z.infer<typeof formSchema>;
+// Make sure this type aligns with what the mutation expects
+export type EditItemFormData = Omit<z.infer<typeof formSchema>, 'locationCoords' | 'photoUrl'> & {
+    photoUrl?: string;
+    locationCoords?: LocationCoords;
+};
+
 
 export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: EditItemFormProps) {
   const { toast } = useToast();
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const [hasCameraPermission, setHasCameraPermission] = React.useState<boolean | null>(null);
-  const [capturedPhotoUrl, setCapturedPhotoUrl] = React.useState<string | null>(item.photoUrl || null); // Initialize with existing photo
-  const [isCapturingLocation, setIsCapturingLocation] = React.useState(false);
-  const [isScanningBarcode, setIsScanningBarcode] = React.useState(false);
-  const [capturedLocation, setCapturedLocation] = React.useState<LocationCoords | null>(item.locationCoords || null); // Initialize with existing coords
+  // Initialize state with item's values, falling back to null/undefined if not present
+  const [capturedPhotoUrl, setCapturedPhotoUrl] = React.useState<string | null>(item.photoUrl || null);
+  const [capturedLocation, setCapturedLocation] = React.useState<LocationCoords | null>(item.locationCoords || null);
   const [showCameraFeed, setShowCameraFeed] = React.useState(false);
 
-  const form = useForm<EditItemFormData>({
+  const form = useForm<z.infer<typeof formSchema>>({ // Use inferred type directly for useForm
     resolver: zodResolver(formSchema),
     defaultValues: { // Populate with existing item data
       itemName: item.itemName,
@@ -80,8 +85,8 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
       description: item.description || '',
       category: item.category || '',
       supplier: item.supplier || '',
-      photoUrl: item.photoUrl || '', // Use existing URL/data URI
-      locationCoords: item.locationCoords || undefined,
+      photoUrl: item.photoUrl || '', // Use existing URL/data URI or empty string
+      locationCoords: item.locationCoords || undefined, // Use existing or undefined
     },
   });
 
@@ -166,8 +171,8 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
         try {
             const dataUrl = await captureProductPhoto(canvas);
              if (dataUrl) {
-                setCapturedPhotoUrl(dataUrl);
-                form.setValue('photoUrl', dataUrl, { shouldValidate: true });
+                setCapturedPhotoUrl(dataUrl); // Update state
+                form.setValue('photoUrl', dataUrl, { shouldValidate: true }); // Update form value
                 toast({ title: "Photo Captured" });
                 setShowCameraFeed(false);
              } else {
@@ -186,8 +191,8 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
     setIsCapturingLocation(true);
     try {
       const location = await getCurrentLocation();
-      setCapturedLocation(location);
-      form.setValue('locationCoords', location, { shouldValidate: true });
+      setCapturedLocation(location); // Update state
+      form.setValue('locationCoords', location, { shouldValidate: true }); // Update form value
       toast({ title: "Location Updated", description: `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` });
     } catch (error: any) {
       console.error("Location fetch error:", error);
@@ -196,7 +201,8 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
          title: "Location Error",
          description: error.message || "Could not fetch location.",
        });
-       setCapturedLocation(item.locationCoords || null); // Revert to original if fetch fails
+       // Revert state and form value to original if fetch fails
+       setCapturedLocation(item.locationCoords || null);
        form.setValue('locationCoords', item.locationCoords || undefined);
     } finally {
       setIsCapturingLocation(false);
@@ -205,14 +211,26 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
 
   // --- Form Submission ---
 
-  function handleFormSubmit(values: EditItemFormData) {
-    console.log("Updating Item:", values);
-     // Prepare data, using captured state values for photo and location if they exist
+  function handleFormSubmit(values: z.infer<typeof formSchema>) {
+    console.log("Updating Item (Raw Form Values):", values);
+     // Prepare data, using captured state values for photo and location
+     // Ensure optional fields are explicitly set to undefined if empty/falsy
      const submitData: EditItemFormData = {
-       ...values,
-       photoUrl: capturedPhotoUrl || undefined, // Use newly captured or existing photo URL
-       locationCoords: capturedLocation || undefined, // Use newly captured or existing coords
+       itemName: values.itemName,
+       currentStock: values.currentStock ?? 0,
+       minStock: values.minStock ?? 0,
+       // Set to undefined if falsy (empty string, null, etc.)
+       barcode: values.barcode || undefined,
+       location: values.location || undefined,
+       description: values.description || undefined,
+       category: values.category || undefined,
+       supplier: values.supplier || undefined,
+       // Use state values, ensuring they are null/undefined correctly
+       photoUrl: capturedPhotoUrl || undefined,
+       locationCoords: capturedLocation || undefined,
      };
+     console.log("Data Submitted:", submitData);
+     // Pass only the form data fields to the onSubmit handler
     onSubmit(submitData);
     // Don't reset form here, parent component closes dialog on success
   }
@@ -463,3 +481,4 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
     </Form>
   );
 }
+

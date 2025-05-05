@@ -80,10 +80,13 @@ function StockManagementPageContent() { // Renamed original component
               ...doc.data(),
           } as StockItem));
           console.log(`Fetched ${itemsList.length} items.`);
+          // Ensure numbers are parsed correctly and optional fields are handled
           return itemsList.map(item => ({
               ...item,
-              currentStock: Number(item.currentStock) || 0,
-              minStock: Number(item.minStock) || 0,
+              currentStock: Number(item.currentStock ?? 0),
+              minStock: Number(item.minStock ?? 0),
+              // Ensure other fields default correctly if missing from Firestore
+              itemName: item.itemName || 'Unknown Item',
               barcode: item.barcode || undefined,
               location: item.location || undefined,
               description: item.description || undefined,
@@ -91,7 +94,7 @@ function StockManagementPageContent() { // Renamed original component
               supplier: item.supplier || undefined,
               photoUrl: item.photoUrl || undefined,
               locationCoords: item.locationCoords || undefined,
-              // userId field should exist if using filtering method
+              userId: item.userId || user.uid, // Ensure userId exists
           }));
       } catch (err) {
           console.error("Error fetching stock items:", err);
@@ -104,8 +107,16 @@ function StockManagementPageContent() { // Renamed original component
               });
               // Consider signing out the user if permission denied persists
                // await signOut(auth);
+           } else if ((err as any)?.code === 'unauthenticated') {
+                toast({
+                  variant: "destructive",
+                  title: "Authentication Required",
+                  description: "Please log in to view stock items.",
+              });
+               // Optionally sign out
+               // await signOut(auth);
            }
-          throw err;
+          throw err; // Re-throw for React Query to handle
       }
     },
      enabled: !!user, // Only run query if user is authenticated
@@ -116,15 +127,16 @@ function StockManagementPageContent() { // Renamed original component
    // Mutation for adding a new item
    const addItemMutation = useMutation({
      mutationFn: async (newItemData: Omit<StockItem, 'id' | 'userId'>) => { // Exclude userId from input type
-       if (!user) throw new Error("User not authenticated"); // Guard clause
+       if (!user || !db) throw new Error("User not authenticated or DB not available"); // Guard clause
        console.log("Adding new item to Firestore:", newItemData);
        // Option 1: Subcollection
        // const itemsCol = collection(db, 'users', user.uid, 'stockItems');
        // Option 2: Root collection + userId field
        const itemsCol = collection(db, 'stockItems');
 
+       // Clean data: remove undefined fields BEFORE saving
        const cleanData = Object.entries(newItemData).reduce((acc, [key, value]) => {
-            if (value !== undefined && value !== null && value !== '') {
+            if (value !== undefined) { // Keep null and empty strings, remove only undefined
               acc[key as keyof typeof acc] = value;
             }
             return acc;
@@ -134,14 +146,15 @@ function StockManagementPageContent() { // Renamed original component
         const dataToSave = { ...cleanData, userId: user.uid };
 
 
-       const docRef = await addDoc(itemsCol, dataToSave); // Save data with userId
+       const docRef = await addDoc(itemsCol, dataToSave); // Save cleaned data with userId
        console.log("Item added with ID:", docRef.id);
-       return { id: docRef.id, ...newItemData, userId: user.uid }; // Return the new item with its ID and userId
+       // Return the full item structure as expected by onSuccess/query cache
+       return { id: docRef.id, ...newItemData, userId: user.uid };
      },
      onSuccess: (newItem) => {
         queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] }); // Use user-specific key
         toast({
-            variant: "default",
+            variant: "default", // Use default variant (often green or neutral)
             title: "Item Added",
             description: `${newItem.itemName} added to stock.`,
         });
@@ -160,7 +173,7 @@ function StockManagementPageContent() { // Renamed original component
     // Mutation for editing an existing item
     const editItemMutation = useMutation({
         mutationFn: async (itemData: StockItem) => {
-            if (!user) throw new Error("User not authenticated");
+            if (!user || !db) throw new Error("User not authenticated or DB not available");
             // Ensure the item being edited belongs to the current user (important for security if using root collection)
              if (itemData.userId !== user.uid && !isAdmin) { // Admins might be allowed to edit any item
                  throw new Error("Permission denied: You can only edit your own items.");
@@ -172,26 +185,42 @@ function StockManagementPageContent() { // Renamed original component
             // Option 2: Root collection path
              const itemDocRef = doc(db, 'stockItems', itemData.id);
 
-            const { id, ...updateData } = itemData;
-             const cleanData = Object.entries(updateData).reduce((acc, [key, value]) => {
-                 if (value !== undefined && value !== null && value !== '') {
-                    acc[key as keyof typeof acc] = value;
-                 }
-                 // Ensure userId is not accidentally removed or changed if not admin
-                  if (key === 'userId' && value !== user.uid && !isAdmin) {
-                      // Skip updating userId if it doesn't match and user is not admin
-                      console.warn("Attempted to change userId without admin rights. Skipping.");
-                  } else if (key === 'userId' && value) {
-                     acc[key as keyof typeof acc] = value; // Allow admin to change userId if needed, or keep it the same
-                  } else if (key !== 'userId') {
-                      acc[key as keyof typeof acc] = value;
-                  }
+            // Exclude id from the data payload for updateDoc
+             const { id, ...updateData } = itemData;
 
+             // **Corrected cleanData logic:** Filter out ONLY undefined values
+             const cleanData = Object.entries(updateData).reduce((acc, [key, value]) => {
+                 if (value !== undefined) { // Firestore supports null and empty strings, but not undefined
+                     if (key === 'userId') {
+                         // Special handling for userId remains the same
+                         if (isAdmin || value === user.uid) {
+                             acc[key as keyof typeof acc] = value;
+                         } else {
+                             console.warn("Attempted to change userId without admin rights or mismatch. Skipping userId update.");
+                         }
+                     } else {
+                         // Add all other keys if their value is not undefined
+                         acc[key as keyof typeof acc] = value;
+                     }
+                 }
                  return acc;
              }, {} as Partial<Omit<StockItem, 'id'>>);
 
+
+             // Ensure there are actually fields to update after cleaning
+             if (Object.keys(cleanData).length === 0) {
+                 console.log("No changes detected after cleaning data. Skipping update.");
+                 // Optionally show a toast message?
+                 // toast({ title: "No Changes", description: "No fields were modified." });
+                 return itemData; // Return original data if nothing changed
+             }
+
+             console.log("Cleaned data for update:", cleanData);
+
+             // Perform the update with the cleaned data
             await updateDoc(itemDocRef, cleanData);
             console.log("Item updated successfully:", itemData.id);
+            // Return the original itemData structure as expected by onSuccess
             return itemData;
         },
         onSuccess: (updatedItem) => {
@@ -199,25 +228,34 @@ function StockManagementPageContent() { // Renamed original component
             setIsEditDialogOpen(false);
             setItemToEdit(null);
             toast({
-                variant: "default",
+                variant: "default", // Use default variant
                 title: "Item Updated",
                 description: `${updatedItem.itemName} has been updated.`,
             });
         },
         onError: (error: any, updatedItem) => {
             console.error("Error updating item:", error);
-            toast({
-                variant: "destructive",
-                title: "Error Updating Item",
-                description: error.message || `Could not update ${updatedItem?.itemName || 'item'}. Please try again.`,
-            });
+             // Check for specific Firestore errors if needed
+             if (error.code === 'invalid-argument') {
+                 toast({
+                     variant: "destructive",
+                     title: "Invalid Data Error",
+                     description: "There was an issue with the data format provided. Please check the fields and try again. (Details: " + error.message + ")",
+                 });
+             } else {
+                toast({
+                    variant: "destructive",
+                    title: "Error Updating Item",
+                    description: error.message || `Could not update ${updatedItem?.itemName || 'item'}. Please try again.`,
+                });
+             }
         },
     });
 
     // Mutation for deleting an item
     const deleteItemMutation = useMutation({
         mutationFn: async (itemToDelete: StockItem) => { // Pass full item for permission check
-            if (!user) throw new Error("User not authenticated");
+            if (!user || !db) throw new Error("User not authenticated or DB not available");
             // Ensure the item being deleted belongs to the current user
              if (itemToDelete.userId !== user.uid && !isAdmin) {
                  throw new Error("Permission denied: You can only delete your own items.");
@@ -229,7 +267,7 @@ function StockManagementPageContent() { // Renamed original component
             const itemDocRef = doc(db, 'stockItems', itemToDelete.id);
             await deleteDoc(itemDocRef);
             console.log("Item deleted successfully:", itemToDelete.id);
-            return itemToDelete.id;
+            return itemToDelete.id; // Return ID on success
         },
         onSuccess: (itemId) => {
              queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
@@ -237,7 +275,7 @@ function StockManagementPageContent() { // Renamed original component
              const deletedItemName = itemToDelete?.itemName || 'Item'; // Use state variable
              setItemToDelete(null);
              toast({
-                 variant: "default",
+                 variant: "default", // Use default variant
                  title: "Item Deleted",
                  description: `${deletedItemName} has been removed from stock.`,
              });
@@ -259,10 +297,13 @@ function StockManagementPageContent() { // Renamed original component
    // Mutation for updating stock (stock out)
     const stockOutMutation = useMutation({
         mutationFn: async (data: StockOutFormData) => {
-             if (!user) throw new Error("User not authenticated");
+             if (!user || !db) throw new Error("User not authenticated or DB not available");
               const itemToUpdate = stockItems.find(item => item.id === data.itemId);
               // Permission check (ensure item belongs to user)
-             if (itemToUpdate?.userId !== user.uid && !isAdmin) {
+             if (!itemToUpdate) {
+                 throw new Error("Item not found.");
+             }
+             if (itemToUpdate.userId !== user.uid && !isAdmin) {
                  throw new Error("Permission denied: Cannot modify stock for items you don't own.");
              }
              console.log("Processing stock out for item:", data.itemId, "Quantity:", data.quantity);
@@ -283,26 +324,26 @@ function StockManagementPageContent() { // Renamed original component
              await batch.commit(); // Commit the batch
 
             console.log("Stock updated successfully for item:", data.itemId);
-            return data;
+            return { ...data, itemName: itemToUpdate.itemName }; // Pass item name back for toast
         },
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
-            const updatedItem = stockItems.find(item => item.id === data.itemId);
+            // const updatedItem = stockItems.find(item => item.id === data.itemId); // Can use data.itemName now
             toast({
-                variant: "default",
+                variant: "default", // Use default variant
                 title: "Stock Updated",
-                description: `${data.quantity} units of ${updatedItem?.itemName || 'item'} removed.`,
+                description: `${data.quantity} units of ${data.itemName || 'item'} removed.`,
             });
              // Reset StockOutForm?
              // Find the form instance and call reset, or manage reset state here
         },
         onError: (error: any, data) => {
             console.error("Error updating stock:", error);
-            const updatedItem = stockItems.find(item => item.id === data.itemId);
+            const failedItem = stockItems.find(item => item.id === data.itemId);
             toast({
                 variant: "destructive",
                 title: "Error Updating Stock",
-                description: error.message || `Could not remove stock for ${updatedItem?.itemName || 'item'}. Please try again.`,
+                description: error.message || `Could not remove stock for ${failedItem?.itemName || 'item'}. Please try again.`,
             });
         },
     });
@@ -316,17 +357,19 @@ function StockManagementPageContent() { // Renamed original component
    };
 
   const handleAddItemSubmit = (data: AddItemFormData) => {
+       // Ensure required fields have defaults if somehow empty, though validation should prevent this
        const newItemData: Omit<StockItem, 'id' | 'userId'> = { // Exclude userId here
          itemName: data.itemName,
-         currentStock: data.currentStock,
-         minStock: data.minStock,
-         barcode: data.barcode,
-         location: data.location,
-         description: data.description,
-         category: data.category,
-         supplier: data.supplier,
-         photoUrl: data.photoUrl,
-         locationCoords: data.locationCoords,
+         currentStock: data.currentStock ?? 0, // Default to 0 if somehow null/undefined
+         minStock: data.minStock ?? 0, // Default to 0
+         // Use undefined for optional fields if they are empty strings or null
+         barcode: data.barcode || undefined,
+         location: data.location || undefined,
+         description: data.description || undefined,
+         category: data.category || undefined,
+         supplier: data.supplier || undefined,
+         photoUrl: data.photoUrl || undefined,
+         locationCoords: data.locationCoords || undefined,
        };
        addItemMutation.mutate(newItemData);
   };
@@ -334,25 +377,28 @@ function StockManagementPageContent() { // Renamed original component
   const handleEditItemSubmit = (data: EditItemFormData) => {
       if (!itemToEdit) return;
 
-      // Ensure userId is included correctly
+      // Combine existing item data with form data, ensuring optional fields are correctly undefined if empty
       const updatedItem: StockItem = {
-          ...itemToEdit, // Start with existing data (includes id and potentially userId)
-          ...data, // Override with form data
-          // Ensure optional fields are handled
+          ...itemToEdit, // Start with existing data (includes id and userId)
+          itemName: data.itemName,
+          currentStock: data.currentStock ?? 0, // Default if needed
+          minStock: data.minStock ?? 0, // Default if needed
+          // Set to undefined if falsy (empty string, null, etc.) from form
           barcode: data.barcode || undefined,
           location: data.location || undefined,
           description: data.description || undefined,
           category: data.category || undefined,
           supplier: data.supplier || undefined,
-          photoUrl: data.photoUrl || undefined,
-          locationCoords: data.locationCoords || undefined,
-          userId: itemToEdit.userId || user?.uid, // Keep original userId or fallback to current user's UID
+          photoUrl: data.photoUrl || undefined, // Handles removal if photoUrl becomes empty/null
+          locationCoords: data.locationCoords || undefined, // Handles removal
+          // userId should be preserved from itemToEdit unless explicitly changed by admin
+          userId: itemToEdit.userId || user?.uid || 'unknown', // Ensure userId exists, provide fallback if necessary
       };
 
       // Double-check userId before mutation if critical
-      if (!updatedItem.userId) {
-          console.error("Missing userId in item data for edit:", updatedItem);
-          toast({ variant: "destructive", title: "Error", description: "Cannot update item without user association." });
+      if (!updatedItem.userId || updatedItem.userId === 'unknown') {
+          console.error("Missing or invalid userId in item data for edit:", updatedItem);
+          toast({ variant: "destructive", title: "Error", description: "Cannot update item without a valid user association." });
           return;
       }
 
@@ -376,6 +422,10 @@ function StockManagementPageContent() { // Renamed original component
    };
 
    const handleSignOut = async () => {
+    if (!auth) {
+        toast({ variant: "destructive", title: "Sign Out Error", description: "Authentication service not available." });
+        return;
+    }
     try {
       await signOut(auth);
       queryClient.clear(); // Clear React Query cache on sign out
@@ -389,7 +439,8 @@ function StockManagementPageContent() { // Renamed original component
   // Filter items based on search query
     const filteredItems = stockItems.filter((item) => {
         const query = searchQuery.toLowerCase();
-        if (!item || typeof item.itemName !== 'string') return false;
+        if (!item || typeof item.itemName !== 'string') return false; // Basic check
+        // Check multiple fields, ensuring they exist before calling toLowerCase
         return (
             item.itemName.toLowerCase().includes(query) ||
             (item.barcode && item.barcode.toLowerCase().includes(query)) ||
@@ -415,7 +466,7 @@ function StockManagementPageContent() { // Renamed original component
                     {user && ` (Logged in as ${user.email})`}
                 </p>
            </div>
-           <Button variant="outline" onClick={handleSignOut} disabled={isMutating}>
+           <Button variant="outline" onClick={handleSignOut} disabled={isMutating || !user}>
                <LogOut className="mr-2 h-4 w-4" /> Sign Out
            </Button>
        </header>
@@ -471,9 +522,9 @@ function StockManagementPageContent() { // Renamed original component
                 </TabsList>
               <TabsContent value="stock-out">
                  <Card className="shadow-md">
-                   <CardContent className="p-0 pt-0">
+                   <CardContent className="p-0 pt-0"> {/* Adjusted padding */}
                      <StockOutForm
-                        items={stockItems} // Pass all items, form handles filtering available ones
+                        items={stockItems} // Pass all user-fetched items
                         onSubmit={handleStockOutSubmit}
                         isLoading={stockOutMutation.isPending}
                       />
@@ -482,7 +533,7 @@ function StockManagementPageContent() { // Renamed original component
               </TabsContent>
               <TabsContent value="add-item">
                  <Card className="shadow-md">
-                    <CardContent className="p-0 pt-0">
+                    <CardContent className="p-0 pt-0"> {/* Adjusted padding */}
                       <AddItemForm
                         onSubmit={handleAddItemSubmit}
                         isLoading={addItemMutation.isPending}

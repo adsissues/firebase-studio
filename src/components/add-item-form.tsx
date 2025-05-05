@@ -54,9 +54,10 @@ const formSchema = z.object({
 });
 
 // Omit locationCoords and photoUrl from the type used directly by form fields, manage them separately
+// Ensure the exported type matches the structure expected by the parent component/mutation
 export type AddItemFormData = Omit<z.infer<typeof formSchema>, 'locationCoords' | 'photoUrl'> & {
-    photoUrl?: string;
-    locationCoords?: LocationCoords;
+    photoUrl?: string; // Keep these optional
+    locationCoords?: LocationCoords; // Keep these optional
 };
 
 
@@ -213,19 +214,22 @@ export function AddItemForm({ onSubmit, isLoading = false }: AddItemFormProps) {
 
 
   function handleFormSubmit(values: z.infer<typeof formSchema>) {
-    console.log("Adding Item:", values);
-    // Prepare data for submission, ensuring optional fields are handled
+    console.log("Adding Item (Raw Form Values):", values);
+    // Prepare data for submission, ensuring optional fields are undefined if empty
      const submitData: AddItemFormData = {
-       ...values,
-       // Ensure optional fields that are empty strings become undefined if needed by backend/DB
+       itemName: values.itemName,
+       currentStock: values.currentStock ?? 0, // Default if somehow null/undefined
+       minStock: values.minStock ?? 0, // Default
+       // Explicitly set optional fields to undefined if they are falsy (empty string, null, etc.)
        barcode: values.barcode || undefined,
        location: values.location || undefined,
        description: values.description || undefined,
        category: values.category || undefined,
        supplier: values.supplier || undefined,
-       photoUrl: capturedPhotoUrl || undefined, // Use captured photo if available
-       locationCoords: capturedLocation || undefined, // Use captured location
+       photoUrl: capturedPhotoUrl || undefined, // Use captured photo if available, else undefined
+       locationCoords: capturedLocation || undefined, // Use captured location if available, else undefined
      };
+     console.log("Data Submitted:", submitData);
     onSubmit(submitData);
     // Reset form handled by effect
   }
