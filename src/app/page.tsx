@@ -10,7 +10,7 @@
     import { EditItemForm, type EditItemFormData } from '@/components/edit-item-form';
     import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
     import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-    import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+    import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'; // Added DialogFooter import
     import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
     import type { StockItem, AdminSettings, StockMovementLog } from '@/types'; // Import AdminSettings & StockMovementLog
     import { useState, useEffect } from 'react'; // Import useEffect
