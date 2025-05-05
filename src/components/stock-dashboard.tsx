@@ -1,7 +1,7 @@
 
 "use client";
 
-import type * as React from 'react';
+import * as React from 'react';
 import {
   Table,
   TableHeader,
@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import type { StockItem } from '@/types';
 import { AlertTriangle, MapPin, Barcode, Tag, Building, Info, Image as ImageIcon, MapPinned, Pencil, Trash2, UserCircle, TrendingDown, Circle } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
+import { cn } from "@/lib/utils"; // Import cn utility
 
 interface StockDashboardProps {
   items: StockItem[];
@@ -184,7 +185,7 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false, globa
                          isLowStock ? 'bg-destructive/10 hover:bg-destructive/20' : '',
                          isOutOfStock ? 'bg-destructive/20 hover:bg-destructive/30 opacity-70' : ''
                     )}
-                >
+                >{/* Ensure no whitespace between TableRow and TableCell */}
                     <TableCell className="font-medium">{item.itemName}</TableCell>
                     <TableCell className="hidden xl:table-cell text-center">{renderPhoto(item)}</TableCell>
                     <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(Tag, item.category, 'Category')}</TableCell>
