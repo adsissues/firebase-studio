@@ -24,6 +24,7 @@ import { AlertTriangle, Loader2, Trash2, LogOut } from 'lucide-react';
 import { RequireAuth } from '@/components/auth/require-auth'; // Import RequireAuth
 import { useAuth } from '@/context/auth-context'; // Import useAuth
 import { signOut } from 'firebase/auth'; // Import signOut
+import { ThemeToggle } from "@/components/theme-toggle"; // Import ThemeToggle
 
 // Create a client with a QueryCache to handle auth errors globally
 const queryClient = new QueryClient({
@@ -466,9 +467,12 @@ function StockManagementPageContent() { // Renamed original component
                     {user && ` (Logged in as ${user.email})`}
                 </p>
            </div>
-           <Button variant="outline" onClick={handleSignOut} disabled={isMutating || !user}>
-               <LogOut className="mr-2 h-4 w-4" /> Sign Out
-           </Button>
+           <div className="flex items-center space-x-4">
+                <ThemeToggle /> {/* Add the theme toggle button */}
+                <Button variant="outline" onClick={handleSignOut} disabled={isMutating || !user}>
+                    <LogOut className="mr-2 h-4 w-4" /> Sign Out
+                </Button>
+           </div>
        </header>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
