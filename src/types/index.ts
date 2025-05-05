@@ -11,7 +11,7 @@ export interface StockItem {
   itemName: string;
   barcode?: string;
   currentStock: number;
-  maximumStock?: number; // Changed from minStock to optional maximumStock
+  minimumStock?: number; // Changed from maximumStock to optional minimumStock
   lowStockThreshold?: number; // Added optional low stock threshold per item
   location?: string; // User-defined location string
   description?: string; // Optional description

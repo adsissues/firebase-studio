@@ -24,6 +24,7 @@
     import { RequireAuth } from '@/components/auth/require-auth';
     import { useAuth } from '@/context/auth-context';
     import { signOut } from 'firebase/auth';
+    import { ThemeProvider } from "@/components/theme-provider"; // Import ThemeProvider
     import { ThemeToggle } from "@/components/theme-toggle";
     import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
 
@@ -66,10 +67,11 @@
               } as StockItem));
               console.log(`Fetched ${itemsList.length} items.`);
 
-              return itemsList.map(item => ({
+              // Add explicit type annotation for the mapped item
+              return itemsList.map((item: StockItem) => ({
                   ...item,
                   currentStock: Number(item.currentStock ?? 0),
-                  maximumStock: Number(item.maximumStock ?? 0), // Changed from minStock
+                  minimumStock: Number(item.minimumStock ?? 0), // Changed from maximumStock
                   itemName: item.itemName || 'Unknown Item',
                   barcode: item.barcode || undefined,
                   location: item.location || undefined,
@@ -142,11 +144,11 @@
                            const currentData = sfDoc.data();
                            const updatedData = { ...dataToSave }; // Start with cleaned form data
 
-                           // Ensure maximumStock is updated if provided
-                           if (formData.maximumStock !== undefined) {
-                              updatedData.maximumStock = formData.maximumStock;
-                           } else if (currentData.maximumStock !== undefined) {
-                               updatedData.maximumStock = currentData.maximumStock; // Keep existing if not provided
+                           // Ensure minimumStock is updated if provided
+                           if (formData.minimumStock !== undefined) {
+                              updatedData.minimumStock = formData.minimumStock;
+                           } else if (currentData.minimumStock !== undefined) {
+                               updatedData.minimumStock = currentData.minimumStock; // Keep existing if not provided
                            }
 
                            // Ensure other fields are only updated if provided in the form
@@ -364,7 +366,7 @@
               ...itemToEdit,
               itemName: data.itemName,
               currentStock: data.currentStock ?? 0,
-              maximumStock: data.maximumStock ?? 0, // Changed from minStock
+              minimumStock: data.minimumStock, // Changed from maximumStock
               barcode: data.barcode || undefined,
               location: data.location || undefined,
               description: data.description || undefined,
@@ -607,5 +609,3 @@
             </QueryClientProvider>
         );
     }
-
-    

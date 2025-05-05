@@ -33,17 +33,17 @@ interface EditItemFormProps {
   onCancel: () => void; // Function to call when cancelling
 }
 
-// Updated schema to use maximumStock instead of minStock
+// Updated schema to use minimumStock instead of maximumStock
 const formSchema = z.object({
   itemName: z.string().min(1, { message: 'Item name is required.' }).max(100),
   currentStock: z.coerce
     .number({ invalid_type_error: 'Current stock must be a number.' })
     .int({ message: 'Current stock must be a whole number.' })
     .nonnegative({ message: 'Current stock cannot be negative.' }),
-  maximumStock: z.coerce // Changed from minStock
-    .number({ invalid_type_error: 'Maximum stock must be a number.' })
-    .int({ message: 'Maximum stock must be a whole number.' })
-    .nonnegative({ message: 'Maximum stock cannot be negative.' })
+  minimumStock: z.coerce // Changed from maximumStock
+    .number({ invalid_type_error: 'Minimum stock must be a number.' })
+    .int({ message: 'Minimum stock must be a whole number.' })
+    .nonnegative({ message: 'Minimum stock cannot be negative.' })
     .optional(), // Keep optional
   barcode: z.string().max(50).optional().or(z.literal('')),
   location: z.string().max(100).optional().or(z.literal('')),
@@ -61,7 +61,7 @@ const formSchema = z.object({
 export type EditItemFormData = Omit<z.infer<typeof formSchema>, 'locationCoords' | 'photoUrl'> & {
     photoUrl?: string;
     locationCoords?: LocationCoords;
-    maximumStock?: number; // Ensure maximumStock is here
+    minimumStock?: number; // Ensure minimumStock is here
 };
 
 
@@ -73,8 +73,8 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
   const [capturedPhotoUrl, setCapturedPhotoUrl] = React.useState<string | null>(item.photoUrl || null);
   const [capturedLocation, setCapturedLocation] = React.useState<LocationCoords | null>(item.locationCoords || null);
   const [showCameraFeed, setShowCameraFeed] = React.useState(false);
-  const [isCapturingLocation, setIsCapturingLocation] = React.useState(false);
-  const [isScanningBarcode, setIsScanningBarcode] = React.useState(false);
+  const [isCapturingLocation, setIsCapturingLocation] = React.useState(false); // Added state
+  const [isScanningBarcode, setIsScanningBarcode] = React.useState(false); // Added state
 
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -82,7 +82,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
     defaultValues: {
       itemName: item.itemName,
       currentStock: item.currentStock,
-      maximumStock: item.maximumStock || undefined, // Changed from minStock
+      minimumStock: item.minimumStock || undefined, // Changed from maximumStock
       barcode: item.barcode || '',
       location: item.location || '',
       description: item.description || '',
@@ -185,7 +185,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
      const submitData: EditItemFormData = {
        itemName: values.itemName,
        currentStock: values.currentStock ?? 0,
-       maximumStock: values.maximumStock, // Changed from minStock
+       minimumStock: values.minimumStock, // Changed from maximumStock
        barcode: values.barcode || undefined,
        location: values.location || undefined,
        description: values.description || undefined,
@@ -239,10 +239,10 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                 />
                 <FormField
                   control={form.control}
-                  name="maximumStock" // Changed from minStock
+                  name="minimumStock" // Changed from maximumStock
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Max. Stock Level</FormLabel> {/* Changed label */}
+                      <FormLabel>Min. Stock Level</FormLabel> {/* Changed label */}
                       <FormControl>
                         <Input
                           type="number"

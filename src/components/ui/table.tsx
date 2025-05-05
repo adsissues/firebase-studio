@@ -1,4 +1,3 @@
-
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
@@ -55,7 +54,7 @@ const TableFooter = React.forwardRef<
 ));
 TableFooter.displayName = "TableFooter";
 
-// Ensure children are directly inside the tag without extra whitespace
+// Fix: Ensure no extra whitespace between `<tr>` and its children
 const TableRow = React.forwardRef<
   HTMLTableRowElement,
   React.HTMLAttributes<HTMLTableRowElement>
@@ -67,7 +66,9 @@ const TableRow = React.forwardRef<
       className
     )}
     {...props}
-  >{children}</tr> // Place children directly inside the closing tag
+  >
+    {children} {/* Ensure that children are directly inside without extra whitespace */}
+  </tr>
 ));
 TableRow.displayName = "TableRow";
 
@@ -121,4 +122,3 @@ export {
   TableCell,
   TableCaption,
 };
-

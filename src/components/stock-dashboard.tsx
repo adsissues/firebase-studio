@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { StockItem } from '@/types';
-import { AlertTriangle, MapPin, Barcode, Tag, Building, Info, Image as ImageIcon, MapPinned, Pencil, Trash2, UserCircle, TrendingDown, TrendingUp, Circle } from 'lucide-react'; // Added new icons
+import { AlertTriangle, MapPin, Barcode, Tag, Building, Info, Image as ImageIcon, MapPinned, Pencil, Trash2, UserCircle, TrendingDown, Circle } from 'lucide-react'; // Removed TrendingUp
 import { useAuth } from '@/context/auth-context';
 
 interface StockDashboardProps {
@@ -29,7 +29,7 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
   const { user } = useAuth();
 
   const getStatus = (item: StockItem) => {
-    const { currentStock, maximumStock, lowStockThreshold = 10 } = item; // Use item's threshold or default
+    const { currentStock, lowStockThreshold = 10 } = item; // Use item's threshold or default
 
     if (currentStock === 0) {
       return (
@@ -45,15 +45,18 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
            Low Stock
          </Badge>
        );
-     } else if (maximumStock && currentStock >= maximumStock) { // Check against maximum stock
-        return (
-          <Badge variant="success" className="flex items-center gap-1 text-xs whitespace-nowrap">
-            <TrendingUp className="h-3 w-3" /> {/* Use TrendingUp for Full */}
-            Full Stock
-          </Badge>
-        );
-    } else {
-      // Default "Okay" status if not Out, Low, or Full
+     }
+    // Removed "Full Stock" logic based on maximumStock
+    // } else if (maximumStock && currentStock >= maximumStock) {
+    //    return (
+    //      <Badge variant="success" className="flex items-center gap-1 text-xs whitespace-nowrap">
+    //        <TrendingUp className="h-3 w-3" /> {/* Use TrendingUp for Full */}
+    //        Full Stock
+    //      </Badge>
+    //    );
+    // }
+    else {
+      // Default "Okay" status if not Out or Low
       return (
         <Badge variant="secondary" className="flex items-center gap-1 text-xs whitespace-nowrap">
            <Circle className="h-3 w-3" /> {/* Use Circle for Okay */}
@@ -160,7 +163,7 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
             <TableHead className="hidden xl:table-cell w-[15%] min-w-[100px]">Description</TableHead>
             {isAdmin && <TableHead className="hidden md:table-cell w-[10%] min-w-[80px]">Owner (User)</TableHead>}
             <TableHead className="text-right w-[70px]">Current</TableHead>
-            <TableHead className="text-right w-[50px]">Max.</TableHead> {/* Changed header */}
+            <TableHead className="text-right w-[50px]">Min.</TableHead> {/* Changed header */}
             <TableHead className="text-center w-[90px]">Status</TableHead>
             <TableHead className="text-center w-[100px]">Actions</TableHead>
           </TableRow>
@@ -185,7 +188,7 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
                 <TableCell className="hidden xl:table-cell text-muted-foreground text-xs">{renderDetail(Info, item.description, 'Description')}</TableCell>
                 {isAdmin && <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(UserCircle, item.userId, 'User ID', item.userId)}</TableCell>}
                 <TableCell className="text-right font-mono">{item.currentStock}</TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">{item.maximumStock ?? '-'}</TableCell> {/* Changed field */}
+                <TableCell className="text-right font-mono text-muted-foreground">{item.minimumStock ?? '-'}</TableCell> {/* Changed field */}
                 <TableCell className="text-center">{getStatus(item)}</TableCell>
                 <TableCell className="text-center">
                   {canPerformAction(item) ? (
