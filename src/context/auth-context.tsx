@@ -29,17 +29,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // If Firebase config is invalid, don't attempt to listen for auth changes.
     // Set loading to false immediately.
     if (!isFirebaseConfigValid) {
-      console.warn("AuthContext: Firebase is not configured. Skipping authentication checks.");
+      console.warn("AuthContext: Firebase is not configured correctly. Skipping authentication checks.");
       setLoading(false);
       setUser(null);
       setIsAdmin(false);
-      return; // Exit early
+      return; // Exit early - IMPORTANT
     }
 
-    // Proceed with auth state listener only if config is valid
+     // Ensure auth is not null before proceeding (it might be null if initialization failed despite isFirebaseConfigValid being initially true)
+     if (!auth) {
+         console.error("AuthContext: Firebase Auth service is not available. Cannot listen for auth state changes.");
+         setLoading(false);
+         setUser(null);
+         setIsAdmin(false);
+         return; // Exit early
+     }
+
+
+    // Proceed with auth state listener only if config is valid and auth initialized
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
         // User is signed in, fetch additional user data (like role) from Firestore
+        // Ensure db is available before fetching
+         if (!db) {
+             console.error("AuthContext: Firestore service is not available. Cannot fetch user role.");
+              // Set user based on firebaseUser only, default role
+              const basicUser: AppUser = {
+                    ...firebaseUser, uid: firebaseUser.uid, email: firebaseUser.email,
+                    displayName: firebaseUser.displayName, photoURL: firebaseUser.photoURL, emailVerified: firebaseUser.emailVerified,
+                    isAnonymous: firebaseUser.isAnonymous, metadata: firebaseUser.metadata, providerData: firebaseUser.providerData,
+                    refreshToken: firebaseUser.refreshToken, tenantId: firebaseUser.tenantId, delete: firebaseUser.delete,
+                    getIdToken: firebaseUser.getIdToken, getIdTokenResult: firebaseUser.getIdTokenResult,
+                    reload: firebaseUser.reload, toJSON: firebaseUser.toJSON,
+                    role: 'user' // Default role if Firestore unavailable
+                 };
+             setUser(basicUser);
+             setIsAdmin(false);
+             setLoading(false); // Finished loading attempt
+             return; // Stop further processing for this user
+         }
+
         const userDocRef = doc(db, 'users', firebaseUser.uid);
         try {
           const userDocSnap = await getDoc(userDocRef);
@@ -94,6 +123,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(basicUser);
             setIsAdmin(false);
             console.log("User logged in (no Firestore doc yet):", basicUser);
+             // Consider creating the user document here if needed
+             // await setDoc(userDocRef, { email: basicUser.email, role: 'user', createdAt: new Date() });
           }
         } catch (error) {
           console.error("Error fetching user role:", error);

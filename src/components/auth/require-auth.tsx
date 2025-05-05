@@ -6,7 +6,8 @@ import { useAuth } from '@/context/auth-context';
 import { AuthForm } from '@/components/auth/auth-form'; // Import the AuthForm
 import { Skeleton } from '@/components/ui/skeleton'; // For loading state
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ShieldAlert, LogIn } from 'lucide-react'; // Icons
+import { ShieldAlert, LogIn, AlertCircle, DatabaseZap } from 'lucide-react'; // Icons
+import { isFirebaseConfigValid } from '@/lib/firebase/firebase'; // Import config validity flag
 
 interface RequireAuthProps {
   children: React.ReactNode;
@@ -21,6 +22,25 @@ interface RequireAuthProps {
  */
 export function RequireAuth({ children, requiredRole }: RequireAuthProps) {
   const { user, loading, isAdmin } = useAuth();
+
+  // Check Firebase config validity FIRST
+  if (!isFirebaseConfigValid) {
+     return (
+        <div className="flex items-center justify-center min-h-screen p-4 bg-destructive/10">
+           <Alert variant="destructive" className="max-w-md">
+              <AlertCircle className="h-5 w-5" />
+              <AlertTitle>Firebase Configuration Error</AlertTitle>
+              <AlertDescription>
+                The application cannot connect to Firebase due to missing or invalid configuration
+                (e.g., API Key, Project ID). Please check the server console logs for details
+                and ensure your <code>.env.local</code> file is set up correctly.
+                Authentication and data storage are unavailable.
+              </AlertDescription>
+           </Alert>
+        </div>
+      );
+  }
+
 
   if (loading) {
     // Show a loading state while checking authentication

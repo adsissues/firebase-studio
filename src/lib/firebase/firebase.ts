@@ -1,8 +1,7 @@
 
 import { initializeApp, getApps, getApp, type FirebaseOptions } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import { getAuth, Auth } from 'firebase/auth'; // Import getAuth and Auth type
-import { Firestore } from 'firebase/firestore'; // Import Firestore type
+import { getFirestore, Firestore } from 'firebase/firestore';
+import { getAuth, Auth } from 'firebase/auth';
 // import { getStorage } from 'firebase/storage'; // Add if Storage is needed
 
 // Your web app's Firebase configuration
@@ -22,11 +21,26 @@ let isFirebaseConfigValid = true;
 const missingKeys: string[] = [];
 
 // Validate required Firebase config keys more strictly
+// Include common placeholder patterns
 const requiredKeys: (keyof FirebaseOptions)[] = ['apiKey', 'authDomain', 'projectId'];
+const placeholderPatterns = [/YOUR_/, /\[?YOUR/, /<YOUR/, /example/i, /__/]; // Common placeholder patterns
+
 for (const key of requiredKeys) {
-  if (!firebaseConfig[key] || firebaseConfig[key]?.trim() === '') {
+  const value = firebaseConfig[key];
+  if (!value || typeof value !== 'string' || value.trim() === '') {
     missingKeys.push(`NEXT_PUBLIC_FIREBASE_${key.toUpperCase()}`);
     isFirebaseConfigValid = false;
+  } else if (key === 'apiKey' && placeholderPatterns.some(pattern => pattern.test(value))) {
+     // Specifically check apiKey for placeholders
+     console.error(`***********************************************************`);
+     console.error(`! FIREBASE CONFIGURATION WARNING !`);
+     console.error(`NEXT_PUBLIC_FIREBASE_API_KEY ("${value}") looks like a placeholder.`);
+     console.error(`Please replace it with your actual Firebase API key from your project settings.`);
+     console.error(`***********************************************************`);
+     isFirebaseConfigValid = false; // Treat placeholder API key as invalid for auth/firestore
+     if (!missingKeys.includes(`NEXT_PUBLIC_FIREBASE_${key.toUpperCase()}`)) {
+        missingKeys.push(`NEXT_PUBLIC_FIREBASE_${key.toUpperCase()} (Placeholder)`);
+     }
   }
 }
 
@@ -38,11 +52,8 @@ if (!isFirebaseConfigValid) {
     console.error("Please ensure the following environment variables are set correctly in your .env.local file:");
     missingKeys.forEach(key => console.error(`  - ${key}`));
     console.error("Refer to your Firebase project settings (Project settings > General > Your apps > Web app).");
-    console.error("After adding the variables, restart the development server.");
+    console.error("After adding/correcting the variables, restart the development server.");
     console.error("***********************************************************");
-    // Throw an error to prevent the app from proceeding with invalid config
-    // throw new Error("Firebase configuration is invalid or incomplete. Cannot initialize Firebase services.");
-    // Note: Throwing here might break the build in some CI environments. Logging might be preferred.
 }
 
 
@@ -51,6 +62,7 @@ let app;
 // Use specific types for db and auth, initialized to null
 let db: Firestore | null = null;
 let auth: Auth | null = null;
+// let storage = null; // Initialize if needed
 
 // Only attempt initialization if config is deemed valid *before* trying to initialize
 if (isFirebaseConfigValid) {
@@ -64,10 +76,10 @@ if (isFirebaseConfigValid) {
       } catch (error: any) {
           console.error("***********************************************************");
           console.error("! FIREBASE INITIALIZATION FAILED !");
-          console.error("An error occurred during Firebase initialization. This often means the provided config values (API Key, Project ID, etc.) are incorrect, even if they are present.");
+          console.error("An error occurred during Firebase initialization. This often means the provided config values (API Key, Project ID, etc.) are incorrect, even if they are present and not placeholders.");
           console.error("Firebase Error:", error.message); // Log the specific Firebase error
           console.error("Please double-check your Firebase project settings and the values in your .env.local file.");
-          console.error("Specifically, ensure the API Key is valid for your project.");
+          console.error("Specifically, ensure the API Key is valid and enabled for your web app in the Firebase console.");
           console.error("***********************************************************");
           // Set services to null again to indicate failure and mark config as invalid
           db = null;
@@ -89,11 +101,9 @@ if (isFirebaseConfigValid) {
           isFirebaseConfigValid = false;
       }
     }
-}
-
-// Only log warning if initialization was attempted but failed, or if initial check failed
-if (!isFirebaseConfigValid) {
-    console.warn("Firebase services (Firestore, Auth) are not available due to configuration errors or initialization failure.");
+} else {
+    // Log warning if the initial config check failed
+    console.warn("Firebase services (Firestore, Auth) will not be initialized due to configuration errors.");
 }
 
 
