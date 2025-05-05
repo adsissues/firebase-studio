@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -48,6 +49,10 @@ export function StockOutForm({ items, onSubmit }: StockOutFormProps) {
     },
   });
 
+   // Filter out items with 0 stock for the dropdown
+   const availableItems = items.filter(item => item.currentStock > 0);
+
+
   function handleFormSubmit(values: StockOutFormData) {
     // Find the selected item to validate quantity against current stock
     const selectedItem = items.find(item => item.id === values.itemId);
@@ -62,12 +67,15 @@ export function StockOutForm({ items, onSubmit }: StockOutFormProps) {
     console.log("Stock Out:", values); // Placeholder for actual submission logic
     onSubmit(values);
     // Optionally reset the form after successful submission
-    // form.reset();
+    // form.reset(); // Resetting might be annoying if logging multiple outs
+    form.resetField("quantity", { defaultValue: 1 }); // Reset only quantity
+    form.resetField("itemId", { defaultValue: '' }); // Reset item selection
   }
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 rounded-lg border p-6 shadow-sm">
+      {/* Removed redundant border and shadow, added padding to match card */}
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 p-6">
          <h2 className="text-lg font-semibold text-primary mb-4">Log Stock Out</h2>
         <FormField
           control={form.control}
@@ -75,19 +83,25 @@ export function StockOutForm({ items, onSubmit }: StockOutFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Item</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} value={field.value || ''}> {/* Ensure value is controlled */}
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Select an item to remove stock" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {items.map((item) => (
-                    <SelectItem key={item.id} value={item.id} disabled={item.currentStock <= 0}>
-                      {item.itemName} (Available: {item.currentStock})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                   {availableItems.length === 0 ? (
+                     <SelectItem value="no-items" disabled>
+                       No items with stock available
+                     </SelectItem>
+                   ) : (
+                     availableItems.map((item) => (
+                       <SelectItem key={item.id} value={item.id}>
+                         {item.itemName} (Available: {item.currentStock})
+                       </SelectItem>
+                     ))
+                   )}
+                 </SelectContent>
               </Select>
               <FormMessage />
             </FormItem>

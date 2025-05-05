@@ -4,9 +4,12 @@ import * as React from 'react';
 import { ItemSearch } from '@/components/item-search';
 import { StockDashboard } from '@/components/stock-dashboard';
 import { StockOutForm, type StockOutFormData } from '@/components/stock-out-form';
+import { AddItemForm, type AddItemFormData } from '@/components/add-item-form'; // Import AddItemForm
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'; // Import Tabs components
 import type { StockItem } from '@/types';
 import { useState, useEffect } from 'react'; // Import useState and useEffect
+import { useToast } from "@/hooks/use-toast"; // Import useToast
 
 // Mock Data - Replace with actual data fetching later
 const initialStockItems: StockItem[] = [
@@ -20,9 +23,11 @@ export default function Home() {
   // State for stock items - initialized to prevent hydration issues
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const { toast } = useToast(); // Initialize toast
 
   // Load initial data on the client side after hydration
   useEffect(() => {
+    // Simulate fetching data
     setStockItems(initialStockItems);
   }, []);
 
@@ -32,18 +37,41 @@ export default function Home() {
   };
 
   const handleStockOutSubmit = (data: StockOutFormData) => {
-    // Update the stock level locally
     setStockItems((prevItems) =>
       prevItems.map((item) =>
         item.id === data.itemId
-          ? { ...item, currentStock: item.currentStock - data.quantity }
+          ? { ...item, currentStock: Math.max(0, item.currentStock - data.quantity) } // Ensure stock doesn't go below 0
           : item
       )
     );
-    // Here you would typically also send this data to your backend/Firebase
+    const updatedItem = stockItems.find(item => item.id === data.itemId);
     console.log('Submitting Stock Out Data:', data);
-    alert(`Logged stock out: ${data.quantity} of item ID ${data.itemId}`);
+    toast({
+       variant: "default", // Use default variant for success
+       title: "Stock Updated",
+       description: `${data.quantity} units of ${updatedItem?.itemName || 'item'} removed.`,
+     });
   };
+
+  const handleAddItemSubmit = (data: AddItemFormData) => {
+      const newItem: StockItem = {
+          // Simple ID generation for demo - use UUID in real app
+          id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          itemName: data.itemName,
+          currentStock: data.currentStock,
+          minStock: data.minStock,
+          barcode: data.barcode || undefined, // Handle optional field
+          location: data.location || undefined, // Handle optional field
+      };
+      setStockItems((prevItems) => [...prevItems, newItem]);
+      console.log('Adding New Item:', newItem);
+      toast({
+        variant: "default", // Use default variant for success
+        title: "Item Added",
+        description: `${newItem.itemName} added to stock.`,
+      });
+  };
+
 
   // Filter items based on search query
   const filteredItems = stockItems.filter((item) =>
@@ -60,7 +88,7 @@ export default function Home() {
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         {/* Left Column: Search and Dashboard */}
         <div className="lg:col-span-2 space-y-6">
-           <Card>
+           <Card className="shadow-md">
              <CardHeader>
                <CardTitle>Stock Levels</CardTitle>
              </CardHeader>
@@ -74,9 +102,28 @@ export default function Home() {
            </Card>
         </div>
 
-        {/* Right Column: Stock Out Form */}
+        {/* Right Column: Action Forms (Stock Out / Add Item) */}
         <div className="lg:col-span-1">
-           <StockOutForm items={stockItems} onSubmit={handleStockOutSubmit} />
+           <Tabs defaultValue="stock-out" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="stock-out">Stock Out</TabsTrigger>
+                <TabsTrigger value="add-item">Add Item</TabsTrigger>
+              </TabsList>
+              <TabsContent value="stock-out">
+                 <Card className="shadow-md">
+                   <CardContent className="p-0 pt-6"> {/* Adjust padding */}
+                     <StockOutForm items={stockItems} onSubmit={handleStockOutSubmit} />
+                   </CardContent>
+                 </Card>
+              </TabsContent>
+              <TabsContent value="add-item">
+                 <Card className="shadow-md">
+                    <CardContent className="p-0 pt-6"> {/* Adjust padding */}
+                      <AddItemForm onSubmit={handleAddItemSubmit} />
+                    </CardContent>
+                  </Card>
+              </TabsContent>
+            </Tabs>
         </div>
       </div>
     </div>
