@@ -15,9 +15,18 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
+// Update metadata to include PWA properties
 export const metadata: Metadata = {
   title: 'StockWatch - Stock Management',
   description: 'Manage your stock efficiently with StockWatch',
+  manifest: '/manifest.json', // Link to the manifest file
+  themeColor: '#317EFB', // Match the theme color in manifest
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'StockWatch',
+    // startupImage: [], // Optional: Add startup images for iOS
+  },
 };
 
 export default function RootLayout({
@@ -27,6 +36,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+       {/* Link to manifest directly in head is handled by Metadata API */}
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
          <ThemeProvider
             attribute="class"
