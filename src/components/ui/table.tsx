@@ -55,20 +55,23 @@ const TableFooter = React.forwardRef<
 ));
 TableFooter.displayName = "TableFooter";
 
-// Ensure children are directly inside the `tr` tags without any surrounding whitespace.
 const TableRow = React.forwardRef<
   HTMLTableRowElement,
   React.HTMLAttributes<HTMLTableRowElement>
->(({ className, children, ...props }, ref) => (
-  <tr
-    ref={ref}
-    className={cn(
-      "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
-      className
-    )}
-    {...props}
-  >{children}</tr>
-));
+>(({ className, children, ...props }, ref) => {
+  return (
+    <tr
+      ref={ref}
+      className={cn(
+        "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </tr>
+  );
+});
 TableRow.displayName = "TableRow";
 
 
@@ -121,3 +124,4 @@ export {
   TableCell,
   TableCaption,
 };
+
