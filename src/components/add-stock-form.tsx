@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import * as React from 'react';
@@ -19,81 +18,74 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Save, Loader2, Camera, MapPin, ScanBarcode, VideoOff, XCircle } from 'lucide-react';
+import { PlusCircle, Loader2, Camera, MapPin, ScanBarcode, VideoOff, PackagePlus } from 'lucide-react'; // Changed icon
 import type { StockItem, LocationCoords } from '@/types';
 import { scanBarcode } from '@/services/barcode-scanner';
 import { captureProductPhoto } from '@/services/camera';
 import { getCurrentLocation } from '@/services/location';
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from '@/context/auth-context'; // Import useAuth for user context
 
-interface EditItemFormProps {
-  item: StockItem; // The item being edited
-  onSubmit: (data: EditItemFormData) => void;
+interface AddStockFormProps {
+  onSubmit: (data: AddStockFormData) => void;
   isLoading?: boolean;
-  onCancel: () => void; // Function to call when cancelling
 }
 
-// Updated schema to use maximumStock instead of minStock
+// Updated schema for Add Stock form
 const formSchema = z.object({
+  barcode: z.string().max(50).optional().or(z.literal('')),
   itemName: z.string().min(1, { message: 'Item name is required.' }).max(100),
-  currentStock: z.coerce
-    .number({ invalid_type_error: 'Current stock must be a number.' })
-    .int({ message: 'Current stock must be a whole number.' })
-    .nonnegative({ message: 'Current stock cannot be negative.' }),
+  quantity: z.coerce // Quantity to add
+    .number({ invalid_type_error: 'Quantity must be a number.' })
+    .int({ message: 'Quantity must be a whole number.' })
+    .positive({ message: 'Quantity to add must be positive.' }),
   maximumStock: z.coerce // Changed from minStock
     .number({ invalid_type_error: 'Maximum stock must be a number.' })
     .int({ message: 'Maximum stock must be a whole number.' })
     .nonnegative({ message: 'Maximum stock cannot be negative.' })
-    .optional(), // Keep optional
-  barcode: z.string().max(50).optional().or(z.literal('')),
+    .optional(), // Make maximum stock optional initially
   location: z.string().max(100).optional().or(z.literal('')),
-  description: z.string().max(500).optional().or(z.literal('')),
-  category: z.string().max(50).optional().or(z.literal('')),
   supplier: z.string().max(100).optional().or(z.literal('')),
   photoUrl: z.string().url({ message: "Please enter a valid URL or capture a photo." }).optional().or(z.literal('')),
+  // Removed description and category for simplicity, can be added back if needed
+  // description: z.string().max(500).optional().or(z.literal('')),
+  // category: z.string().max(50).optional().or(z.literal('')),
   locationCoords: z.object({
     latitude: z.number(),
     longitude: z.number(),
   }).optional(),
 });
 
-// Update EditItemFormData type to reflect the schema change
-export type EditItemFormData = Omit<z.infer<typeof formSchema>, 'locationCoords' | 'photoUrl'> & {
-    photoUrl?: string;
-    locationCoords?: LocationCoords;
-    maximumStock?: number; // Ensure maximumStock is here
-};
+// Type for data submitted from this form
+export type AddStockFormData = z.infer<typeof formSchema>;
 
-
-export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: EditItemFormProps) {
+export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps) {
   const { toast } = useToast();
+  const { user } = useAuth(); // Get user for context if needed (e.g., disabling form)
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const [hasCameraPermission, setHasCameraPermission] = React.useState<boolean | null>(null);
-  const [capturedPhotoUrl, setCapturedPhotoUrl] = React.useState<string | null>(item.photoUrl || null);
-  const [capturedLocation, setCapturedLocation] = React.useState<LocationCoords | null>(item.locationCoords || null);
-  const [showCameraFeed, setShowCameraFeed] = React.useState(false);
+  const [capturedPhotoUrl, setCapturedPhotoUrl] = React.useState<string | null>(null);
   const [isCapturingLocation, setIsCapturingLocation] = React.useState(false);
   const [isScanningBarcode, setIsScanningBarcode] = React.useState(false);
+  const [capturedLocation, setCapturedLocation] = React.useState<LocationCoords | null>(null);
+  const [showCameraFeed, setShowCameraFeed] = React.useState(false);
 
-
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<AddStockFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      itemName: item.itemName,
-      currentStock: item.currentStock,
-      maximumStock: item.maximumStock || undefined, // Changed from minStock
-      barcode: item.barcode || '',
-      location: item.location || '',
-      description: item.description || '',
-      category: item.category || '',
-      supplier: item.supplier || '',
-      photoUrl: item.photoUrl || '',
-      locationCoords: item.locationCoords || undefined,
+      barcode: '',
+      itemName: '',
+      quantity: 1, // Default quantity to add is 1
+      maximumStock: undefined, // Default max stock to undefined
+      location: '',
+      supplier: '',
+      photoUrl: '',
+      locationCoords: undefined,
     },
   });
 
-   // Camera permission effect
+   // Camera permission effect (same as before)
    React.useEffect(() => {
        let stream: MediaStream | null = null;
        const getCameraPermission = async () => {
@@ -114,11 +106,16 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                console.error('Error accessing camera:', error);
                setHasCameraPermission(false);
                setShowCameraFeed(false);
-               toast({ variant: 'destructive', title: 'Camera Access Denied' });
+               toast({ variant: 'destructive', title: 'Camera Access Denied', description: 'Please enable camera permissions.' });
            }
        };
        getCameraPermission();
-       return () => { if (videoRef.current?.srcObject) (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop()); };
+       return () => {
+            if (videoRef.current?.srcObject) {
+               (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+               videoRef.current.srcObject = null;
+           }
+        };
    }, [showCameraFeed, toast]);
 
   const handleScanBarcode = async () => {
@@ -128,9 +125,10 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
       const result = await scanBarcode();
       form.setValue('barcode', result.barcode, { shouldValidate: true });
       toast({ title: "Barcode Scanned", description: `Barcode: ${result.barcode}` });
+      // Optionally: Try to auto-fill item name based on barcode lookup here?
     } catch (error) {
       console.error("Barcode scan error:", error);
-      toast({ variant: "destructive", title: "Scan Error" });
+      toast({ variant: "destructive", title: "Scan Error", description: "Could not scan barcode." });
     } finally {
       setIsScanningBarcode(false);
     }
@@ -139,7 +137,8 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
   const handleCapturePhoto = async () => {
     if (!hasCameraPermission || !videoRef.current || !canvasRef.current) {
         toast({ variant: "destructive", title: "Camera Not Ready" });
-        setShowCameraFeed(true); return;
+        setShowCameraFeed(true);
+        return;
     }
      const video = videoRef.current;
      const canvas = canvasRef.current;
@@ -169,104 +168,55 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
       const location = await getCurrentLocation();
       setCapturedLocation(location);
       form.setValue('locationCoords', location, { shouldValidate: true });
-      toast({ title: "Location Updated", description: `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` });
+      toast({ title: "Location Captured", description: `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` });
     } catch (error: any) {
       console.error("Location fetch error:", error);
        toast({ variant: "destructive", title: "Location Error", description: error.message || "Could not fetch location." });
-       setCapturedLocation(item.locationCoords || null);
-       form.setValue('locationCoords', item.locationCoords || undefined);
+       setCapturedLocation(null);
+       form.setValue('locationCoords', undefined);
     } finally {
       setIsCapturingLocation(false);
     }
   };
 
-  function handleFormSubmit(values: z.infer<typeof formSchema>) {
-    console.log("Updating Item (Raw Form Values):", values);
-     const submitData: EditItemFormData = {
-       itemName: values.itemName,
-       currentStock: values.currentStock ?? 0,
-       maximumStock: values.maximumStock, // Changed from minStock
-       barcode: values.barcode || undefined,
-       location: values.location || undefined,
-       description: values.description || undefined,
-       category: values.category || undefined,
-       supplier: values.supplier || undefined,
-       photoUrl: capturedPhotoUrl || values.photoUrl || undefined,
-       locationCoords: capturedLocation || values.locationCoords || undefined,
+  function handleFormSubmit(values: AddStockFormData) {
+    console.log("Adding Stock (Raw Form Values):", values);
+     const submitData: AddStockFormData = {
+       ...values, // Submit all validated form values
+       photoUrl: capturedPhotoUrl || values.photoUrl || undefined, // Prioritize captured, then form, then undefined
+       locationCoords: capturedLocation || values.locationCoords || undefined, // Prioritize captured, then form, then undefined
      };
      console.log("Data Submitted:", submitData);
     onSubmit(submitData);
   }
 
+  // Reset form effect
+  React.useEffect(() => {
+    if (!isLoading && form.formState.isSubmitSuccessful) {
+       form.reset();
+       setCapturedPhotoUrl(null);
+       setCapturedLocation(null);
+       setShowCameraFeed(false);
+       if (videoRef.current?.srcObject) {
+          (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+          videoRef.current.srcObject = null;
+       }
+    }
+  }, [isLoading, form.formState.isSubmitSuccessful, form.reset]);
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 pt-4">
-        <fieldset disabled={isLoading} className="space-y-4 max-h-[65vh] overflow-y-auto pr-2">
-             <FormField
-              control={form.control}
-              name="itemName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Item Name*</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., Large Red Box" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="currentStock"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Current Stock*</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="1"
-                          placeholder="0"
-                          {...field}
-                          value={field.value ?? ''}
-                          onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))}
-                          />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="maximumStock" // Changed from minStock
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Max. Stock Level</FormLabel> {/* Changed label */}
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="1"
-                          placeholder="Optional" // Indicate it's optional
-                          {...field}
-                          value={field.value ?? ''}
-                           onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))} // Set to undefined if empty
-                          />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-            </div>
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 rounded-lg border p-6 shadow-sm">
+        <fieldset disabled={isLoading || !user} className="space-y-4"> {/* Disable if loading or not logged in */}
+            <h2 className="text-lg font-semibold text-primary mb-4">Add Stock</h2>
 
-            {/* Barcode Section */}
+            {/* Barcode Field */}
              <FormField
                control={form.control}
                name="barcode"
                render={({ field }) => (
                  <FormItem>
-                   <FormLabel>Barcode</FormLabel>
+                   <FormLabel>Barcode (Optional)</FormLabel>
                    <div className="flex gap-2">
                       <FormControl>
                         <Input placeholder="Scan or enter barcode" {...field} className="flex-grow" />
@@ -282,56 +232,80 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                          {isScanningBarcode ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanBarcode className="h-4 w-4" />}
                        </Button>
                    </div>
+                   <FormDescription>
+                     Scanning or entering a barcode helps find existing items faster.
+                   </FormDescription>
                    <FormMessage />
                  </FormItem>
                )}
              />
 
-            {/* Other Optional Fields */}
-             <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="Describe the item..." {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-               <div className="grid grid-cols-2 gap-4">
-                 <FormField
-                    control={form.control}
-                    name="category"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Category</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g., Electronics" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="supplier"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Supplier</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g., Acme Corp" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-              </div>
+            {/* Item Name Field */}
+            <FormField
+              control={form.control}
+              name="itemName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Item Name*</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., Large Red Box" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                     Enter the name of the item you are adding stock for.
+                   </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
+            {/* Quantity and Maximum Stock Fields */}
+             <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="quantity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Quantity to Add*</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="1" // Minimum quantity to add is 1
+                          step="1"
+                          placeholder="1"
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))}
+                          />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="maximumStock"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Maximum Stock</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="Optional max level"
+                          {...field}
+                          value={field.value ?? ''} // Handle undefined/null
+                           onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))} // Set to undefined if empty
+                          />
+                      </FormControl>
+                      <FormDescription>Max quantity to keep.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+            </div>
 
-            {/* Location Section */}
+            {/* Location Field */}
             <FormField
               control={form.control}
               name="location"
@@ -354,11 +328,26 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                          </Button>
                     </div>
                   <FormDescription>
-                     Manually enter location or {capturedLocation ? `use captured coordinates (Lat: ${capturedLocation.latitude.toFixed(4)}, Lon: ${capturedLocation.longitude.toFixed(4)}).` : 'capture current GPS coordinates.'}
+                     Where is this item stored? {capturedLocation ? `(Using GPS: ${capturedLocation.latitude.toFixed(4)}, ${capturedLocation.longitude.toFixed(4)})` : ''}
                    </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
+            />
+
+            {/* Supplier Field */}
+            <FormField
+                control={form.control}
+                name="supplier"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Supplier</FormLabel>
+                    <FormControl>
+                        <Input placeholder="e.g., Acme Corp" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
             />
 
             {/* Photo Section */}
@@ -368,38 +357,42 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                     {showCameraFeed && (
                         <div className="space-y-2">
                             <video ref={videoRef} className="w-full aspect-video rounded-md bg-muted" autoPlay muted playsInline />
-                            {hasCameraPermission === false && ( <Alert variant="destructive"><VideoOff className="h-4 w-4" /><AlertTitle>Camera Access Denied</AlertTitle></Alert> )}
+                            {hasCameraPermission === false && (
+                                <Alert variant="destructive">
+                                  <VideoOff className="h-4 w-4" />
+                                  <AlertTitle>Camera Access Denied</AlertTitle>
+                                </Alert>
+                            )}
                              {hasCameraPermission === null && ( <Alert><Loader2 className="h-4 w-4 animate-spin" /><AlertTitle>Accessing Camera</AlertTitle></Alert> )}
                             <Button type="button" onClick={handleCapturePhoto} disabled={!hasCameraPermission || isLoading}>
-                               <Camera className="mr-2 h-4 w-4" /> Capture New Photo
+                               <Camera className="mr-2 h-4 w-4" /> Capture Photo
                            </Button>
                             <canvas ref={canvasRef} style={{ display: 'none' }} />
                         </div>
                     )}
                     <Button type="button" variant="outline" onClick={() => setShowCameraFeed(prev => !prev)} disabled={isLoading}>
-                        <Camera className="mr-2 h-4 w-4" /> {showCameraFeed ? 'Hide Camera' : 'Open Camera to Replace'}
+                        <Camera className="mr-2 h-4 w-4" /> {showCameraFeed ? 'Hide Camera' : 'Open Camera'}
                     </Button>
                     {capturedPhotoUrl && !showCameraFeed && (
                       <div className="mt-2">
-                        <img src={capturedPhotoUrl} alt="Product" className="rounded-md border max-w-xs max-h-40 object-contain" data-ai-hint="product image" />
+                        <img src={capturedPhotoUrl} alt="Captured product" className="rounded-md border max-w-xs max-h-40 object-contain" data-ai-hint="product image" />
                          <Button variant="link" size="sm" onClick={() => { setCapturedPhotoUrl(null); form.setValue('photoUrl', ''); }} className="text-destructive p-0 h-auto mt-1">Remove photo</Button>
                       </div>
                     )}
-                    <FormDescription>Optionally update the photo.</FormDescription>
+                    <FormDescription>Optional: Add a photo.</FormDescription>
                      <FormField control={form.control} name="photoUrl" render={({ field }) => <FormMessage />} />
                  </div>
              </FormItem>
-        </fieldset>
 
-        <div className="flex justify-end gap-2 pt-4 border-t">
-             <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
-                <XCircle className="mr-2 h-4 w-4" /> Cancel
-             </Button>
-            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isLoading || isCapturingLocation || isScanningBarcode}>
-              {isLoading ? ( <Loader2 className="mr-2 h-4 w-4 animate-spin" /> ) : ( <Save className="mr-2 h-4 w-4" /> )}
-              {isLoading ? 'Saving...' : 'Save Changes'}
-            </Button>
-         </div>
+        </fieldset>
+        <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading || isCapturingLocation || isScanningBarcode || !user}>
+          {isLoading ? (
+             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+           ) : (
+             <PackagePlus className="mr-2 h-4 w-4" /> // Updated Icon
+           )}
+          {isLoading ? 'Adding...' : 'Add Stock'}
+        </Button>
       </form>
     </Form>
   );

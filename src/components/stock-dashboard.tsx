@@ -15,40 +15,54 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { StockItem } from '@/types';
-import { AlertTriangle, MapPin, Barcode, Tag, Building, Info, Image as ImageIcon, MapPinned, Pencil, Trash2, UserCircle } from 'lucide-react'; // Added UserCircle
-import { useAuth } from '@/context/auth-context'; // Import useAuth
+import { AlertTriangle, MapPin, Barcode, Tag, Building, Info, Image as ImageIcon, MapPinned, Pencil, Trash2, UserCircle, TrendingDown, TrendingUp, Circle } from 'lucide-react'; // Added new icons
+import { useAuth } from '@/context/auth-context';
 
 interface StockDashboardProps {
   items: StockItem[];
   onEdit: (item: StockItem) => void;
   onDelete: (item: StockItem) => void;
-  isAdmin?: boolean; // Prop already exists from previous step
+  isAdmin?: boolean;
 }
 
 export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: StockDashboardProps) {
-  const { user } = useAuth(); // Get the current user
+  const { user } = useAuth();
 
   const getStatus = (item: StockItem) => {
-    if (item.currentStock === 0) {
+    const { currentStock, maximumStock, lowStockThreshold = 10 } = item; // Use item's threshold or default
+
+    if (currentStock === 0) {
       return (
         <Badge variant="destructive" className="flex items-center gap-1 text-xs whitespace-nowrap">
           <AlertTriangle className="h-3 w-3" />
           Out of Stock
         </Badge>
       );
-    } else if (item.minStock && item.currentStock <= item.minStock) {
-      return (
-        <Badge variant="destructive" className="flex items-center gap-1 text-xs whitespace-nowrap">
-          <AlertTriangle className="h-3 w-3" />
-          Low Stock
-        </Badge>
-      );
-    } else if (item.minStock && (item.currentStock / item.minStock) < 1.5) {
-      return <Badge variant="secondary" className="text-xs whitespace-nowrap">Okay</Badge>;
+    } else if (currentStock <= lowStockThreshold) { // Use lowStockThreshold for "Low Stock"
+       return (
+         <Badge variant="destructive" className="flex items-center gap-1 text-xs whitespace-nowrap">
+           <TrendingDown className="h-3 w-3" /> {/* Use TrendingDown for Low */}
+           Low Stock
+         </Badge>
+       );
+     } else if (maximumStock && currentStock >= maximumStock) { // Check against maximum stock
+        return (
+          <Badge variant="success" className="flex items-center gap-1 text-xs whitespace-nowrap">
+            <TrendingUp className="h-3 w-3" /> {/* Use TrendingUp for Full */}
+            Full Stock
+          </Badge>
+        );
     } else {
-      return <Badge variant="success" className="text-xs whitespace-nowrap">Good</Badge>;
+      // Default "Okay" status if not Out, Low, or Full
+      return (
+        <Badge variant="secondary" className="flex items-center gap-1 text-xs whitespace-nowrap">
+           <Circle className="h-3 w-3" /> {/* Use Circle for Okay */}
+           Okay
+         </Badge>
+       );
     }
   };
+
 
   const renderDetail = (icon: React.ElementType, value: string | number | undefined | null, label?: string, fullValue?: string) => {
       if (!value && value !== 0) return <span className="text-muted-foreground">-</span>;
@@ -64,7 +78,7 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
                     <span className="truncate">{displayValue}</span>
                   </span>
                 </TooltipTrigger>
-                {(label || (typeof value === 'string' && value.length > 20)) && ( // Show tooltip if labeled or truncated
+                {(label || (typeof value === 'string' && value.length > 20)) && (
                  <TooltipContent>{label ? `${label}: ` : ''}{tooltipContent}</TooltipContent>
                 )}
             </Tooltip>
@@ -74,7 +88,6 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
 
    const renderPhoto = (item: StockItem) => {
       if (!item.photoUrl) return <span className="text-muted-foreground">-</span>;
-      // Basic check if it's likely a data URI
       const isDataUri = item.photoUrl.startsWith('data:image');
       return (
         <TooltipProvider delayDuration={100}>
@@ -89,7 +102,6 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
                 src={item.photoUrl}
                 alt={item.itemName}
                 className="max-w-xs max-h-40 object-contain rounded"
-                // Add AI hint only if it's likely *not* a data URI to avoid revealing potentially sensitive data
                 data-ai-hint={!isDataUri ? "product image" : undefined}
                />
             </TooltipContent>
@@ -118,7 +130,6 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
                    <div className="max-w-xs break-words">
                       {item.location && <div>Storage: {item.location}</div>}
                       {coordsLocation && <div>Coordinates: {coordsLocation.replace('GPS: ', '')}</div>}
-                       {/* Display '-' only if both are missing */}
                       {!item.location && !coordsLocation && <div>-</div>}
                    </div>
                </TooltipContent>
@@ -127,11 +138,10 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
      );
     };
 
-  // Determine if the current user can perform actions on a specific item
   const canPerformAction = (item: StockItem) => {
-    if (!user) return false; // Not logged in
-    if (isAdmin) return true; // Admin can always perform actions
-    return item.userId === user.uid; // Non-admin can only act on their own items
+    if (!user) return false;
+    if (isAdmin) return true;
+    return item.userId === user.uid;
   };
 
 
@@ -150,7 +160,7 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
             <TableHead className="hidden xl:table-cell w-[15%] min-w-[100px]">Description</TableHead>
             {isAdmin && <TableHead className="hidden md:table-cell w-[10%] min-w-[80px]">Owner (User)</TableHead>}
             <TableHead className="text-right w-[70px]">Current</TableHead>
-            <TableHead className="text-right w-[50px]">Min.</TableHead>
+            <TableHead className="text-right w-[50px]">Max.</TableHead> {/* Changed header */}
             <TableHead className="text-center w-[90px]">Status</TableHead>
             <TableHead className="text-center w-[100px]">Actions</TableHead>
           </TableRow>
@@ -164,7 +174,8 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
             </TableRow>
           ) : (
             items.map((item) => (
-              <TableRow key={item.id} className={item.minStock && item.currentStock <= item.minStock && item.currentStock !== 0 ? 'bg-destructive/10 hover:bg-destructive/20' : item.currentStock === 0 ? 'bg-destructive/20 hover:bg-destructive/30 opacity-70' : ''}>
+               // Adjusted background logic based on lowStockThreshold
+               <TableRow key={item.id} className={item.currentStock <= (item.lowStockThreshold ?? 10) && item.currentStock !== 0 ? 'bg-destructive/10 hover:bg-destructive/20' : item.currentStock === 0 ? 'bg-destructive/20 hover:bg-destructive/30 opacity-70' : ''}>
                 <TableCell className="font-medium">{item.itemName}</TableCell>
                 <TableCell className="hidden xl:table-cell text-center">{renderPhoto(item)}</TableCell>
                 <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(Tag, item.category, 'Category')}</TableCell>
@@ -174,7 +185,7 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
                 <TableCell className="hidden xl:table-cell text-muted-foreground text-xs">{renderDetail(Info, item.description, 'Description')}</TableCell>
                 {isAdmin && <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(UserCircle, item.userId, 'User ID', item.userId)}</TableCell>}
                 <TableCell className="text-right font-mono">{item.currentStock}</TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">{item.minStock ?? '-'}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">{item.maximumStock ?? '-'}</TableCell> {/* Changed field */}
                 <TableCell className="text-center">{getStatus(item)}</TableCell>
                 <TableCell className="text-center">
                   {canPerformAction(item) ? (
@@ -203,7 +214,6 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
                       </TooltipProvider>
                     </div>
                   ) : (
-                    // Optionally show disabled buttons or nothing if user cannot act
                     <span className="text-muted-foreground text-xs">-</span>
                   )}
                 </TableCell>

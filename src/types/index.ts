@@ -1,3 +1,4 @@
+
 import type { User as FirebaseUser } from 'firebase/auth'; // Import Firebase User type
 
 export interface LocationCoords {
@@ -10,13 +11,15 @@ export interface StockItem {
   itemName: string;
   barcode?: string;
   currentStock: number;
-  minStock: number;
+  maximumStock?: number; // Changed from minStock to optional maximumStock
+  lowStockThreshold?: number; // Added optional low stock threshold per item
   location?: string; // User-defined location string
   description?: string; // Optional description
   category?: string; // Optional category
   supplier?: string; // Optional supplier
   photoUrl?: string; // Optional photo data URI or URL
   locationCoords?: LocationCoords; // Optional geographical coordinates
+  userId: string; // Added userId to associate item with a user
 }
 
 // Define a User type extending FirebaseUser with role information
@@ -30,4 +33,3 @@ export interface AppUser extends FirebaseUser {
 //     itemId: string;
 //     quantity: number;
 // }
-
