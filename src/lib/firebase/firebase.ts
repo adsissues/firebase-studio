@@ -17,15 +17,15 @@ import { getAuth, Auth } from 'firebase/auth';
 // Failure to do so will result in "auth/api-key-not-valid" errors and prevent Firebase services from working.
 // ========================================================================
 const firebaseConfig: FirebaseOptions = {
-  apiKey: "AIzaSyB7rFf67wX4iSZEk12Cak74Ar_dR0Cs", // <-- THIS IS A PLACEHOLDER - REPLACE IT!
+  apiKey: "AIzaSyAr3ZqN5w1xOYYiSZEk12Cak74Ar_dR0Cs",
   authDomain: "shipshape-wbwno.firebaseapp.com",
   projectId: "shipshape-wbwno",
-  storageBucket: "gs://shipshape-wbwno.appspot.com",
+  storageBucket: "shipshape-wbwno.firebasestorage.app",
   messagingSenderId: "151363841939",
-  databaseURL: "https://shipshape-wbwno-default-rtdb.firebaseio.com",
   appId: "1:151363841939:web:e682165aa874215bed8266"
-  // measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID, // Optional: add if you need Analytics
 };
+  // measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID, // Optional: add if you need Analytics
+
 
 // Flag to track if the configuration is valid
 let isFirebaseConfigValid = true;
