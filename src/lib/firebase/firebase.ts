@@ -19,7 +19,6 @@ const firebaseConfig: FirebaseOptions = {
 // Flag to track if the configuration is valid
 let isFirebaseConfigValid = true;
 const missingKeys: string[] = [];
-const placeholderApiKey = 'YOUR_API_KEY'; // Common placeholder
 
 // Validate required Firebase config keys
 const requiredKeys: (keyof FirebaseOptions)[] = ['apiKey', 'authDomain', 'projectId'];
@@ -30,16 +29,9 @@ for (const key of requiredKeys) {
   }
 }
 
-// Specifically check for placeholder API key
-if (firebaseConfig.apiKey && (firebaseConfig.apiKey === placeholderApiKey || firebaseConfig.apiKey.includes('AIzaSy'))) {
-   // A simple check for common placeholders or default keys
-    if (!missingKeys.includes('NEXT_PUBLIC_FIREBASE_API_KEY')) { // Avoid duplicate message if already missing
-         console.error(`Firebase config warning: NEXT_PUBLIC_FIREBASE_API_KEY appears to be a placeholder or example key. Please replace it with your actual Firebase API key in .env.local.`);
-         // Don't mark as invalid just for placeholder, but warn strongly. App might still work partially.
-         // isFirebaseConfigValid = false; // Optionally, treat placeholders as invalid
-    }
-}
-
+// Removed the check for placeholder API keys that caused the console error.
+// The check above for missing keys is sufficient for basic validation.
+// If needed, a warning (not error) about placeholder keys could be added back carefully.
 
 if (!isFirebaseConfigValid) {
     console.error("***********************************************************");
