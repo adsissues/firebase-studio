@@ -1,3 +1,4 @@
+
 'use client';
 
     import * as React from 'react';
@@ -8,19 +9,20 @@
       DialogTitle,
       DialogDescription,
       DialogFooter,
-      DialogClose, // Import DialogClose
+      DialogClose,
     } from '@/components/ui/dialog';
     import { Button } from '@/components/ui/button';
     import { Label } from '@/components/ui/label';
     import { Switch } from '@/components/ui/switch';
     import { Input } from '@/components/ui/input';
-    import { Bell, Mail, Save, XCircle, AlertTriangle } from 'lucide-react'; // Import icons
+    import { Bell, Mail, Save, XCircle, AlertTriangle, Loader2 } from 'lucide-react'; // Added Loader2
 
     interface AdminSettingsDialogProps {
       isOpen: boolean;
       onClose: () => void;
       onSave: (settings: AdminSettings) => void;
       currentSettings?: AdminSettings; // Optional current settings to pre-populate
+      isLoading?: boolean; // Add loading state
     }
 
     export interface AdminSettings {
@@ -40,6 +42,7 @@
       onClose,
       onSave,
       currentSettings = defaultSettings,
+      isLoading = false, // Initialize loading state
     }: AdminSettingsDialogProps) {
       const [emailEnabled, setEmailEnabled] = React.useState(currentSettings.emailNotifications);
       const [pushEnabled, setPushEnabled] = React.useState(currentSettings.pushNotifications);
@@ -55,6 +58,8 @@
       }, [isOpen, currentSettings]);
 
       const handleSave = () => {
+          if (isLoading) return; // Prevent saving if already loading
+
           if (threshold <= 0) {
             setThresholdError("Low stock threshold must be a positive number.");
             return;
@@ -65,7 +70,7 @@
             pushNotifications: pushEnabled,
             lowStockThreshold: threshold,
           });
-          // onClose(); // Consider closing only after successful save confirmed by parent
+          // Closing is handled by parent component via onSave's onSuccess callback typically
       };
 
       const handleThresholdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -88,15 +93,15 @@
             <DialogHeader>
               <DialogTitle>Admin Notification Settings</DialogTitle>
               <DialogDescription>
-                Configure how and when notifications are sent for low stock alerts.
+                Configure the global low stock alert threshold and notification methods. Item-specific minimums override the global threshold.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="grid gap-6 py-4">
+             <fieldset disabled={isLoading} className="grid gap-6 py-4"> {/* Disable fields when loading */}
                {/* Low Stock Threshold */}
                <div className="grid grid-cols-4 items-center gap-4">
                  <Label htmlFor="low-stock-threshold" className="col-span-1 text-right">
-                   Low Stock Threshold
+                   Global Low Stock Threshold
                  </Label>
                  <div className="col-span-3 space-y-1">
                     <Input
@@ -114,7 +119,7 @@
                       </p>
                     )}
                     <p className="text-xs text-muted-foreground">
-                        Notify when stock drops to this level or below.
+                        Notify when stock drops to this level or below (unless item has specific minimum).
                     </p>
                  </div>
                </div>
@@ -135,6 +140,7 @@
                   checked={emailEnabled}
                   onCheckedChange={setEmailEnabled}
                   aria-label="Toggle email notifications"
+                  disabled={isLoading} // Disable switch when loading
                 />
               </div>
 
@@ -153,24 +159,29 @@
                    id="push-notifications"
                    checked={pushEnabled}
                    onCheckedChange={setPushEnabled}
-                   disabled // Disable push notifications for now
+                   disabled // Always disable push notifications for now
                    aria-label="Toggle push notifications (disabled)"
                  />
                </div>
-            </div>
+            </fieldset>
 
             <DialogFooter className="sm:justify-end">
               <DialogClose asChild>
-                  <Button type="button" variant="outline" onClick={onClose}>
+                  <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}> {/* Disable cancel when loading */}
                      <XCircle className="mr-2 h-4 w-4" /> Cancel
                   </Button>
               </DialogClose>
-              <Button type="button" onClick={handleSave}>
-                  <Save className="mr-2 h-4 w-4" /> Save Settings
+              <Button type="button" onClick={handleSave} disabled={isLoading}> {/* Disable save when loading */}
+                  {isLoading ? (
+                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                   ) : (
+                     <Save className="mr-2 h-4 w-4" />
+                   )}
+                  {isLoading ? 'Saving...' : 'Save Settings'}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       );
     }
-    
+

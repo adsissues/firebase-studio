@@ -11,12 +11,12 @@
     import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
     import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
     import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-    import type { StockItem } from '@/types';
-    import { useState } from 'react';
+    import type { StockItem, AdminSettings } from '@/types'; // Import AdminSettings
+    import { useState, useEffect } from 'react'; // Import useEffect
     import { useToast } from "@/hooks/use-toast";
     import { QueryClient, QueryClientProvider, useQuery, useMutation, QueryCache } from '@tanstack/react-query';
     import { db, auth } from '@/lib/firebase/firebase';
-    import { collection, getDocs, addDoc, updateDoc, doc, increment, deleteDoc, writeBatch, query, where, runTransaction } from 'firebase/firestore'; // Import query, where, writeBatch, runTransaction
+    import { collection, getDocs, addDoc, updateDoc, doc, increment, deleteDoc, writeBatch, query, where, runTransaction, setDoc, getDoc } from 'firebase/firestore'; // Import setDoc, getDoc
     import { Skeleton } from '@/components/ui/skeleton';
     import { Button } from '@/components/ui/button';
     import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -40,6 +40,14 @@
       }),
     });
 
+    // Default settings if none are found in Firestore
+    const defaultAdminSettings: AdminSettings = {
+        emailNotifications: true,
+        pushNotifications: false,
+        lowStockThreshold: 10,
+    };
+
+
     function StockManagementPageContent() {
       const { user, isAdmin } = useAuth();
       const [searchQuery, setSearchQuery] = useState('');
@@ -50,15 +58,45 @@
       const [itemToDelete, setItemToDelete] = useState<StockItem | null>(null);
       const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
 
+        // Fetch Admin Settings (only if user is admin)
+        const { data: adminSettings = defaultAdminSettings, isLoading: isLoadingSettings, refetch: refetchSettings } = useQuery<AdminSettings>({
+            queryKey: ['adminSettings'],
+            queryFn: async () => {
+                if (!isAdmin || !db) return defaultAdminSettings; // Only fetch if admin and db exists
+                console.log("Fetching admin settings from Firestore...");
+                const settingsDocRef = doc(db, 'settings', 'admin'); // Assuming a single 'admin' settings doc
+                try {
+                    const docSnap = await getDoc(settingsDocRef);
+                    if (docSnap.exists()) {
+                        console.log("Admin settings found:", docSnap.data());
+                        return docSnap.data() as AdminSettings;
+                    } else {
+                        console.log("No admin settings found, using defaults.");
+                        // Optionally create default settings document here if it doesn't exist
+                        // await setDoc(settingsDocRef, defaultAdminSettings);
+                        return defaultAdminSettings;
+                    }
+                } catch (error) {
+                     console.error("Error fetching admin settings:", error);
+                     toast({ variant: "destructive", title: "Error Loading Settings", description: "Could not load admin settings." });
+                     return defaultAdminSettings; // Return default on error
+                }
+            },
+            enabled: isAdmin && !!user, // Only enable if user is admin and logged in
+            staleTime: 15 * 60 * 1000, // Cache settings for 15 minutes
+            refetchOnWindowFocus: false, // Less critical to refetch settings on focus
+        });
+
+
       // Fetch stock items
-      const { data: stockItems = [], isLoading: isLoadingItems, error: fetchError, refetch } = useQuery<StockItem[]>({
+      const { data: stockItems = [], isLoading: isLoadingItems, error: fetchError, refetch: refetchItems } = useQuery<StockItem[]>({
         queryKey: ['stockItems', user?.uid],
         queryFn: async () => {
            if (!user) return [];
            console.log("Fetching stock items from Firestore for user:", user.uid);
            try {
                const itemsCol = collection(db, 'stockItems');
-               const q = query(itemsCol, where("userId", "==", user.uid));
+               const q = isAdmin ? query(itemsCol) : query(itemsCol, where("userId", "==", user.uid)); // Admin sees all items
                const itemSnapshot = await getDocs(q);
 
                const itemsList = itemSnapshot.docs.map(doc => ({
@@ -71,7 +109,7 @@
               return itemsList.map((item: StockItem) => ({
                   ...item,
                   currentStock: Number(item.currentStock ?? 0),
-                  minimumStock: Number(item.minimumStock ?? 0), // Changed from maximumStock
+                  minimumStock: item.minimumStock !== undefined ? Number(item.minimumStock) : undefined, // Keep undefined if not set
                   itemName: item.itemName || 'Unknown Item',
                   barcode: item.barcode || undefined,
                   location: item.location || undefined,
@@ -80,7 +118,7 @@
                   supplier: item.supplier || undefined,
                   photoUrl: item.photoUrl || undefined,
                   locationCoords: item.locationCoords || undefined,
-                  userId: item.userId || user.uid,
+                  userId: item.userId || user.uid, // Ensure userId is present
               }));
           } catch (err) {
               console.error("Error fetching stock items:", err);
@@ -92,7 +130,7 @@
               throw err;
           }
         },
-         enabled: !!user,
+         enabled: !!user, // Enable only when user is logged in
          staleTime: 5 * 60 * 1000,
          refetchOnWindowFocus: true,
       });
@@ -108,27 +146,51 @@
                 const itemsCol = collection(db, 'stockItems');
                 let targetItemQuery;
 
-                // Prioritize finding by barcode if provided
-                if (barcode) {
-                    targetItemQuery = query(itemsCol, where("userId", "==", user.uid), where("barcode", "==", barcode));
-                } else {
-                    // Fallback to finding by item name
-                    targetItemQuery = query(itemsCol, where("userId", "==", user.uid), where("itemName", "==", itemName));
-                }
+                // Prioritize finding by barcode if provided and user is owner/admin
+                const barcodeQueryConstraint = barcode ? [where("barcode", "==", barcode)] : [];
+                const nameQueryConstraint = itemName ? [where("itemName", "==", itemName)] : []; // Use only if barcode not provided
 
-                const querySnapshot = await getDocs(targetItemQuery);
+                 // Base query constraints (userId for non-admins)
+                const baseConstraints = !isAdmin ? [where("userId", "==", user.uid)] : [];
+
+                // Combine constraints: Use barcode if present, otherwise use name
+                const queryConstraints = barcode
+                    ? [...baseConstraints, ...barcodeQueryConstraint]
+                    : [...baseConstraints, ...nameQueryConstraint];
+
+
+                 if (queryConstraints.length > (isAdmin ? 0 : 1)) { // Ensure we have a lookup field (barcode or name)
+                     targetItemQuery = query(itemsCol, ...queryConstraints);
+                 } else {
+                      // Cannot look up without barcode or name if creating a new item
+                      // This case should ideally be handled by creating a new item directly
+                       // If barcode is provided but doesn't match anything, we still proceed to add new below
+                      targetItemQuery = null;
+                 }
+
+
+                 let querySnapshot;
+                  if (targetItemQuery) {
+                      querySnapshot = await getDocs(targetItemQuery);
+                  }
+
 
                 // Prepare data for update/add, removing undefined
                  const dataToSave = Object.entries(formData).reduce((acc, [key, value]) => {
                       if (value !== undefined && key !== 'quantity') { // Exclude quantity from base data
-                          acc[key as keyof typeof acc] = value;
+                         // Convert numeric fields explicitly if needed, though zod coerce helps
+                         if (key === 'minimumStock' && typeof value === 'string') {
+                            acc[key as keyof typeof acc] = value === '' ? undefined : Number(value);
+                          } else {
+                             acc[key as keyof typeof acc] = value === '' ? undefined : value; // Handle empty strings for text fields
+                          }
                       }
                       return acc;
                   }, {} as Partial<Omit<StockItem, 'id' | 'userId' | 'currentStock'>> & { userId?: string }); // Ensure correct type
 
-                  dataToSave.userId = user.uid; // Ensure userId is set
+                  dataToSave.userId = user.uid; // Ensure userId is set for the current user
 
-                 if (!querySnapshot.empty) {
+                 if (querySnapshot && !querySnapshot.empty) {
                      // --- Item exists, update stock ---
                      const existingDoc = querySnapshot.docs[0]; // Assume first match is the one
                      const itemDocRef = doc(db, 'stockItems', existingDoc.id);
@@ -140,29 +202,50 @@
                            if (!sfDoc.exists()) {
                                throw "Document does not exist!";
                            }
-                           // Only update fields that were provided in the form, don't overwrite existing with undefined
                            const currentData = sfDoc.data();
-                           const updatedData = { ...dataToSave }; // Start with cleaned form data
+                           const updatedData = { ...dataToSave }; // Start with cleaned form data from the form
 
-                           // Ensure minimumStock is updated if provided
+                           // Ensure minimumStock is updated or kept
                            if (formData.minimumStock !== undefined) {
                               updatedData.minimumStock = formData.minimumStock;
                            } else if (currentData.minimumStock !== undefined) {
                                updatedData.minimumStock = currentData.minimumStock; // Keep existing if not provided
+                           } else {
+                                delete updatedData.minimumStock; // Remove if not provided and not existing
                            }
 
-                           // Ensure other fields are only updated if provided in the form
-                            if (formData.location !== undefined) updatedData.location = formData.location; else if(currentData.location !== undefined) updatedData.location = currentData.location;
-                            if (formData.supplier !== undefined) updatedData.supplier = formData.supplier; else if(currentData.supplier !== undefined) updatedData.supplier = currentData.supplier;
-                            if (formData.photoUrl !== undefined) updatedData.photoUrl = formData.photoUrl; else if(currentData.photoUrl !== undefined) updatedData.photoUrl = currentData.photoUrl;
-                            // Add other optional fields here if needed
+                           // Ensure other optional fields are only updated if provided in the form
+                           // Only include fields in updatedData if they were actually in dataToSave (i.e., provided in the form)
+                            const finalUpdateData = Object.keys(updatedData).reduce((acc, key) => {
+                               if (updatedData[key as keyof typeof updatedData] !== undefined) {
+                                   acc[key as keyof typeof acc] = updatedData[key as keyof typeof updatedData];
+                               }
+                               return acc;
+                           }, {} as Partial<StockItem>);
+
 
                            // Atomically increment the current stock
                            const newStock = (currentData.currentStock || 0) + quantity;
-                           transaction.update(itemDocRef, { ...updatedData, currentStock: newStock });
+                           transaction.update(itemDocRef, { ...finalUpdateData, currentStock: newStock });
                        });
 
-                     return { ...existingDoc.data(), id: existingDoc.id, quantityAdded: quantity } as StockItem & { quantityAdded: number };
+                      const updatedDocSnap = await getDoc(itemDocRef); // Re-fetch to get the final state
+                      const resultData = { ...updatedDocSnap.data(), id: updatedDocSnap.id } as StockItem;
+
+
+                      // Check for low stock after update
+                      const effectiveThreshold = resultData.minimumStock ?? adminSettings.lowStockThreshold;
+                      if (resultData.currentStock > 0 && resultData.currentStock <= effectiveThreshold) {
+                           toast({
+                               variant: "default", // Or maybe a different variant like 'warning' if you add one
+                               title: "Low Stock Warning",
+                               description: `${resultData.itemName} stock is low (${resultData.currentStock} <= ${effectiveThreshold}). Consider restocking.`,
+                               duration: 5000,
+                            });
+                       }
+
+
+                     return { ...resultData, quantityAdded: quantity };
                  } else {
                      // --- Item does not exist, add new ---
                      console.log("Item does not exist, adding new item:", itemName);
@@ -170,16 +253,36 @@
                      const newItemDataWithStock = {
                          ...dataToSave,
                          currentStock: quantity,
+                         userId: user.uid, // Ensure user ID is set for the new item
                      };
 
-                      // Remove userId again before adding as it's already in dataToSave
-                      const { userId, ...finalData } = newItemDataWithStock;
-                      const dataWithUser = { ...finalData, userId: user.uid }; // Add user ID
+                       // Remove undefined fields before adding
+                      const finalNewItemData = Object.entries(newItemDataWithStock).reduce((acc, [key, value]) => {
+                          if (value !== undefined) {
+                             acc[key as keyof typeof acc] = value;
+                          }
+                          return acc;
+                      }, {} as Partial<StockItem>);
 
-                     const docRef = await addDoc(itemsCol, dataWithUser);
+
+                     const docRef = await addDoc(itemsCol, finalNewItemData);
                      console.log("New item added with ID:", docRef.id);
-                     // Return the full item structure
-                     return { id: docRef.id, ...newItemDataWithStock, userId: user.uid, quantityAdded: quantity } as StockItem & { quantityAdded: number };
+
+                     const newItem = { id: docRef.id, ...finalNewItemData } as StockItem;
+
+                      // Check for low stock immediately after adding
+                      const effectiveThreshold = newItem.minimumStock ?? adminSettings.lowStockThreshold;
+                      if (newItem.currentStock > 0 && newItem.currentStock <= effectiveThreshold) {
+                           toast({
+                               variant: "default", // Or 'warning'
+                               title: "Low Stock Warning",
+                               description: `${newItem.itemName} stock is low (${newItem.currentStock} <= ${effectiveThreshold}). Consider restocking.`,
+                               duration: 5000,
+                           });
+                       }
+
+
+                     return { ...newItem, quantityAdded: quantity };
                  }
              },
              onSuccess: (result) => {
@@ -213,30 +316,69 @@
                  const itemDocRef = doc(db, 'stockItems', itemData.id);
                  const { id, ...updateData } = itemData;
 
+                 // Clean data: remove undefined fields, ensure numbers are numbers
                  const cleanData = Object.entries(updateData).reduce((acc, [key, value]) => {
-                     if (value !== undefined) {
-                         if (key === 'userId') {
-                             if (isAdmin || value === user.uid) {
-                                 acc[key as keyof typeof acc] = value;
-                             } else {
-                                 console.warn("Attempted to change userId without admin rights or mismatch. Skipping userId update.");
-                             }
-                         } else {
-                             acc[key as keyof typeof acc] = value;
-                         }
-                     }
-                     return acc;
-                 }, {} as Partial<Omit<StockItem, 'id'>>);
+                      if (value !== undefined) {
+                          if (key === 'currentStock' || key === 'minimumStock') {
+                              acc[key as keyof typeof acc] = Number(value);
+                          } else if (key === 'userId') {
+                              // Allow userId update only if admin or matches current user (redundant check, but safe)
+                              if (isAdmin || value === user.uid) {
+                                  acc[key as keyof typeof acc] = value;
+                              } else {
+                                  console.warn("Attempted to change userId without admin rights or mismatch. Skipping userId update.");
+                              }
+                          } else {
+                              // Assign other defined values
+                               acc[key as keyof typeof acc] = value === '' ? null : value; // Store empty strings as null? Or handle upstream? Let's keep empty strings for now or decide based on desired behavior. Setting to undefined might be better if empty means "not set". Let's try undefined.
+                                acc[key as keyof typeof acc] = value === '' ? undefined : value;
+                          }
+                      } else {
+                          // If value is undefined, we want to remove it from the update unless it's a required field?
+                           // For optional fields, Firestore update won't add them if undefined.
+                           // Let's explicitly set fields to undefined if they should be cleared.
+                           // This happens automatically if they are undefined in the input `itemData`.
+                           // The goal is primarily to prevent sending `{ field: undefined }` which Firestore rejects.
+                           // Instead, we just omit the field from the final update object.
+                      }
+                      return acc;
+                  }, {} as Partial<Omit<StockItem, 'id'>>);
 
-                 if (Object.keys(cleanData).length === 0) {
+                  // Remove fields that ended up as undefined AFTER cleaning
+                  const finalUpdateData = Object.entries(cleanData).reduce((acc, [key, value]) => {
+                      if (value !== undefined) {
+                         acc[key as keyof typeof acc] = value;
+                      }
+                      return acc;
+                  }, {} as Partial<Omit<StockItem, 'id'>>);
+
+
+                 if (Object.keys(finalUpdateData).length === 0) {
                      console.log("No changes detected after cleaning data. Skipping update.");
-                     return itemData;
+                     return itemData; // Return original data if no changes
                  }
-                 console.log("Cleaned data for update:", cleanData);
+                 console.log("Cleaned data for update:", finalUpdateData);
 
-                await updateDoc(itemDocRef, cleanData);
+                await updateDoc(itemDocRef, finalUpdateData);
                 console.log("Item updated successfully:", itemData.id);
-                return itemData;
+
+                // Re-fetch the updated item data to check stock levels
+                 const updatedDocSnap = await getDoc(itemDocRef);
+                 const updatedItemResult = { id: updatedDocSnap.id, ...updatedDocSnap.data() } as StockItem;
+
+                 // Check for low stock after edit
+                 const effectiveThreshold = updatedItemResult.minimumStock ?? adminSettings.lowStockThreshold;
+                 if (updatedItemResult.currentStock > 0 && updatedItemResult.currentStock <= effectiveThreshold) {
+                      toast({
+                           variant: "default", // Or 'warning'
+                           title: "Low Stock Warning",
+                           description: `${updatedItemResult.itemName} stock is low (${updatedItemResult.currentStock} <= ${effectiveThreshold}). Consider restocking.`,
+                           duration: 5000,
+                       });
+                  }
+
+
+                return updatedItemResult; // Return the actual updated data
             },
             onSuccess: (updatedItem) => {
                  queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
@@ -248,19 +390,19 @@
                     description: `${updatedItem.itemName} has been updated.`,
                 });
             },
-            onError: (error: any, updatedItem) => {
+            onError: (error: any, originalItemData) => { // Receive original item data on error
                 console.error("Error updating item:", error);
                  if (error.code === 'invalid-argument') {
                      toast({
                          variant: "destructive",
                          title: "Invalid Data Error",
-                         description: "There was an issue with the data format provided. (Details: " + error.message + ")",
+                         description: "There was an issue with the data format provided. Check numeric fields. (Details: " + error.message + ")",
                      });
                  } else {
                     toast({
                         variant: "destructive",
                         title: "Error Updating Item",
-                        description: error.message || `Could not update ${updatedItem?.itemName || 'item'}.`,
+                        description: error.message || `Could not update ${originalItemData?.itemName || 'item'}.`,
                     });
                  }
             },
@@ -318,16 +460,37 @@
                  console.log("Processing stock out for item:", data.itemId, "Quantity:", data.quantity);
                  const itemDocRef = doc(db, 'stockItems', data.itemId);
 
-                 const batch = writeBatch(db);
-                 batch.update(itemDocRef, {
-                     currentStock: increment(-data.quantity)
+                 // Use transaction for atomic update and fetch
+                 let updatedStockLevel = 0;
+                 await runTransaction(db, async (transaction) => {
+                    const sfDoc = await transaction.get(itemDocRef);
+                    if (!sfDoc.exists()) {
+                        throw "Document does not exist!";
+                    }
+                    const currentStock = sfDoc.data().currentStock || 0;
+                    updatedStockLevel = currentStock - data.quantity;
+                     if (updatedStockLevel < 0) {
+                        throw new Error("Stock out quantity exceeds available stock."); // Prevent negative stock
+                    }
+                    transaction.update(itemDocRef, { currentStock: increment(-data.quantity) });
                  });
 
-                 await batch.commit();
 
-                console.log("Stock updated successfully for item:", data.itemId);
-                return { ...data, itemName: itemToUpdate.itemName };
-            },
+                 console.log("Stock updated successfully for item:", data.itemId);
+
+                 // Check for low stock after stock out
+                 const effectiveThreshold = itemToUpdate.minimumStock ?? adminSettings.lowStockThreshold;
+                 if (updatedStockLevel > 0 && updatedStockLevel <= effectiveThreshold) {
+                      toast({
+                           variant: "default", // Or 'warning'
+                           title: "Low Stock Warning",
+                           description: `${itemToUpdate.itemName} stock is now low (${updatedStockLevel} <= ${effectiveThreshold}). Consider restocking.`,
+                           duration: 5000,
+                       });
+                  }
+
+                 return { ...data, itemName: itemToUpdate.itemName };
+             },
             onSuccess: (data) => {
                 queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
                 toast({
@@ -347,6 +510,34 @@
             },
         });
 
+         // Mutation for saving admin settings
+        const saveSettingsMutation = useMutation({
+            mutationFn: async (newSettings: AdminSettings) => {
+                if (!isAdmin || !db) throw new Error("Permission denied or DB not available.");
+                console.log("Saving admin settings to Firestore:", newSettings);
+                const settingsDocRef = doc(db, 'settings', 'admin');
+                await setDoc(settingsDocRef, newSettings, { merge: true }); // Use setDoc with merge to update or create
+                return newSettings;
+            },
+            onSuccess: (savedSettings) => {
+                queryClient.invalidateQueries({ queryKey: ['adminSettings'] }); // Refetch settings after save
+                toast({
+                    title: "Settings Saved",
+                    description: "Notification preferences have been updated.",
+                });
+                setIsSettingsDialogOpen(false);
+            },
+            onError: (error: any) => {
+                console.error("Error saving admin settings:", error);
+                toast({
+                    variant: "destructive",
+                    title: "Error Saving Settings",
+                    description: error.message || "Could not save settings.",
+                });
+            },
+        });
+
+
       const handleSearchChange = (query: string) => {
         setSearchQuery(query);
       };
@@ -362,11 +553,13 @@
       const handleEditItemSubmit = (data: EditItemFormData) => {
           if (!itemToEdit) return;
 
+          // Prepare the updated item object, ensuring numeric conversion and handling undefined
           const updatedItem: StockItem = {
-              ...itemToEdit,
+              id: itemToEdit.id, // Keep the original ID
+              userId: itemToEdit.userId || user?.uid || 'unknown', // Keep original or set current user
               itemName: data.itemName,
               currentStock: data.currentStock ?? 0,
-              minimumStock: data.minimumStock, // Changed from maximumStock
+              minimumStock: data.minimumStock === undefined || data.minimumStock === null ? undefined : Number(data.minimumStock), // Ensure number or undefined
               barcode: data.barcode || undefined,
               location: data.location || undefined,
               description: data.description || undefined,
@@ -374,8 +567,8 @@
               supplier: data.supplier || undefined,
               photoUrl: data.photoUrl || undefined,
               locationCoords: data.locationCoords || undefined,
-              userId: itemToEdit.userId || user?.uid || 'unknown',
           };
+
 
           if (!updatedItem.userId || updatedItem.userId === 'unknown') {
               console.error("Missing or invalid userId in item data for edit:", updatedItem);
@@ -409,7 +602,7 @@
         }
         try {
           await signOut(auth);
-          queryClient.clear();
+          queryClient.clear(); // Clear React Query cache on sign out
           toast({ title: "Signed Out", description: "You have been successfully signed out." });
         } catch (error) {
           console.error("Error signing out:", error);
@@ -420,6 +613,7 @@
         const filteredItems = stockItems.filter((item) => {
             const query = searchQuery.toLowerCase();
             if (!item || typeof item.itemName !== 'string') return false;
+            // Search across multiple relevant fields
             return (
                 item.itemName.toLowerCase().includes(query) ||
                 (item.barcode && item.barcode.toLowerCase().includes(query)) ||
@@ -430,17 +624,52 @@
             );
         });
 
-       const isMutating = stockOutMutation.isPending || addStockMutation.isPending || editItemMutation.isPending || deleteItemMutation.isPending; // Updated mutation name
+       const isMutating = stockOutMutation.isPending || addStockMutation.isPending || editItemMutation.isPending || deleteItemMutation.isPending || saveSettingsMutation.isPending; // Updated mutation name
 
-      const handleSaveSettings = (settings: { emailNotifications: boolean; pushNotifications: boolean; lowStockThreshold: number }) => {
-        console.log("Saving admin settings:", settings);
-        // TODO: Implement saving settings to Firestore or backend
-        toast({
-            title: "Settings Saved",
-            description: "Notification preferences have been updated.",
-        });
-        setIsSettingsDialogOpen(false);
-      };
+        // Trigger low stock alert checks when items or settings change
+        useEffect(() => {
+            if (!isAdmin && !isLoadingItems && !isLoadingSettings && stockItems.length > 0) {
+                let lowStockMessages: string[] = [];
+                stockItems.forEach(item => {
+                    const effectiveThreshold = item.minimumStock ?? adminSettings.lowStockThreshold;
+                    if (item.currentStock > 0 && item.currentStock <= effectiveThreshold) {
+                         lowStockMessages.push(`${item.itemName} (${item.currentStock})`);
+                    }
+                });
+
+                if (lowStockMessages.length > 0) {
+                    toast({
+                        variant: "destructive", // Use destructive variant for higher visibility
+                        title: `Low Stock Alert (${lowStockMessages.length} item${lowStockMessages.length > 1 ? 's' : ''})`,
+                        description: `Restock needed for: ${lowStockMessages.join(', ')}.`,
+                        duration: 10000, // Show for longer
+                    });
+                    // TODO: Implement email/push notifications based on adminSettings if enabled
+                    if (adminSettings.emailNotifications) {
+                        console.log("TODO: Send email notification for low stock:", lowStockMessages);
+                        // sendLowStockEmail(user?.email, lowStockMessages); // Example function call
+                    }
+                     if (adminSettings.pushNotifications) {
+                         console.log("TODO: Send push notification for low stock:", lowStockMessages);
+                         // sendLowStockPushNotification(user?.pushToken, lowStockMessages); // Example function call
+                     }
+                }
+            }
+        }, [stockItems, adminSettings, isLoadingItems, isLoadingSettings, isAdmin, user, toast]); // Dependencies
+
+
+        const handleSaveSettings = (settings: AdminSettings) => {
+            saveSettingsMutation.mutate(settings);
+        };
+
+
+        // Refetch handler combining both data types
+        const handleRetryFetch = () => {
+             if (fetchError) refetchItems();
+             // Optionally refetch settings if there was an error, though less common
+             // if (settingsError) refetchSettings();
+         };
+
 
       return (
         <div className="container mx-auto p-4 md:p-8">
@@ -455,8 +684,8 @@
                <div className="flex items-center space-x-4">
                     <ThemeToggle />
                      {isAdmin && (
-                       <Button variant="outline" size="icon" onClick={() => setIsSettingsDialogOpen(true)} aria-label="Admin Settings">
-                          <Settings className="h-5 w-5" />
+                       <Button variant="outline" size="icon" onClick={() => setIsSettingsDialogOpen(true)} disabled={isLoadingSettings || isMutating} aria-label="Admin Settings">
+                          {isLoadingSettings ? <Loader2 className="h-5 w-5 animate-spin" /> : <Settings className="h-5 w-5" />}
                        </Button>
                      )}
                     <Button variant="outline" onClick={handleSignOut} disabled={isMutating || !user}>
@@ -490,7 +719,7 @@
                            <AlertTitle>Error Loading Data</AlertTitle>
                            <AlertDescription>
                                Could not load stock items. {(fetchError as Error).message}
-                               <Button variant="outline" size="sm" onClick={() => refetch()} className="ml-4">Retry</Button>
+                               <Button variant="outline" size="sm" onClick={handleRetryFetch} className="ml-4">Retry</Button>
                            </AlertDescription>
                        </Alert>
                     )}
@@ -500,6 +729,7 @@
                             onEdit={handleEditClick}
                             onDelete={handleDeleteClick}
                             isAdmin={isAdmin}
+                            globalLowStockThreshold={adminSettings.lowStockThreshold} // Pass global threshold
                          />
                      )}
                   </CardContent>
@@ -591,7 +821,8 @@
                     isOpen={isSettingsDialogOpen}
                     onClose={() => setIsSettingsDialogOpen(false)}
                     onSave={handleSaveSettings}
-                    currentSettings={{ emailNotifications: true, pushNotifications: false, lowStockThreshold: 10 }}
+                     currentSettings={adminSettings} // Pass fetched settings
+                     isLoading={saveSettingsMutation.isPending} // Pass loading state
                   />
              )}
         </div>
@@ -603,9 +834,16 @@
     export default function Home() {
         return (
             <QueryClientProvider client={queryClient}>
-                <RequireAuth>
-                     <StockManagementPageContent />
-                </RequireAuth>
+                 <ThemeProvider
+                    attribute="class"
+                    defaultTheme="system"
+                    enableSystem
+                    disableTransitionOnChange
+                 >
+                    <RequireAuth>
+                        <StockManagementPageContent />
+                    </RequireAuth>
+                </ThemeProvider>
             </QueryClientProvider>
         );
     }

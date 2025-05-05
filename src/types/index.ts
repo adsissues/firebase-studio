@@ -11,8 +11,7 @@ export interface StockItem {
   itemName: string;
   barcode?: string;
   currentStock: number;
-  minimumStock?: number; // Changed from maximumStock to optional minimumStock
-  lowStockThreshold?: number; // Added optional low stock threshold per item
+  minimumStock?: number; // Optional minimum stock level SPECIFIC to this item. Overrides global threshold if set.
   location?: string; // User-defined location string
   description?: string; // Optional description
   category?: string; // Optional category
@@ -25,6 +24,13 @@ export interface StockItem {
 // Define a User type extending FirebaseUser with role information
 export interface AppUser extends FirebaseUser {
   role?: 'admin' | 'user'; // Define possible roles
+}
+
+// Settings type, particularly for admin configurations
+export interface AdminSettings {
+  emailNotifications: boolean;
+  pushNotifications: boolean; // Placeholder for future push notification implementation
+  lowStockThreshold: number; // Global threshold for low stock notifications, unless overridden by item.minimumStock
 }
 
 

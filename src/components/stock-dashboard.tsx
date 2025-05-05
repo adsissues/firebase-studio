@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { StockItem } from '@/types';
-import { AlertTriangle, MapPin, Barcode, Tag, Building, Info, Image as ImageIcon, MapPinned, Pencil, Trash2, UserCircle, TrendingDown, Circle } from 'lucide-react'; // Removed TrendingUp
+import { AlertTriangle, MapPin, Barcode, Tag, Building, Info, Image as ImageIcon, MapPinned, Pencil, Trash2, UserCircle, TrendingDown, Circle } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 
 interface StockDashboardProps {
@@ -23,13 +23,16 @@ interface StockDashboardProps {
   onEdit: (item: StockItem) => void;
   onDelete: (item: StockItem) => void;
   isAdmin?: boolean;
+  globalLowStockThreshold: number; // Add prop for the global threshold
 }
 
-export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: StockDashboardProps) {
+export function StockDashboard({ items, onEdit, onDelete, isAdmin = false, globalLowStockThreshold }: StockDashboardProps) {
   const { user } = useAuth();
 
   const getStatus = (item: StockItem) => {
-    const { currentStock, lowStockThreshold = 10 } = item; // Use item's threshold or default
+    // Use item's specific minimumStock if set, otherwise fallback to the global threshold
+    const effectiveThreshold = item.minimumStock !== undefined ? item.minimumStock : globalLowStockThreshold;
+    const { currentStock } = item;
 
     if (currentStock === 0) {
       return (
@@ -38,7 +41,7 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
           Out of Stock
         </Badge>
       );
-    } else if (currentStock <= lowStockThreshold) { // Use lowStockThreshold for "Low Stock"
+    } else if (currentStock <= effectiveThreshold) { // Use effectiveThreshold for "Low Stock"
        return (
          <Badge variant="destructive" className="flex items-center gap-1 text-xs whitespace-nowrap">
            <TrendingDown className="h-3 w-3" /> {/* Use TrendingDown for Low */}
@@ -46,15 +49,6 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
          </Badge>
        );
      }
-    // Removed "Full Stock" logic based on maximumStock
-    // } else if (maximumStock && currentStock >= maximumStock) {
-    //    return (
-    //      <Badge variant="success" className="flex items-center gap-1 text-xs whitespace-nowrap">
-    //        <TrendingUp className="h-3 w-3" /> {/* Use TrendingUp for Full */}
-    //        Full Stock
-    //      </Badge>
-    //    );
-    // }
     else {
       // Default "Okay" status if not Out or Low
       return (
@@ -176,52 +170,65 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
               </TableCell>
             </TableRow>
           ) : (
-            items.map((item) => (
-               // Adjusted background logic based on lowStockThreshold
-               <TableRow key={item.id} className={item.currentStock <= (item.lowStockThreshold ?? 10) && item.currentStock !== 0 ? 'bg-destructive/10 hover:bg-destructive/20' : item.currentStock === 0 ? 'bg-destructive/20 hover:bg-destructive/30 opacity-70' : ''}>
-                <TableCell className="font-medium">{item.itemName}</TableCell>
-                <TableCell className="hidden xl:table-cell text-center">{renderPhoto(item)}</TableCell>
-                <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(Tag, item.category, 'Category')}</TableCell>
-                <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(Building, item.supplier, 'Supplier')}</TableCell>
-                <TableCell className="hidden sm:table-cell text-muted-foreground text-xs">{renderLocation(item)}</TableCell>
-                <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(Barcode, item.barcode, 'Barcode')}</TableCell>
-                <TableCell className="hidden xl:table-cell text-muted-foreground text-xs">{renderDetail(Info, item.description, 'Description')}</TableCell>
-                {isAdmin && <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(UserCircle, item.userId, 'User ID', item.userId)}</TableCell>}
-                <TableCell className="text-right font-mono">{item.currentStock}</TableCell>
-                <TableCell className="text-right font-mono text-muted-foreground">{item.minimumStock ?? '-'}</TableCell> {/* Changed field */}
-                <TableCell className="text-center">{getStatus(item)}</TableCell>
-                <TableCell className="text-center">
-                  {canPerformAction(item) ? (
-                    <div className="flex justify-center gap-1">
-                      <TooltipProvider delayDuration={100}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(item)}>
-                              <Pencil className="h-4 w-4" />
-                              <span className="sr-only">Edit {item.itemName}</span>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Edit Item</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                      <TooltipProvider delayDuration={100}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
-                              <Trash2 className="h-4 w-4" />
-                              <span className="sr-only">Delete {item.itemName}</span>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Delete Item</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground text-xs">-</span>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))
+            items.map((item) => {
+                // Determine effective threshold for highlighting
+                const effectiveThreshold = item.minimumStock !== undefined ? item.minimumStock : globalLowStockThreshold;
+                const isLowStock = item.currentStock > 0 && item.currentStock <= effectiveThreshold;
+                const isOutOfStock = item.currentStock === 0;
+
+               return (
+                 // Adjusted background logic based on effectiveThreshold
+                 <TableRow
+                    key={item.id}
+                    className={cn(
+                         isLowStock ? 'bg-destructive/10 hover:bg-destructive/20' : '',
+                         isOutOfStock ? 'bg-destructive/20 hover:bg-destructive/30 opacity-70' : ''
+                    )}
+                >
+                    <TableCell className="font-medium">{item.itemName}</TableCell>
+                    <TableCell className="hidden xl:table-cell text-center">{renderPhoto(item)}</TableCell>
+                    <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(Tag, item.category, 'Category')}</TableCell>
+                    <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(Building, item.supplier, 'Supplier')}</TableCell>
+                    <TableCell className="hidden sm:table-cell text-muted-foreground text-xs">{renderLocation(item)}</TableCell>
+                    <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(Barcode, item.barcode, 'Barcode')}</TableCell>
+                    <TableCell className="hidden xl:table-cell text-muted-foreground text-xs">{renderDetail(Info, item.description, 'Description')}</TableCell>
+                    {isAdmin && <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(UserCircle, item.userId, 'User ID', item.userId)}</TableCell>}
+                    <TableCell className="text-right font-mono">{item.currentStock}</TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">{item.minimumStock ?? '-'}</TableCell> {/* Changed field */}
+                    <TableCell className="text-center">{getStatus(item)}</TableCell>
+                    <TableCell className="text-center">
+                      {canPerformAction(item) ? (
+                        <div className="flex justify-center gap-1">
+                          <TooltipProvider delayDuration={100}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(item)}>
+                                  <Pencil className="h-4 w-4" />
+                                  <span className="sr-only">Edit {item.itemName}</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Edit Item</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <TooltipProvider delayDuration={100}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
+                                  <Trash2 className="h-4 w-4" />
+                                  <span className="sr-only">Delete {item.itemName}</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Delete Item</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+               );
+            })
           )}
         </TableBody>
       </Table>
