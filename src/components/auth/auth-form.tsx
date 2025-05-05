@@ -55,6 +55,11 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
     console.error(`Sign In Error:`, authError);
     let message = 'An unexpected error occurred. Please try again.';
     switch (authError.code) {
+      case 'auth/invalid-api-key':
+      case 'auth/api-key-not-valid': // Handle variations
+      case 'auth/api-key-not-valid.-please-pass-a-valid-api-key.': // Handle variations
+        message = 'Firebase API Key is invalid. Please ensure it is configured correctly in the application setup (.env.local).';
+        break;
       case 'auth/invalid-email':
         message = 'Invalid email address format.';
         break;
@@ -75,6 +80,11 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
   };
 
   const onSubmit = async (values: AuthFormData) => {
+    if (!auth) {
+        setError("Firebase Authentication is not configured correctly. Check console for details.");
+        setIsLoading(false);
+        return;
+    }
     setIsLoading(true);
     setError(null);
     const { email, password } = values;
@@ -89,6 +99,8 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
     }
      // Set loading to false only on error or completion (handled implicitly by component unmount/redirect on success)
      // If onSuccess doesn't cause unmount, add setIsLoading(false) in try block after onSuccess()
+     // Keep isLoading true on success if redirecting, otherwise set to false
+     // For safety, ensure it's set to false on error path handled by handleAuthError
   };
 
   return (
@@ -152,4 +164,3 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
     </Card>
   );
 }
-
