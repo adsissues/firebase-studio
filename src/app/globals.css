@@ -8,25 +8,28 @@ body {
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    --background: 0 0% 100%; /* White */
+    --foreground: 0 0% 3.9%; /* Dark Grey/Black */
     --card: 0 0% 100%;
     --card-foreground: 0 0% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
+    --primary: 213 69% 60%; /* Calm Blue #4A90E2 */
+    --primary-foreground: 0 0% 98%; /* White */
+    --secondary: 0 0% 96.1%; /* Light Grey */
     --secondary-foreground: 0 0% 9%;
     --muted: 0 0% 96.1%;
     --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
+    /* Accent is often used for focus rings etc. Let's use the blue for accent as well */
+    --accent: 213 69% 95%; /* Lighter Blue for hover/accent states */
+    --accent-foreground: 213 69% 40%; /* Darker blue text on accent bg */
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
+    --success: 138 58% 37%; /* Green #259643 */
+    --success-foreground: 0 0% 98%; /* White */
     --border: 0 0% 89.8%;
     --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
+    --ring: 213 69% 60%; /* Use primary blue for focus rings */
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
@@ -43,25 +46,27 @@ body {
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
+    --background: 240 10% 3.9%; /* Dark background */
+    --foreground: 0 0% 98%; /* White */
+    --card: 240 10% 3.9%;
     --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
+    --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
+    --primary: 213 69% 60%; /* Calm Blue #4A90E2 */
+    --primary-foreground: 0 0% 98%; /* White */
+    --secondary: 240 3.7% 15.9%; /* Darker Grey */
     --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
+    --muted: 240 3.7% 15.9%;
     --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 213 69% 30%; /* Darker Blue for hover/accent */
+    --accent-foreground: 0 0% 98%; /* White text on accent bg */
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
+    --success: 138 58% 45%; /* Slightly lighter Green for dark mode */
+    --success-foreground: 0 0% 98%; /* White */
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 213 69% 60%; /* Use primary blue for focus rings */
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
