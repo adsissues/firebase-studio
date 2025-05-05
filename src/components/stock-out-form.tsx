@@ -23,18 +23,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { StockItem } from '@/types';
-import { MinusCircle, Loader2 } from 'lucide-react'; // Import Loader2
+import { MinusCircle, Loader2 } from 'lucide-react';
+import { useAuth } from '@/context/auth-context'; // Import useAuth
 
 interface StockOutFormProps {
-  items: StockItem[];
+  items: StockItem[]; // Receive all items fetched by parent
   onSubmit: (data: StockOutFormData) => void;
-  isLoading?: boolean; // Add isLoading prop
+  isLoading?: boolean;
 }
 
 // Dynamic schema based on selected item's stock
 const createFormSchema = (items: StockItem[]) => z.object({
   itemId: z.string().min(1, { message: 'Please select an item.' }),
-  quantity: z.coerce // Coerce input to number
+  quantity: z.coerce
     .number({ invalid_type_error: 'Quantity must be a number.' })
     .int({ message: 'Quantity must be a whole number.' })
     .positive({ message: 'Quantity must be greater than zero.' }),
@@ -48,7 +49,7 @@ const createFormSchema = (items: StockItem[]) => z.object({
     const selectedItem = items.find(item => item.id === data.itemId);
     return {
       message: `Quantity cannot exceed available stock (${selectedItem?.currentStock ?? 0}).`,
-      path: ['quantity'], // Apply error to quantity field
+      path: ['quantity'],
     };
   }
 );
@@ -57,8 +58,23 @@ const createFormSchema = (items: StockItem[]) => z.object({
 export type StockOutFormData = z.infer<ReturnType<typeof createFormSchema>>;
 
 export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFormProps) {
-  // Recreate schema when items change
-  const formSchema = React.useMemo(() => createFormSchema(items), [items]);
+   const { user, isAdmin } = useAuth(); // Get user and admin status
+
+  // Filter items based on user ownership or admin status *before* creating schema/form
+  const userVisibleItems = React.useMemo(() => {
+      if (!user) return []; // No items visible if not logged in
+      if (isAdmin) return items; // Admin sees all items
+      return items.filter(item => item.userId === user.uid); // User sees only their items
+  }, [items, user, isAdmin]);
+
+   // Filter out items with 0 stock from the user-visible items
+   const availableItems = React.useMemo(() => {
+       return userVisibleItems.filter(item => item.currentStock > 0);
+   }, [userVisibleItems]);
+
+
+  // Recreate schema based on *all* user-visible items (validation needs access to original stock)
+  const formSchema = React.useMemo(() => createFormSchema(userVisibleItems), [userVisibleItems]);
 
   const form = useForm<StockOutFormData>({
     resolver: zodResolver(formSchema),
@@ -66,36 +82,27 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
       itemId: '',
       quantity: 1,
     },
-    context: { items }, // Pass items to resolver context if needed
-    mode: "onChange", // Validate on change for better UX
+    context: { items: userVisibleItems }, // Pass user-visible items to resolver context
+    mode: "onChange",
   });
-
-   // Filter out items with 0 stock for the dropdown
-   const availableItems = items.filter(item => item.currentStock > 0);
 
 
   function handleFormSubmit(values: StockOutFormData) {
-    // Validation is now handled by Zod resolver including the refine check
     console.log("Stock Out:", values);
     onSubmit(values);
-    // Resetting is handled by parent now
-    // form.resetField("quantity", { defaultValue: 1 });
-    // form.resetField("itemId", { defaultValue: '' });
   }
 
-   // Reset form if submission is successful (isLoading becomes false after being true)
    React.useEffect(() => {
      if (!isLoading && form.formState.isSubmitSuccessful) {
-        form.reset({ itemId: '', quantity: 1 }); // Reset with default values
+        form.reset({ itemId: '', quantity: 1 });
      }
    }, [isLoading, form.formState.isSubmitSuccessful, form.reset]);
 
 
   return (
     <Form {...form}>
-      {/* Removed redundant border and shadow, added padding to match card */}
       <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 p-6">
-         <fieldset disabled={isLoading} className="space-y-4"> {/* Disable form fields when loading */}
+         <fieldset disabled={isLoading || !user} className="space-y-4"> {/* Disable if loading or not logged in */}
            <h2 className="text-lg font-semibold text-primary mb-4">Log Stock Out</h2>
           <FormField
             control={form.control}
@@ -106,9 +113,10 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
                 <Select
                   onValueChange={(value) => {
                       field.onChange(value);
-                      form.trigger("quantity"); // Re-validate quantity when item changes
+                      form.trigger("quantity");
                   }}
                   value={field.value || ''}
+                   disabled={!user} // Disable if not logged in
                 >
                   <FormControl>
                     <SelectTrigger>
@@ -116,7 +124,9 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                     {availableItems.length === 0 ? (
+                     {!user ? (
+                         <SelectItem value="login-required" disabled>Please log in</SelectItem>
+                     ) : availableItems.length === 0 ? (
                        <SelectItem value="no-items" disabled>
                          No items with stock available
                        </SelectItem>
@@ -147,6 +157,7 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
                       {...field}
                       value={field.value ?? ''}
                       onChange={e => field.onChange(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                       disabled={!user || !form.watch('itemId')} // Disable if no item selected or not logged in
                     />
                 </FormControl>
                 <FormMessage />
@@ -154,7 +165,7 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
             )}
           />
          </fieldset>
-        <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
+        <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading || !user}>
            {isLoading ? (
              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
            ) : (
@@ -166,4 +177,3 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
     </Form>
   );
 }
-
