@@ -73,6 +73,10 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
   const [capturedPhotoUrl, setCapturedPhotoUrl] = React.useState<string | null>(item.photoUrl || null);
   const [capturedLocation, setCapturedLocation] = React.useState<LocationCoords | null>(item.locationCoords || null);
   const [showCameraFeed, setShowCameraFeed] = React.useState(false);
+  // Define missing state variables
+  const [isCapturingLocation, setIsCapturingLocation] = React.useState(false);
+  const [isScanningBarcode, setIsScanningBarcode] = React.useState(false);
+
 
   const form = useForm<z.infer<typeof formSchema>>({ // Use inferred type directly for useForm
     resolver: zodResolver(formSchema),
@@ -481,4 +485,3 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
     </Form>
   );
 }
-
