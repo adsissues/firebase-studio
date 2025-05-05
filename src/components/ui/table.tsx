@@ -55,7 +55,7 @@ const TableFooter = React.forwardRef<
 ));
 TableFooter.displayName = "TableFooter";
 
-// Updated TableRow to fix whitespace/hydration issue again
+// Ensure children are directly inside the tag without extra whitespace
 const TableRow = React.forwardRef<
   HTMLTableRowElement,
   React.HTMLAttributes<HTMLTableRowElement>
@@ -67,7 +67,7 @@ const TableRow = React.forwardRef<
       className
     )}
     {...props}
-  >{children}</tr> // Ensure children are directly inside the tag without extra whitespace
+  >{children}</tr> // Place children directly inside the closing tag
 ));
 TableRow.displayName = "TableRow";
 
