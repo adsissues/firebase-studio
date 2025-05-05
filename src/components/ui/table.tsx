@@ -1,3 +1,4 @@
+
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
@@ -66,9 +67,9 @@ const TableRow = React.forwardRef<
       className
     )}
     {...props}
-  >
-    {children} {/* Ensure that children are directly inside without extra whitespace */}
-  </tr>
+  >{/* Ensure no whitespace before children */}
+    {children}
+  </tr>// Ensure no whitespace after children or before closing tag
 ));
 TableRow.displayName = "TableRow";
 
