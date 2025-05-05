@@ -16,15 +16,18 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { StockItem } from '@/types';
 import { AlertTriangle, MapPin, Barcode, Tag, Building, Info, Image as ImageIcon, MapPinned, Pencil, Trash2, UserCircle } from 'lucide-react'; // Added UserCircle
+import { useAuth } from '@/context/auth-context'; // Import useAuth
 
 interface StockDashboardProps {
   items: StockItem[];
   onEdit: (item: StockItem) => void;
   onDelete: (item: StockItem) => void;
-  isAdmin?: boolean; // Add isAdmin prop
+  isAdmin?: boolean; // Prop already exists from previous step
 }
 
 export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: StockDashboardProps) {
+  const { user } = useAuth(); // Get the current user
+
   const getStatus = (item: StockItem) => {
     if (item.currentStock === 0) {
       return (
@@ -47,7 +50,7 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
     }
   };
 
-  const renderDetail = (icon: React.ElementType, value: string | number | undefined, label?: string, fullValue?: string) => {
+  const renderDetail = (icon: React.ElementType, value: string | number | undefined | null, label?: string, fullValue?: string) => {
       if (!value && value !== 0) return <span className="text-muted-foreground">-</span>;
       const Icon = icon;
       const displayValue = typeof value === 'string' && value.length > 20 ? `${value.substring(0, 17)}...` : value;
@@ -124,6 +127,13 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
      );
     };
 
+  // Determine if the current user can perform actions on a specific item
+  const canPerformAction = (item: StockItem) => {
+    if (!user) return false; // Not logged in
+    if (isAdmin) return true; // Admin can always perform actions
+    return item.userId === user.uid; // Non-admin can only act on their own items
+  };
+
 
   return (
     <div className="rounded-lg border shadow-sm overflow-hidden">
@@ -132,24 +142,23 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
         <TableHeader>
           <TableRow>
             <TableHead className="w-[15%] min-w-[120px]">Item Name</TableHead>
-             <TableHead className="hidden xl:table-cell text-center w-[50px]">Photo</TableHead>
-             <TableHead className="hidden md:table-cell w-[10%] min-w-[80px]">Category</TableHead>
-             <TableHead className="hidden lg:table-cell w-[10%] min-w-[80px]">Supplier</TableHead>
+            <TableHead className="hidden xl:table-cell text-center w-[50px]">Photo</TableHead>
+            <TableHead className="hidden md:table-cell w-[10%] min-w-[80px]">Category</TableHead>
+            <TableHead className="hidden lg:table-cell w-[10%] min-w-[80px]">Supplier</TableHead>
             <TableHead className="hidden sm:table-cell w-[15%] min-w-[100px]">Location</TableHead>
             <TableHead className="hidden lg:table-cell w-[10%] min-w-[80px]">Barcode</TableHead>
-             <TableHead className="hidden xl:table-cell w-[15%] min-w-[100px]">Description</TableHead>
-             {isAdmin && <TableHead className="hidden md:table-cell w-[10%] min-w-[80px]">Owner (User)</TableHead>} {/* Show Owner if Admin */}
+            <TableHead className="hidden xl:table-cell w-[15%] min-w-[100px]">Description</TableHead>
+            {isAdmin && <TableHead className="hidden md:table-cell w-[10%] min-w-[80px]">Owner (User)</TableHead>}
             <TableHead className="text-right w-[70px]">Current</TableHead>
             <TableHead className="text-right w-[50px]">Min.</TableHead>
             <TableHead className="text-center w-[90px]">Status</TableHead>
-            {/* Actions column always visible, but content depends on role */}
             <TableHead className="text-center w-[100px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {items.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={isAdmin ? 12 : 11} className="h-24 text-center text-muted-foreground">{/* Adjust colSpan based on isAdmin */}
+              <TableCell colSpan={isAdmin ? 12 : 11} className="h-24 text-center text-muted-foreground">
                 No stock items found matching your search.
               </TableCell>
             </TableRow>
@@ -163,39 +172,40 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false }: Sto
                 <TableCell className="hidden sm:table-cell text-muted-foreground text-xs">{renderLocation(item)}</TableCell>
                 <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(Barcode, item.barcode, 'Barcode')}</TableCell>
                 <TableCell className="hidden xl:table-cell text-muted-foreground text-xs">{renderDetail(Info, item.description, 'Description')}</TableCell>
-                {isAdmin && <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(UserCircle, item.userId, 'User ID', item.userId)}</TableCell>} {/* Show Owner if Admin */}
+                {isAdmin && <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(UserCircle, item.userId, 'User ID', item.userId)}</TableCell>}
                 <TableCell className="text-right font-mono">{item.currentStock}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">{item.minStock ?? '-'}</TableCell>
                 <TableCell className="text-center">{getStatus(item)}</TableCell>
                 <TableCell className="text-center">
-                   {/* Conditionally render actions based on isAdmin or ownership (assuming userId exists on item) */}
-                  {/* For now, only admin can edit/delete any item. Non-admins can only edit/delete their own (handled in mutation logic) */}
-                  {/* We show buttons for all owned items for non-admins, and all items for admins */}
-                  {/* The actual permission is enforced in the mutation function */}
-                   <div className="flex justify-center gap-1">
-                     <TooltipProvider delayDuration={100}>
-                       <Tooltip>
-                         <TooltipTrigger asChild>
-                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(item)}>
-                             <Pencil className="h-4 w-4" />
-                             <span className="sr-only">Edit {item.itemName}</span>
-                           </Button>
-                         </TooltipTrigger>
-                         <TooltipContent>Edit Item</TooltipContent>
-                       </Tooltip>
-                     </TooltipProvider>
-                     <TooltipProvider delayDuration={100}>
-                       <Tooltip>
-                         <TooltipTrigger asChild>
-                           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
-                             <Trash2 className="h-4 w-4" />
-                             <span className="sr-only">Delete {item.itemName}</span>
-                           </Button>
-                         </TooltipTrigger>
-                         <TooltipContent>Delete Item</TooltipContent>
-                       </Tooltip>
-                     </TooltipProvider>
-                   </div>
+                  {canPerformAction(item) ? (
+                    <div className="flex justify-center gap-1">
+                      <TooltipProvider delayDuration={100}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(item)}>
+                              <Pencil className="h-4 w-4" />
+                              <span className="sr-only">Edit {item.itemName}</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Edit Item</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      <TooltipProvider delayDuration={100}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
+                              <Trash2 className="h-4 w-4" />
+                              <span className="sr-only">Delete {item.itemName}</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Delete Item</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  ) : (
+                    // Optionally show disabled buttons or nothing if user cannot act
+                    <span className="text-muted-foreground text-xs">-</span>
+                  )}
                 </TableCell>
               </TableRow>
             ))

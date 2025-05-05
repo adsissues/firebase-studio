@@ -7,12 +7,12 @@ import { getAuth, Auth } from 'firebase/auth';
 // Your web app's Firebase configuration
 // Ensure these environment variables are set in your .env.local file
 const firebaseConfig: FirebaseOptions = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  apiKey: "AIzaSyAr3ZqN5w1xOYYiSZEk12Cak74Ar_dR0Cs",
+  authDomain: "shipshape-wbwno.firebaseapp.com",
+  projectId: "shipshape-wbwno",
+  storageBucket: "shipshape-wbwno.firebasestorage.app",
+  messagingSenderId: "151363841939",
+  appId: "1:151363841939:web:e682165aa874215bed8266"
   // measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID, // Optional: add if you need Analytics
 };
 
