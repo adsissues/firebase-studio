@@ -4,6 +4,7 @@
     import * as React from 'react';
     import { ItemSearch } from '@/components/item-search';
     import { StockDashboard } from '@/components/stock-dashboard';
+    import { StockMovementDashboard } from '@/components/stock-movement-dashboard'; // Import StockMovementDashboard
     import { StockOutForm, type StockOutFormDataSubmit } from '@/components/stock-out-form'; // Adjusted import name
     import { AddStockForm, type AddStockFormData } from '@/components/add-stock-form'; // Renamed component and type
     import { EditItemForm, type EditItemFormData } from '@/components/edit-item-form';
@@ -11,22 +12,23 @@
     import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
     import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
     import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-    import type { StockItem, AdminSettings } from '@/types'; // Import AdminSettings
+    import type { StockItem, AdminSettings, StockMovementLog } from '@/types'; // Import AdminSettings & StockMovementLog
     import { useState, useEffect } from 'react'; // Import useEffect
     import { useToast } from "@/hooks/use-toast";
     import { QueryClient, QueryClientProvider, useQuery, useMutation, QueryCache } from '@tanstack/react-query';
     import { db, auth } from '@/lib/firebase/firebase';
-    import { collection, getDocs, addDoc, updateDoc, doc, increment, deleteDoc, writeBatch, query, where, runTransaction, setDoc, getDoc } from 'firebase/firestore'; // Import setDoc, getDoc
+    import { collection, getDocs, addDoc, updateDoc, doc, increment, deleteDoc, writeBatch, query, where, runTransaction, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'; // Import setDoc, getDoc, serverTimestamp
     import { Skeleton } from '@/components/ui/skeleton';
     import { Button } from '@/components/ui/button';
     import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-    import { AlertTriangle, Loader2, Trash2, LogOut, Settings } from 'lucide-react';
+    import { AlertTriangle, Loader2, Trash2, LogOut, Settings, Camera, XCircle, VideoOff } from 'lucide-react'; // Added Camera icons
     import { RequireAuth } from '@/components/auth/require-auth';
     import { useAuth } from '@/context/auth-context';
     import { signOut } from 'firebase/auth';
     import { ThemeProvider } from "@/components/theme-provider"; // Import ThemeProvider
     import { ThemeToggle } from "@/components/theme-toggle";
     import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
+    import { searchItemByPhoto, type SearchItemByPhotoInput } from '@/ai/flows/search-item-by-photo-flow'; // Import photo search flow
 
     const queryClient = new QueryClient({
       queryCache: new QueryCache({
@@ -57,6 +59,11 @@
       const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
       const [itemToDelete, setItemToDelete] = useState<StockItem | null>(null);
       const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
+      const [isPhotoSearchOpen, setIsPhotoSearchOpen] = useState(false);
+      const [photoSearchLoading, setPhotoSearchLoading] = useState(false);
+      const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+      const videoRef = React.useRef<HTMLVideoElement>(null);
+      const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
         // Fetch Admin Settings (only if user is admin)
         const { data: adminSettings = defaultAdminSettings, isLoading: isLoadingSettings, refetch: refetchSettings } = useQuery<AdminSettings>({
@@ -135,6 +142,64 @@
          refetchOnWindowFocus: true,
       });
 
+      // Fetch stock movement logs
+      const { data: stockMovements = [], isLoading: isLoadingMovements, refetch: refetchMovements } = useQuery<StockMovementLog[]>({
+         queryKey: ['stockMovements', user?.uid],
+         queryFn: async () => {
+             if (!user) return [];
+             console.log("Fetching stock movements for user:", user.uid);
+             const logsCol = collection(db, 'stockMovements');
+             // Admin sees all logs, user sees logs related to their items (might need adjustment based on exact needs)
+             // This query fetches logs where the logged item's userId matches the current user's ID
+             // OR fetches all logs if the current user is an admin.
+             const q = isAdmin ? query(logsCol) : query(logsCol, where("userId", "==", user.uid));
+             try {
+                const logSnapshot = await getDocs(q);
+                 const logsList = logSnapshot.docs.map(doc => ({
+                     id: doc.id,
+                     ...doc.data(),
+                     // Ensure timestamp is correctly typed if necessary (though Firestore SDK often handles this)
+                     // timestamp: (doc.data().timestamp as FirebaseTimestamp).toDate() // Example if conversion needed
+                 } as StockMovementLog));
+                 console.log(`Fetched ${logsList.length} stock movements.`);
+                 // Sort by timestamp descending
+                 logsList.sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
+                 return logsList;
+             } catch (err) {
+                 console.error("Error fetching stock movements:", err);
+                 toast({ variant: "destructive", title: "Error Loading Movements", description: "Could not load stock movement history." });
+                 throw err;
+             }
+         },
+         enabled: !!user, // Enable only when user is logged in
+         staleTime: 2 * 60 * 1000, // Cache for 2 minutes
+         refetchOnWindowFocus: true,
+      });
+
+      // Helper function to log stock movements
+      const logStockMovement = async (item: StockItem, quantityChange: number, newStockLevel: number) => {
+        if (!user || !db) return;
+        try {
+            const logData: Omit<StockMovementLog, 'id' | 'timestamp'> & { timestamp: any } = {
+                itemId: item.id,
+                itemName: item.itemName,
+                quantityChange: quantityChange,
+                newStockLevel: newStockLevel,
+                type: quantityChange > 0 ? 'in' : 'out',
+                userId: user.uid,
+                userEmail: user.email || undefined,
+                timestamp: serverTimestamp(), // Use server timestamp
+            };
+            await addDoc(collection(db, 'stockMovements'), logData);
+            console.log("Stock movement logged:", logData);
+            queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid] }); // Invalidate movement logs cache
+        } catch (error) {
+            console.error("Error logging stock movement:", error);
+            toast({ variant: "destructive", title: "Logging Error", description: "Could not log stock movement." });
+        }
+    };
+
+
         // Mutation for adding stock (handles both new items and adding to existing)
         const addStockMutation = useMutation({
             mutationFn: async (formData: AddStockFormData) => {
@@ -195,6 +260,8 @@
                      const existingDoc = querySnapshot.docs[0]; // Assume first match is the one
                      const itemDocRef = doc(db, 'stockItems', existingDoc.id);
                      console.log("Item exists, updating stock for ID:", existingDoc.id);
+                     let finalStockLevel = 0;
+                     let existingItemData: StockItem | null = null;
 
                       // Use a transaction to safely update stock and other fields
                       await runTransaction(db, async (transaction) => {
@@ -202,7 +269,8 @@
                            if (!sfDoc.exists()) {
                                throw "Document does not exist!";
                            }
-                           const currentData = sfDoc.data();
+                           const currentData = sfDoc.data() as Omit<StockItem, 'id'>;
+                           existingItemData = { ...currentData, id: existingDoc.id }; // Capture existing data for logging
                            const updatedData = { ...dataToSave }; // Start with cleaned form data from the form
 
                            // Ensure minimumStock is updated or kept
@@ -226,8 +294,13 @@
 
                            // Atomically increment the current stock
                            const newStock = (currentData.currentStock || 0) + quantity;
+                           finalStockLevel = newStock; // Capture final stock level for logging
                            transaction.update(itemDocRef, { ...finalUpdateData, currentStock: newStock });
                        });
+
+                      if (existingItemData) {
+                           await logStockMovement(existingItemData, quantity, finalStockLevel);
+                      }
 
                       const updatedDocSnap = await getDoc(itemDocRef); // Re-fetch to get the final state
                       const resultData = { ...updatedDocSnap.data(), id: updatedDocSnap.id } as StockItem;
@@ -240,7 +313,7 @@
                                variant: "default", // Or maybe a different variant like 'warning' if you add one
                                title: "Low Stock Warning",
                                description: `${resultData.itemName} stock is low (${resultData.currentStock} <= ${effectiveThreshold}). Consider restocking.`,
-                               duration: 5000,
+                               duration: 7000, // Increased duration
                             });
                        }
 
@@ -270,6 +343,9 @@
 
                      const newItem = { id: docRef.id, ...finalNewItemData } as StockItem;
 
+                     // Log the initial stock addition
+                     await logStockMovement(newItem, quantity, newItem.currentStock);
+
                       // Check for low stock immediately after adding
                       const effectiveThreshold = newItem.minimumStock ?? adminSettings.lowStockThreshold;
                       if (newItem.currentStock > 0 && newItem.currentStock <= effectiveThreshold) {
@@ -277,7 +353,7 @@
                                variant: "default", // Or 'warning'
                                title: "Low Stock Warning",
                                description: `${newItem.itemName} stock is low (${newItem.currentStock} <= ${effectiveThreshold}). Consider restocking.`,
-                               duration: 5000,
+                               duration: 7000, // Increased duration
                            });
                        }
 
@@ -316,6 +392,16 @@
                  const itemDocRef = doc(db, 'stockItems', itemData.id);
                  const { id, ...updateData } = itemData;
 
+                 // Get current data before update for comparison if logging stock changes
+                  let originalStock = 0;
+                  try {
+                       const currentDoc = await getDoc(itemDocRef);
+                       if (currentDoc.exists()) {
+                           originalStock = currentDoc.data().currentStock ?? 0;
+                       }
+                   } catch (e) { console.error("Could not fetch original stock before edit:", e); }
+
+
                  // Clean data: remove undefined fields, ensure numbers are numbers
                  const cleanData = Object.entries(updateData).reduce((acc, [key, value]) => {
                       if (value !== undefined) {
@@ -330,7 +416,7 @@
                               }
                           } else {
                               // Assign other defined values
-                               acc[key as keyof typeof acc] = value === '' ? null : value; // Store empty strings as null? Or handle upstream? Let's keep empty strings for now or decide based on desired behavior. Setting to undefined might be better if empty means "not set". Let's try undefined.
+                               // acc[key as keyof typeof acc] = value === '' ? null : value; // Store empty strings as null? Or handle upstream? Let's try undefined.
                                 acc[key as keyof typeof acc] = value === '' ? undefined : value;
                           }
                       } else {
@@ -362,6 +448,15 @@
                 await updateDoc(itemDocRef, finalUpdateData);
                 console.log("Item updated successfully:", itemData.id);
 
+                // Log stock movement if currentStock was changed during edit
+                const newStock = finalUpdateData.currentStock;
+                 if (newStock !== undefined && newStock !== originalStock) {
+                     const quantityChange = newStock - originalStock;
+                     // Need the full item data for logging
+                     const updatedItemForLog: StockItem = { ...itemData, currentStock: newStock }; // Use submitted data + new stock
+                     await logStockMovement(updatedItemForLog, quantityChange, newStock);
+                 }
+
                 // Re-fetch the updated item data to check stock levels
                  const updatedDocSnap = await getDoc(itemDocRef);
                  const updatedItemResult = { id: updatedDocSnap.id, ...updatedDocSnap.data() } as StockItem;
@@ -372,8 +467,8 @@
                       toast({
                            variant: "default", // Or 'warning'
                            title: "Low Stock Warning",
-                           description: `${updatedItemResult.itemName} stock is low (${updatedItemResult.currentStock} <= ${effectiveThreshold}). Consider restocking.`,
-                           duration: 5000,
+                           description: `${updatedItemResult.itemName} stock is now low (${updatedItemResult.currentStock} <= ${effectiveThreshold}). Consider restocking.`,
+                           duration: 7000, // Increased duration
                        });
                   }
 
@@ -419,10 +514,25 @@
                 const itemDocRef = doc(db, 'stockItems', itemToDelete.id);
                 await deleteDoc(itemDocRef);
                 console.log("Item deleted successfully:", itemToDelete.id);
+
+                 // Optional: Log the deletion as a 'stock out' of the remaining quantity if needed
+                 // if (itemToDelete.currentStock > 0) {
+                 //    await logStockMovement(itemToDelete, -itemToDelete.currentStock, 0);
+                 // }
+                 // Optional: Also delete related movement logs? (Could make history confusing)
+                 // const logsRef = collection(db, 'stockMovements');
+                 // const q = query(logsRef, where('itemId', '==', itemToDelete.id));
+                 // const logsSnapshot = await getDocs(q);
+                 // const batch = writeBatch(db);
+                 // logsSnapshot.forEach(doc => batch.delete(doc.ref));
+                 // await batch.commit();
+
+
                 return itemToDelete.id;
             },
             onSuccess: (itemId) => {
                  queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
+                 queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid] }); // Invalidate movements too
                  setIsDeleteDialogOpen(false);
                  const deletedItemName = itemToDelete?.itemName || 'Item';
                  setItemToDelete(null);
@@ -478,6 +588,9 @@
 
                  console.log("Stock updated successfully for item:", data.itemId);
 
+                  // Log the stock out movement
+                  await logStockMovement(itemToUpdate, -data.quantity, updatedStockLevel);
+
                  // Check for low stock after stock out
                  const effectiveThreshold = itemToUpdate.minimumStock ?? adminSettings.lowStockThreshold;
                  if (updatedStockLevel > 0 && updatedStockLevel <= effectiveThreshold) {
@@ -485,7 +598,7 @@
                            variant: "default", // Or 'warning'
                            title: "Low Stock Warning",
                            description: `${itemToUpdate.itemName} stock is now low (${updatedStockLevel} <= ${effectiveThreshold}). Consider restocking.`,
-                           duration: 5000,
+                           duration: 7000, // Increased duration
                        });
                   }
 
@@ -536,6 +649,84 @@
                 });
             },
         });
+
+
+        // --- Photo Search ---
+         // Camera permission effect for photo search
+        React.useEffect(() => {
+            let stream: MediaStream | null = null;
+            const getCameraPermission = async () => {
+                if (!isPhotoSearchOpen) {
+                    if (videoRef.current?.srcObject) {
+                        (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+                        videoRef.current.srcObject = null;
+                    }
+                    setHasCameraPermission(null);
+                    return;
+                }
+
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    setHasCameraPermission(true);
+                    if (videoRef.current) videoRef.current.srcObject = stream;
+                } catch (error) {
+                    console.error('Error accessing camera for photo search:', error);
+                    setHasCameraPermission(false);
+                    setIsPhotoSearchOpen(false); // Close dialog if permission denied
+                    toast({ variant: 'destructive', title: 'Camera Access Denied', description: 'Please enable camera permissions for photo search.' });
+                }
+            };
+            getCameraPermission();
+            return () => {
+                 if (videoRef.current?.srcObject) {
+                    (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+                    videoRef.current.srcObject = null;
+                }
+             };
+        }, [isPhotoSearchOpen, toast]);
+
+        const handlePhotoSearchCapture = async () => {
+             if (!hasCameraPermission || !videoRef.current || !canvasRef.current || photoSearchLoading) {
+                 toast({ variant: "destructive", title: "Camera Not Ready or Busy" });
+                 return;
+             }
+              const video = videoRef.current;
+              const canvas = canvasRef.current;
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+              const context = canvas.getContext('2d');
+              if (context) {
+                 context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                 const dataUrl = canvas.toDataURL('image/jpeg', 0.8); // Use JPEG for smaller size
+
+                 if (dataUrl && dataUrl !== 'data:,') {
+                      setPhotoSearchLoading(true);
+                     try {
+                         const input: SearchItemByPhotoInput = { photoDataUri: dataUrl };
+                         console.log("Sending image data URI for search...");
+                         const result = await searchItemByPhoto(input);
+                         console.log("Photo search result:", result);
+
+                         if (result.itemName) {
+                            setSearchQuery(result.itemName); // Set search query to the identified item name
+                            toast({ title: "Item Found by Photo", description: `Searching for "${result.itemName}".` });
+                            setIsPhotoSearchOpen(false); // Close dialog on success
+                         } else {
+                            toast({ variant: "destructive", title: "Item Not Found", description: "Could not identify an item from the photo." });
+                         }
+                     } catch (error: any) {
+                         console.error("Error searching item by photo:", error);
+                         toast({ variant: "destructive", title: "Photo Search Error", description: error.message || "Failed to search by photo." });
+                     } finally {
+                         setPhotoSearchLoading(false);
+                     }
+                 } else {
+                     toast({ variant: "destructive", title: "Capture Error", description: "Could not capture image data." });
+                 }
+             } else {
+                 toast({ variant: "destructive", title: "Canvas Error", description: "Could not get canvas context." });
+             }
+         };
 
 
       const handleSearchChange = (query: string) => {
@@ -624,7 +815,7 @@
             );
         });
 
-       const isMutating = stockOutMutation.isPending || addStockMutation.isPending || editItemMutation.isPending || deleteItemMutation.isPending || saveSettingsMutation.isPending; // Updated mutation name
+       const isMutating = stockOutMutation.isPending || addStockMutation.isPending || editItemMutation.isPending || deleteItemMutation.isPending || saveSettingsMutation.isPending || photoSearchLoading; // Include photo search loading
 
         // Trigger low stock alert checks when items or settings change
         useEffect(() => {
@@ -666,6 +857,7 @@
         // Refetch handler combining both data types
         const handleRetryFetch = () => {
              if (fetchError) refetchItems();
+             if (isLoadingMovements) refetchMovements(); // Retry movements if loading failed
              // Optionally refetch settings if there was an error, though less common
              // if (settingsError) refetchSettings();
          };
@@ -681,7 +873,7 @@
                         {user && ` (Logged in as ${user.email})`}
                     </p>
                </div>
-               <div className="flex items-center space-x-4">
+               <div className="flex items-center space-x-2 md:space-x-4">
                     <ThemeToggle />
                      {isAdmin && (
                        <Button variant="outline" size="icon" onClick={() => setIsSettingsDialogOpen(true)} disabled={isLoadingSettings || isMutating} aria-label="Admin Settings">
@@ -689,7 +881,8 @@
                        </Button>
                      )}
                     <Button variant="outline" onClick={handleSignOut} disabled={isMutating || !user}>
-                        <LogOut className="mr-2 h-4 w-4" /> Sign Out
+                        <LogOut className="mr-2 h-4 w-4" />
+                        <span className="hidden md:inline">Sign Out</span> {/* Hide text on small screens */}
                     </Button>
                </div>
            </header>
@@ -702,11 +895,21 @@
                    <CardTitle>Stock Levels {isAdmin && '(Admin View)'}</CardTitle>
                  </CardHeader>
                  <CardContent className="space-y-4">
-                    <ItemSearch
-                        searchQuery={searchQuery}
-                        onSearchChange={handleSearchChange}
-                        placeholder="Search by name, barcode, category, etc..."
-                      />
+                    <div className="flex gap-2">
+                        <ItemSearch
+                            searchQuery={searchQuery}
+                            onSearchChange={handleSearchChange}
+                            placeholder="Search by name, barcode, etc..."
+                        />
+                        <Button
+                             variant="outline" size="icon"
+                             onClick={() => setIsPhotoSearchOpen(true)}
+                             disabled={isMutating}
+                             aria-label="Search by photo"
+                         >
+                             <Camera className="h-5 w-5" />
+                         </Button>
+                     </div>
                     {isLoadingItems && (
                       <div className="space-y-4">
                         <Skeleton className="h-10 w-full" />
@@ -734,6 +937,28 @@
                      )}
                   </CardContent>
                </Card>
+
+                 {/* Stock Movement Dashboard */}
+                <Card className="shadow-md">
+                    <CardHeader>
+                        <CardTitle>Recent Stock Movements</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {isLoadingMovements && (
+                            <div className="space-y-2">
+                                <Skeleton className="h-8 w-full" />
+                                <Skeleton className="h-8 w-full" />
+                                <Skeleton className="h-8 w-3/4" />
+                            </div>
+                        )}
+                         {!isLoadingMovements && stockMovements.length === 0 && (
+                             <p className="text-muted-foreground text-center py-4">No recent stock movements recorded.</p>
+                         )}
+                        {!isLoadingMovements && stockMovements.length > 0 && (
+                             <StockMovementDashboard movements={stockMovements} />
+                        )}
+                    </CardContent>
+                </Card>
             </div>
 
             {/* Right Column: Action Forms (Stock Out / Add Stock) */}
@@ -825,6 +1050,54 @@
                      isLoading={saveSettingsMutation.isPending} // Pass loading state
                   />
              )}
+
+             {/* Photo Search Dialog */}
+              <Dialog open={isPhotoSearchOpen} onOpenChange={setIsPhotoSearchOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle>Search Item by Photo</DialogTitle>
+                        <DialogDescription>
+                           Center the item in the camera view and capture the photo to search.
+                        </DialogDescription>
+                    </DialogHeader>
+                     <div className="space-y-4 py-4">
+                        <video ref={videoRef} className="w-full aspect-video rounded-md bg-muted" autoPlay muted playsInline />
+                         <canvas ref={canvasRef} className="hidden" /> {/* Hidden canvas for capture */}
+
+                         {hasCameraPermission === false && (
+                             <Alert variant="destructive">
+                               <VideoOff className="h-4 w-4" />
+                               <AlertTitle>Camera Access Denied</AlertTitle>
+                               <AlertDescription>Please allow camera access in your browser settings.</AlertDescription>
+                             </Alert>
+                         )}
+                         {hasCameraPermission === null && !photoSearchLoading && (
+                             <Alert>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <AlertTitle>Accessing Camera...</AlertTitle>
+                             </Alert>
+                         )}
+
+                        <Button
+                            onClick={handlePhotoSearchCapture}
+                            disabled={!hasCameraPermission || photoSearchLoading}
+                            className="w-full"
+                        >
+                             {photoSearchLoading ? (
+                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                             ) : (
+                                 <Camera className="mr-2 h-4 w-4" />
+                             )}
+                             {photoSearchLoading ? 'Searching...' : 'Capture & Search'}
+                         </Button>
+                     </div>
+                     <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsPhotoSearchOpen(false)} disabled={photoSearchLoading}>
+                           <XCircle className="mr-2 h-4 w-4"/> Cancel
+                        </Button>
+                     </DialogFooter>
+                 </DialogContent>
+             </Dialog>
         </div>
       );
     }
@@ -847,3 +1120,4 @@
             </QueryClientProvider>
         );
     }
+
