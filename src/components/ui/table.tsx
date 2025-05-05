@@ -55,22 +55,22 @@ const TableFooter = React.forwardRef<
 ));
 TableFooter.displayName = "TableFooter";
 
-// Fix: Ensure no extra whitespace between `<tr>` and its children
+// Fix: Ensure absolutely no whitespace between <tr> tags and children
 const TableRow = React.forwardRef<
   HTMLTableRowElement,
   React.HTMLAttributes<HTMLTableRowElement>
->(({ className, children, ...props }, ref) => (
-  <tr
-    ref={ref}
-    className={cn(
-      "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
-      className
-    )}
-    {...props}
-  >{/* Ensure no whitespace before children */}
-    {children}
-  </tr>// Ensure no whitespace after children or before closing tag
-));
+>(({ className, children, ...props }, ref) => {
+  return (
+    <tr
+      ref={ref}
+      className={cn(
+        "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+        className
+      )}
+      {...props}
+    >{children}</tr> // Place children directly between tags
+  );
+});
 TableRow.displayName = "TableRow";
 
 
