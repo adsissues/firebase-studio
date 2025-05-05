@@ -37,7 +37,7 @@ export async function getCurrentLocation(): Promise<LocationCoords> {
           //   message = "An unknown error occurred.";
           //   break;
         }
-        reject(new Error(message));
+        reject(new Error(message)); // This correctly rejects the promise with an error message
       },
       {
         enableHighAccuracy: true, // Request more accurate position

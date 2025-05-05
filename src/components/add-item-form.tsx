@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from 'react';
@@ -195,8 +196,9 @@ export function AddItemForm({ onSubmit, isLoading = false }: AddItemFormProps) {
       form.setValue('locationCoords', location, { shouldValidate: true }); // Store coords in form state
       toast({ title: "Location Captured", description: `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` });
     } catch (error: any) {
-      console.error("Location fetch error:", error);
-       toast({
+      // This catch block handles the rejection from getCurrentLocation, including permission denial
+      console.error("Location fetch error:", error); // Log the error for debugging
+       toast({ // Show user-friendly error message
          variant: "destructive",
          title: "Location Error",
          description: error.message || "Could not fetch current location. Please ensure location services are enabled.",
@@ -458,7 +460,7 @@ export function AddItemForm({ onSubmit, isLoading = false }: AddItemFormProps) {
                     {/* Display Captured Photo Preview */}
                     {capturedPhotoUrl && !showCameraFeed && (
                       <div className="mt-2">
-                        <img src={capturedPhotoUrl} alt="Captured product" className="rounded-md border max-w-xs max-h-40 object-contain" />
+                        <img src={capturedPhotoUrl} alt="Captured product" className="rounded-md border max-w-xs max-h-40 object-contain" data-ai-hint="product image" />
                          <Button variant="link" size="sm" onClick={() => { setCapturedPhotoUrl(null); form.setValue('photoUrl', ''); }} className="text-destructive p-0 h-auto mt-1">
                            Remove photo
                          </Button>
@@ -489,3 +491,4 @@ export function AddItemForm({ onSubmit, isLoading = false }: AddItemFormProps) {
     </Form>
   );
 }
+
