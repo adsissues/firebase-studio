@@ -23,30 +23,51 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { StockItem } from '@/types';
-import { MinusCircle } from 'lucide-react';
+import { MinusCircle, Loader2 } from 'lucide-react'; // Import Loader2
 
 interface StockOutFormProps {
   items: StockItem[];
   onSubmit: (data: StockOutFormData) => void;
+  isLoading?: boolean; // Add isLoading prop
 }
 
-const formSchema = z.object({
+// Dynamic schema based on selected item's stock
+const createFormSchema = (items: StockItem[]) => z.object({
   itemId: z.string().min(1, { message: 'Please select an item.' }),
   quantity: z.coerce // Coerce input to number
     .number({ invalid_type_error: 'Quantity must be a number.' })
     .int({ message: 'Quantity must be a whole number.' })
     .positive({ message: 'Quantity must be greater than zero.' }),
-});
+}).refine(
+  (data) => {
+    const selectedItem = items.find(item => item.id === data.itemId);
+    if (!selectedItem) return true; // Let itemId validation handle this
+    return data.quantity <= selectedItem.currentStock;
+  },
+  (data) => {
+    const selectedItem = items.find(item => item.id === data.itemId);
+    return {
+      message: `Quantity cannot exceed available stock (${selectedItem?.currentStock ?? 0}).`,
+      path: ['quantity'], // Apply error to quantity field
+    };
+  }
+);
 
-export type StockOutFormData = z.infer<typeof formSchema>;
 
-export function StockOutForm({ items, onSubmit }: StockOutFormProps) {
+export type StockOutFormData = z.infer<ReturnType<typeof createFormSchema>>;
+
+export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFormProps) {
+  // Recreate schema when items change
+  const formSchema = React.useMemo(() => createFormSchema(items), [items]);
+
   const form = useForm<StockOutFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       itemId: '',
       quantity: 1,
     },
+    context: { items }, // Pass items to resolver context if needed
+    mode: "onChange", // Validate on change for better UX
   });
 
    // Filter out items with 0 stock for the dropdown
@@ -54,77 +75,95 @@ export function StockOutForm({ items, onSubmit }: StockOutFormProps) {
 
 
   function handleFormSubmit(values: StockOutFormData) {
-    // Find the selected item to validate quantity against current stock
-    const selectedItem = items.find(item => item.id === values.itemId);
-    if (!selectedItem) {
-        form.setError("itemId", { type: "manual", message: "Selected item not found." });
-        return;
-    }
-    if (values.quantity > selectedItem.currentStock) {
-        form.setError("quantity", { type: "manual", message: `Quantity cannot exceed available stock (${selectedItem.currentStock}).` });
-        return;
-    }
-    console.log("Stock Out:", values); // Placeholder for actual submission logic
+    // Validation is now handled by Zod resolver including the refine check
+    console.log("Stock Out:", values);
     onSubmit(values);
-    // Optionally reset the form after successful submission
-    // form.reset(); // Resetting might be annoying if logging multiple outs
-    form.resetField("quantity", { defaultValue: 1 }); // Reset only quantity
-    form.resetField("itemId", { defaultValue: '' }); // Reset item selection
+    // Resetting is handled by parent now
+    // form.resetField("quantity", { defaultValue: 1 });
+    // form.resetField("itemId", { defaultValue: '' });
   }
+
+   // Reset form if submission is successful (isLoading becomes false after being true)
+   React.useEffect(() => {
+     if (!isLoading && form.formState.isSubmitSuccessful) {
+        form.reset({ itemId: '', quantity: 1 }); // Reset with default values
+     }
+   }, [isLoading, form.formState.isSubmitSuccessful, form.reset]);
+
 
   return (
     <Form {...form}>
       {/* Removed redundant border and shadow, added padding to match card */}
       <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 p-6">
-         <h2 className="text-lg font-semibold text-primary mb-4">Log Stock Out</h2>
-        <FormField
-          control={form.control}
-          name="itemId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Item</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value || ''}> {/* Ensure value is controlled */}
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select an item to remove stock" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                   {availableItems.length === 0 ? (
-                     <SelectItem value="no-items" disabled>
-                       No items with stock available
-                     </SelectItem>
-                   ) : (
-                     availableItems.map((item) => (
-                       <SelectItem key={item.id} value={item.id}>
-                         {item.itemName} (Available: {item.currentStock})
+         <fieldset disabled={isLoading} className="space-y-4"> {/* Disable form fields when loading */}
+           <h2 className="text-lg font-semibold text-primary mb-4">Log Stock Out</h2>
+          <FormField
+            control={form.control}
+            name="itemId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Item</FormLabel>
+                <Select
+                  onValueChange={(value) => {
+                      field.onChange(value);
+                      form.trigger("quantity"); // Re-validate quantity when item changes
+                  }}
+                  value={field.value || ''}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select an item to remove stock" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                     {availableItems.length === 0 ? (
+                       <SelectItem value="no-items" disabled>
+                         No items with stock available
                        </SelectItem>
-                     ))
-                   )}
-                 </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="quantity"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Quantity</FormLabel>
-              <FormControl>
-                <Input type="number" min="1" placeholder="Enter quantity" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <Button type="submit" className="w-full bg-primary hover:bg-primary/90">
-          <MinusCircle className="mr-2 h-4 w-4" />
-          Log Stock Out
+                     ) : (
+                       availableItems.map((item) => (
+                         <SelectItem key={item.id} value={item.id}>
+                           {item.itemName} (Available: {item.currentStock})
+                         </SelectItem>
+                       ))
+                     )}
+                   </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="quantity"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Quantity</FormLabel>
+                <FormControl>
+                  <Input
+                      type="number"
+                      min="1"
+                      placeholder="Enter quantity"
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={e => field.onChange(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                    />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+         </fieldset>
+        <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
+           {isLoading ? (
+             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+           ) : (
+             <MinusCircle className="mr-2 h-4 w-4" />
+           )}
+           {isLoading ? 'Logging...' : 'Log Stock Out'}
         </Button>
       </form>
     </Form>
   );
 }
+
