@@ -23,9 +23,11 @@ export const metadata: Metadata = {
   themeColor: '#317EFB', // Match the theme color in manifest
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    statusBarStyle: 'default', // Or 'black-translucent'
     title: 'StockWatch',
-    // startupImage: [], // Optional: Add startup images for iOS
+    // The apple-touch-icon link is typically handled automatically by iOS
+    // if placed in the public root, but can be specified here if needed.
+    // icons: { apple: '/icons/icon-192x192.png' } // Example if needed
   },
 };
 
