@@ -118,23 +118,23 @@ export function StockDashboard({ items, onEdit, onDelete }: StockDashboardProps)
         <TableCaption className="py-4">Overview of current stock levels.</TableCaption>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[20%] min-w-[150px]">Item Name</TableHead> {/* Adjusted width */}
-             <TableHead className="hidden xl:table-cell text-center w-[50px]">Photo</TableHead> {/* Fixed width */}
-             <TableHead className="hidden md:table-cell w-[10%] min-w-[80px]">Category</TableHead> {/* Adjusted width */}
-             <TableHead className="hidden lg:table-cell w-[10%] min-w-[80px]">Supplier</TableHead> {/* Adjusted width */}
-            <TableHead className="hidden sm:table-cell w-[15%] min-w-[100px]">Location</TableHead> {/* Adjusted width */}
-            <TableHead className="hidden lg:table-cell w-[10%] min-w-[80px]">Barcode</TableHead> {/* Adjusted width */}
-             <TableHead className="hidden xl:table-cell w-[15%] min-w-[100px]">Description</TableHead> {/* Adjusted width */}
-            <TableHead className="text-right w-[70px]">Current</TableHead> {/* Fixed width */}
-            <TableHead className="text-right w-[50px]">Min.</TableHead> {/* Fixed width */}
-            <TableHead className="text-center w-[90px]">Status</TableHead> {/* Fixed width */}
-            <TableHead className="text-center w-[100px]">Actions</TableHead> {/* Added Actions Header, fixed width */}
+            <TableHead className="w-[20%] min-w-[150px]">Item Name</TableHead>{/* Adjusted width */}
+             <TableHead className="hidden xl:table-cell text-center w-[50px]">Photo</TableHead>{/* Fixed width */}
+             <TableHead className="hidden md:table-cell w-[10%] min-w-[80px]">Category</TableHead>{/* Adjusted width */}
+             <TableHead className="hidden lg:table-cell w-[10%] min-w-[80px]">Supplier</TableHead>{/* Adjusted width */}
+            <TableHead className="hidden sm:table-cell w-[15%] min-w-[100px]">Location</TableHead>{/* Adjusted width */}
+            <TableHead className="hidden lg:table-cell w-[10%] min-w-[80px]">Barcode</TableHead>{/* Adjusted width */}
+             <TableHead className="hidden xl:table-cell w-[15%] min-w-[100px]">Description</TableHead>{/* Adjusted width */}
+            <TableHead className="text-right w-[70px]">Current</TableHead>{/* Fixed width */}
+            <TableHead className="text-right w-[50px]">Min.</TableHead>{/* Fixed width */}
+            <TableHead className="text-center w-[90px]">Status</TableHead>{/* Fixed width */}
+            <TableHead className="text-center w-[100px]">Actions</TableHead>{/* Added Actions Header, fixed width */}
           </TableRow>
         </TableHeader>
         <TableBody>
           {items.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={11} className="h-24 text-center text-muted-foreground"> {/* Updated colSpan */}
+              <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">{/* Updated colSpan */}
                 No stock items found matching your search.
               </TableCell>
             </TableRow>
@@ -142,41 +142,41 @@ export function StockDashboard({ items, onEdit, onDelete }: StockDashboardProps)
             items.map((item) => (
               <TableRow key={item.id} className={item.minStock && item.currentStock <= item.minStock && item.currentStock !== 0 ? 'bg-destructive/10 hover:bg-destructive/20' : item.currentStock === 0 ? 'bg-destructive/20 hover:bg-destructive/30 opacity-70' : ''}>
                 <TableCell className="font-medium">{item.itemName}</TableCell>
-                 <TableCell className="hidden xl:table-cell text-center">{renderPhoto(item)}</TableCell>
-                 <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(Tag, item.category, 'Category')}</TableCell>
-                 <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(Building, item.supplier, 'Supplier')}</TableCell>
-                 <TableCell className="hidden sm:table-cell text-muted-foreground text-xs">{renderLocation(item)}</TableCell>
-                 <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(Barcode, item.barcode, 'Barcode')}</TableCell>
-                 <TableCell className="hidden xl:table-cell text-muted-foreground text-xs">{renderDetail(Info, item.description, 'Description')}</TableCell>
+                <TableCell className="hidden xl:table-cell text-center">{renderPhoto(item)}</TableCell>
+                <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(Tag, item.category, 'Category')}</TableCell>
+                <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(Building, item.supplier, 'Supplier')}</TableCell>
+                <TableCell className="hidden sm:table-cell text-muted-foreground text-xs">{renderLocation(item)}</TableCell>
+                <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(Barcode, item.barcode, 'Barcode')}</TableCell>
+                <TableCell className="hidden xl:table-cell text-muted-foreground text-xs">{renderDetail(Info, item.description, 'Description')}</TableCell>
                 <TableCell className="text-right font-mono">{item.currentStock}</TableCell>
                 <TableCell className="text-right font-mono text-muted-foreground">{item.minStock ?? '-'}</TableCell>
                 <TableCell className="text-center">{getStatus(item)}</TableCell>
-                 <TableCell className="text-center"> {/* Added Actions Cell */}
-                   <div className="flex justify-center gap-1">
-                     <TooltipProvider delayDuration={100}>
-                       <Tooltip>
-                         <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(item)}>
-                              <Pencil className="h-4 w-4" />
-                              <span className="sr-only">Edit {item.itemName}</span>
-                            </Button>
-                         </TooltipTrigger>
-                         <TooltipContent>Edit Item</TooltipContent>
-                       </Tooltip>
-                     </TooltipProvider>
-                      <TooltipProvider delayDuration={100}>
-                       <Tooltip>
-                         <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
-                              <Trash2 className="h-4 w-4" />
-                               <span className="sr-only">Delete {item.itemName}</span>
-                            </Button>
-                         </TooltipTrigger>
-                         <TooltipContent>Delete Item</TooltipContent>
-                       </Tooltip>
-                     </TooltipProvider>
-                   </div>
-                 </TableCell>
+                <TableCell className="text-center">{/* Added Actions Cell */}
+                  <div className="flex justify-center gap-1">
+                    <TooltipProvider delayDuration={100}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(item)}>
+                            <Pencil className="h-4 w-4" />
+                            <span className="sr-only">Edit {item.itemName}</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Edit Item</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <TooltipProvider delayDuration={100}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
+                            <Trash2 className="h-4 w-4" />
+                            <span className="sr-only">Delete {item.itemName}</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Delete Item</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                </TableCell>
               </TableRow>
             ))
           )}
