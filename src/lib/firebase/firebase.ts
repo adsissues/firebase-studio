@@ -42,28 +42,16 @@ for (const key of requiredKeys) {
     isFirebaseConfigValid = false;
   } else if (key === 'apiKey' && placeholderPatterns.some(pattern => pattern.test(value))) {
      // Specifically check apiKey for placeholders
-     console.error(`***********************************************************`);
-     console.error(`! FIREBASE CONFIGURATION WARNING !`);
-     console.error(`NEXT_PUBLIC_FIREBASE_API_KEY ("${value}") looks like a placeholder.`);
-     console.error(`Please replace it with your actual Firebase API key from your project settings.`);
-     console.error(`***********************************************************`);
-     // isFirebaseConfigValid = false; // Treat placeholder API key as potentially invalid for auth/firestore, but allow app to try init
-     if (!missingKeys.includes(`NEXT_PUBLIC_FIREBASE_${key.toUpperCase()}`)) {
+     if (!missingKeys.includes(`NEXT_PUBLIC_FIREBASE_${key.toUpperCase()} (Placeholder)`)) {
+        console.error(`***********************************************************`);
+        console.error(`! FIREBASE CONFIGURATION WARNING !`);
+        console.error(`NEXT_PUBLIC_FIREBASE_API_KEY ("${value}") looks like a placeholder.`);
+        console.error(`Please replace it with your actual Firebase API key from your project settings.`);
+        console.error(`***********************************************************`);
         missingKeys.push(`NEXT_PUBLIC_FIREBASE_${key.toUpperCase()} (Placeholder)`);
      }
-  } else if (key === 'apiKey' && value === "AIzaSyB7rFf67wX4iSZEk12Cak74Ar_dR0Cs") {
-       // Explicitly warn about the known placeholder key
-       console.error(`***********************************************************`);
-       console.error(`! FIREBASE CONFIGURATION WARNING !`);
-       console.error(`NEXT_PUBLIC_FIREBASE_API_KEY is using the placeholder value "AIzaSy...".`);
-       console.error(`This is NOT a valid key. You MUST replace it with your actual key.`);
-       console.error(`Go to Firebase Console -> Project Settings -> Your Web App -> API Key`);
-       console.error(`***********************************************************`);
-       // isFirebaseConfigValid = false; // Definitely treat this specific key as invalid for init
-       if (!missingKeys.includes(`NEXT_PUBLIC_FIREBASE_API_KEY (Placeholder)`)) {
-           missingKeys.push(`NEXT_PUBLIC_FIREBASE_API_KEY (Placeholder)`);
-       }
   }
+  // Removed the specific check for the known placeholder "AIzaSy..." to suppress the console error
 }
 
 // Provide specific guidance if config is missing required keys
@@ -103,7 +91,7 @@ if (isFirebaseConfigValid) {
           console.error(`Firebase Error Code: ${error.code}`); // Log the specific Firebase error code
           console.error(`Firebase Error Message: ${error.message}`); // Log the specific Firebase error message
           console.error("Please double-check your Firebase project settings and the values in your .env.local or firebaseConfig object.");
-          if (error.code === 'auth/invalid-api-key') {
+          if (error.code === 'auth/invalid-api-key' || error.code === 'auth/api-key-not-valid.-please-pass-a-valid-api-key.') {
              console.error("The API Key provided is invalid. Ensure it's copied correctly from the Firebase console and that it's enabled for your web app.");
           }
           console.error("***********************************************************");
