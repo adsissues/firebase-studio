@@ -39,11 +39,11 @@ const formSchema = z.object({
     .number({ invalid_type_error: 'Quantity must be a number.' })
     .int({ message: 'Quantity must be a whole number.' })
     .positive({ message: 'Quantity to add must be positive.' }),
-  maximumStock: z.coerce // Changed from minStock
-    .number({ invalid_type_error: 'Maximum stock must be a number.' })
-    .int({ message: 'Maximum stock must be a whole number.' })
-    .nonnegative({ message: 'Maximum stock cannot be negative.' })
-    .optional(), // Make maximum stock optional initially
+  minimumStock: z.coerce
+  .number({ invalid_type_error: 'Minimum stock must be a number.' })
+  .int({ message: 'Minimum stock must be a whole number.' })
+  .nonnegative({ message: 'Minimum stock cannot be negative.' })
+  .optional(),
   location: z.string().max(100).optional().or(z.literal('')),
   supplier: z.string().max(100).optional().or(z.literal('')),
   photoUrl: z.string().url({ message: "Please enter a valid URL or capture a photo." }).optional().or(z.literal('')),
@@ -77,7 +77,7 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
       barcode: '',
       itemName: '',
       quantity: 1, // Default quantity to add is 1
-      maximumStock: undefined, // Default max stock to undefined
+      minimumStock: undefined,
       location: '',
       supplier: '',
       photoUrl: '',
@@ -280,29 +280,28 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
                       <FormMessage />
                     </FormItem>
                   )}
-                />
-                <FormField
-                  control={form.control}
-                  name="maximumStock"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Maximum Stock</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="1"
-                          placeholder="Optional max level"
-                          {...field}
-                          value={field.value ?? ''} // Handle undefined/null
+                  />
+                  <FormField
+                   control={form.control} name="minimumStock"
+                   render={({ field }) => (
+                     <FormItem>
+                       <FormLabel>Minimum Stock</FormLabel>
+                       <FormControl>
+                         <Input
+                           type="number"
+                           min="0"
+                           step="1"
+                           placeholder="Optional min level"
+                           {...field}
+                           value={field.value ?? ''} // Handle undefined/null
                            onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))} // Set to undefined if empty
-                          />
-                      </FormControl>
-                      <FormDescription>Max quantity to keep.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                           />
+                       </FormControl>
+                       <FormDescription>Min quantity to keep.</FormDescription>
+                       <FormMessage />
+                     </FormItem>
+                   )}
+                  />
             </div>
 
             {/* Location Field */}
