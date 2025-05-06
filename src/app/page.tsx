@@ -1,4 +1,3 @@
-
  'use client';
 
     import * as React from 'react';
@@ -10,7 +9,7 @@
     import { EditItemForm, type EditItemFormData } from '@/components/edit-item-form';
     import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
     import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-    import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'; // Added DialogFooter import
+    import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
     import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
     import type { StockItem, AdminSettings, StockMovementLog } from '@/types'; // Import AdminSettings & StockMovementLog
     import { useState, useEffect } from 'react'; // Import useEffect
@@ -286,7 +285,7 @@
                            // Only include fields in updatedData if they were actually in dataToSave (i.e., provided in the form)
                             const finalUpdateData = Object.keys(updatedData).reduce((acc, key) => {
                                if (updatedData[key as keyof typeof updatedData] !== undefined) {
-                                   acc[key as keyof typeof acc] = updatedData[key as keyof typeof updatedData];
+                                   acc[key as keyof typeof acc] = updatedData[key as keyof updatedData];
                                }
                                return acc;
                            }, {} as Partial<StockItem>);
@@ -854,240 +853,267 @@
          }; // Added missing closing brace
 
 
-      return (
-        
-           
-               
-                   
-                        {isAdmin ? 'Admin Dashboard' : 'Your Stock Management Dashboard'}
-                        {user && ` (Logged in as ${user.email})`}
-                    
-                
-            
-          
-            
-                
-                     
-                         {isAdmin && (
-                           
-                              {isLoadingSettings ? <Skeleton className="h-9 w-20" /> : <AdminSettingsDialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen} onSave={handleSaveSettings} currentSettings={adminSettings} isLoading={saveSettingsMutation.isPending} />}
-                           
-                         )}
-                        
-                            
-                                <ThemeToggle />
-                            
-                        
-                    
-                
-            
+      const pageTitle = `${isAdmin ? 'Admin Dashboard' : 'Your Stock Management Dashboard'}${user ? ` (Logged in as ${user.email})` : ''}`;
 
-           
-             
-                 Stock Levels {isAdmin && '(Admin View)'}
-                 
-                     
-                         
-                             
-                                 placeholder="Search by name, barcode, etc..."
-                             
-                              
-                                  
-                                      {fetchError ? "Retry Fetch" : "Refresh"}
-                                  
-                              
-                          
-                      
+      return (
+        <div className="container mx-auto p-4 md:p-8">
+           <header className="mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+               <div className="text-center sm:text-left">
+                   <h1 className="text-3xl font-bold text-primary">StockWatch</h1>
+                   <p className="text-xl text-muted-foreground">
+                       {pageTitle}
+                   </p>
+               </div>
+               <div className="flex items-center gap-2">
+                   {isAdmin && (
+                       <Button
+                         variant="outline"
+                         size="icon"
+                         onClick={() => setIsSettingsDialogOpen(true)}
+                         disabled={isLoadingSettings || saveSettingsMutation.isPending}
+                         aria-label="Open Admin Settings"
+                       >
+                         <Settings className="h-5 w-5" />
+                       </Button>
+                   )}
+                   <ThemeToggle />
+                   <Button
+                       variant="outline"
+                       size="icon"
+                       onClick={handleSignOut}
+                       disabled={isMutating}
+                       aria-label="Sign Out"
+                   >
+                       <LogOut className="h-5 w-5" />
+                   </Button>
+               </div>
+           </header>
+
+           <main className="space-y-8">
+             <Card className="shadow-md">
+                 <CardHeader>
+                     <CardTitle className="text-2xl">Stock Levels {isAdmin && '(Admin View)'}</CardTitle>
+                 </CardHeader>
+                 <CardContent className="space-y-4">
+                     <div className="flex flex-col sm:flex-row gap-2 items-center">
+                         <div className="flex-grow">
+                            <ItemSearch
+                                searchQuery={searchQuery}
+                                onSearchChange={handleSearchChange}
+                                placeholder="Search by name, barcode, etc..."
+                            />
+                         </div>
+                         <Button
+                            variant="outline"
+                            onClick={() => setIsPhotoSearchOpen(true)}
+                            disabled={isMutating || hasCameraPermission === false}
+                            className="w-full sm:w-auto"
+                            aria-label="Search by Photo"
+                          >
+                            <Camera className="mr-2 h-4 w-4" /> Search by Photo
+                          </Button>
+                          <Button onClick={handleRetryFetch} disabled={isLoadingItems || isMutating} className="w-full sm:w-auto">
+                              {isLoadingItems ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                              {fetchError ? "Retry Fetch" : "Refresh"}
+                          </Button>
+                      </div>
                      {isLoadingItems && (
-                      
-                         
-                         
-                      
+                      <div className="space-y-2 pt-4">
+                         <Skeleton className="h-8 w-full" />
+                         <Skeleton className="h-12 w-full" />
+                         <Skeleton className="h-12 w-full" />
+                      </div>
                      )}
                      {fetchError && (
-                        
-                             
+                        <Alert variant="destructive" className="mt-4">
+                             <AlertTriangle className="h-4 w-4" />
+                             <AlertTitle>Error Loading Stock</AlertTitle>
+                             <AlertDescription>
                                  Could not load stock items. {(fetchError as Error).message}
-                                 
-                            
-                         
+                             </AlertDescription>
+                         </Alert>
                      )}
                      {!isLoadingItems && !fetchError && (
-                         
+                         <StockDashboard
                              items={filteredItems}
                              onEdit={handleEditClick}
                              onDelete={handleDeleteClick}
                              isAdmin={isAdmin}
                              globalLowStockThreshold={adminSettings.lowStockThreshold} // Pass global threshold
-                          
+                          />
                       )}
-                  
-               
+                  </CardContent>
+               </Card>
 
-                
-                    
-                         Recent Stock Movements
-                    
-                    
+                <Card className="shadow-md">
+                    <CardHeader>
+                        <CardTitle className="text-2xl">Recent Stock Movements</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                         {isLoadingMovements && (
-                            
-                                
-                                
-                                
-                            
+                            <div className="space-y-2">
+                                <Skeleton className="h-8 w-full" />
+                                <Skeleton className="h-10 w-full" />
+                                <Skeleton className="h-10 w-full" />
+                            </div>
                         )}
                          {!isLoadingMovements && stockMovements.length === 0 && (
-                             
+                             <p className="text-muted-foreground">
                                  No recent stock movements recorded.
-                             
+                             </p>
                          )}
                         {!isLoadingMovements && stockMovements.length > 0 && (
-                             
+                             <StockMovementDashboard
                                   movements={stockMovements} itemLimit={15} />
                             
                         )}
-                    
-                
+                    </CardContent>
+                </Card>
             
 
-            
-               
-                   
+            <Tabs defaultValue="stock-out" className="w-full">
+               <Card className="shadow-md">
+                   <CardHeader>
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="stock-out">Stock Out</TabsTrigger>
+                            <TabsTrigger value="add-stock">Add Stock</TabsTrigger>
+                        </TabsList>
+                   </CardHeader>
+                  <TabsContent value="stock-out">
+                     <CardContent>
+                        <StockOutForm
+                             items={stockItems} // Pass all user-visible items
+                             onSubmit={handleStockOutSubmit}
+                             isLoading={stockOutMutation.isPending}
+                           />
                         
-                            Stock Out
-                            Add Stock
+                     </CardContent>
+                   </TabsContent>
+                   <TabsContent value="add-stock">
+                     <CardContent>
+                        <AddStockForm
+                             onSubmit={handleAddStockSubmit} // Renamed handler
+                             isLoading={addStockMutation.isPending} // Updated mutation name
+                           />
                         
-                   
-                  
-                     
-                       
-                         
-                            
-                                 items={stockItems} // Pass all user-visible items
-                                 onSubmit={handleStockOutSubmit}
-                                 isLoading={stockOutMutation.isPending}
-                               
-                            
-                         
-                      
-                   
-                   
-                     
-                        
-                            
-                                 onSubmit={handleAddStockSubmit} // Renamed handler
-                                 isLoading={addStockMutation.isPending} // Updated mutation name
-                               
-                            
-                         
-                      
-                   
-                
-            
-          
+                     </CardContent>
+                   </TabsContent>
+                </Card>
+            </Tabs>
+          </main>
 
           {/* Edit Item Dialog */}
-           
-               
-                   
-                       Edit Item: {itemToEdit?.itemName}
-                       
+           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+               <DialogContent className="sm:max-w-lg">
+                   <DialogHeader>
+                       <DialogTitle>Edit Item: {itemToEdit?.itemName}</DialogTitle>
+                       <DialogDescription>
                             Make changes to the item details below. Click save when done.
-                        
-                    
+                        </DialogDescription>
+                    </DialogHeader>
                     {itemToEdit && (
-                       
+                       <EditItemForm
                             item={itemToEdit}
                             onSubmit={handleEditItemSubmit}
                             isLoading={editItemMutation.isPending}
                             onCancel={() => setIsEditDialogOpen(false)}
-                        
+                        />
                     )}
-                
-            
+                </DialogContent>
+            </Dialog>
 
 
-           
-                
-                    
-                        Are you sure?
-                        
+           <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
                             This will permanently delete {itemToDelete?.itemName}. This action cannot be undone.
-                        
-                    
-                    
-                        
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)} disabled={deleteItemMutation.isPending}>
                             Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDeleteItem} disabled={deleteItemMutation.isPending} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
                             {deleteItemMutation.isPending ? (
-                                
- Deleting...
+                                <> <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>
                              ) : (
-                                
- Delete Item
+                                <> <Trash2 className="mr-2 h-4 w-4" /> Delete Item</>
                              )}
-                        
-                    
-                
-            
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
-               {isAdmin && (
-                   
+               {isAdmin && isSettingsDialogOpen && ( // Render only if admin and dialog should be open
+                   <AdminSettingsDialog
+                      isOpen={isSettingsDialogOpen} // Control visibility
                       onClose={() => setIsSettingsDialogOpen(false)}
                       onSave={handleSaveSettings}
                        currentSettings={adminSettings} // Pass fetched settings
                        isLoading={saveSettingsMutation.isPending} // Pass loading state
-                   
+                   />
                )}
 
-               
-                  
-                      
-                          Search Item by Photo
-                          
+               <Dialog open={isPhotoSearchOpen} onOpenChange={setIsPhotoSearchOpen}>
+                  <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                          <DialogTitle>Search Item by Photo</DialogTitle>
+                          <DialogDescription>
                              Center the item in the camera view and capture the photo to search.
-                          
-                      
-                       
-                            
-                                
+                          </DialogDescription>
+                      </DialogHeader>
+                       <div className="space-y-4 py-4">
+                            <div className="relative aspect-video w-full bg-muted rounded-md overflow-hidden">
+                                <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
                                 {/* Hidden canvas for capture */}
+                                <canvas ref={canvasRef} style={{ display: 'none' }} />
 
                                  {hasCameraPermission === false && (
-                                      
-                                           
-                                              Camera Access Denied
-                                              Please allow camera access in your browser settings.
-                                           
-                                       
+                                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-destructive-foreground p-4">
+                                           <VideoOff className="h-12 w-12 mb-2" />
+                                           <p className="text-lg font-semibold">Camera Access Denied</p>
+                                           <p className="text-sm text-center">Please allow camera access in your browser settings.</p>
+                                       </div>
                                   )}
                                  {hasCameraPermission === null && !photoSearchLoading && (
-                                      
-                                            
-                                                 Accessing Camera...
-                                             
-                                         
+                                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-muted-foreground">
+                                            <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                                            <p>Accessing Camera...</p>
+                                         </div>
                                   )}
 
-                                
+                                {photoSearchLoading && (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-primary-foreground">
+                                        <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                                        <p>Analyzing Photo...</p>
+                                    </div>
+                                )}
+                            </div>
+                            <Button
+                                 type="button"
+                                 onClick={handlePhotoSearchCapture}
+                                 disabled={photoSearchLoading || hasCameraPermission !== true}
+                                 className="w-full"
+                                 size="lg"
+                             >
                                      {photoSearchLoading ? (
-                                          
+                                          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                                      ) : (
-                                         
+                                         <Camera className="mr-2 h-5 w-5" />
                                      )}
                                      {photoSearchLoading ? 'Searching...' : 'Capture & Search'}
-                                
-                         
-                         
-                             
-                                 
-                                     Cancel
-                                 
-                             
-                          
-                   
-               
-         
-       
+                                </Button>
+                         </div>
+                         <DialogFooter>
+                             <Button variant="outline" onClick={() => setIsPhotoSearchOpen(false)} disabled={photoSearchLoading}>
+                                 <XCircle className="mr-2 h-4 w-4"/> Cancel
+                             </Button>
+                          </DialogFooter>
+                   </DialogContent>
+               </Dialog>
+         </div>
        );
      }
 
@@ -1095,15 +1121,18 @@
      // Wrap the page component with QueryClientProvider and RequireAuth
      export default function Home() {
          return (
-             
-                  
-                      
-                          
-                              <StockManagementPageContent />
-                          
-                      
-                  
-              
+             <QueryClientProvider client={queryClient}>
+                  <ThemeProvider
+                    attribute="class"
+                    defaultTheme="system"
+                    enableSystem
+                    disableTransitionOnChange
+                  >
+                      <RequireAuth>
+                          <StockManagementPageContent />
+                      </RequireAuth>
+                  </ThemeProvider>
+              </QueryClientProvider>
          );
      }
     
