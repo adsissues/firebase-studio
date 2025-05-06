@@ -66,7 +66,7 @@ const TableRow = React.forwardRef<
       className
     )}
     {...props}
-  >{children}</tr> // Render children directly without extra newlines or spaces
+  >{children}</tr> // Ensure children are rendered directly inside the <tr> tag
 ));
 TableRow.displayName = "TableRow";
 

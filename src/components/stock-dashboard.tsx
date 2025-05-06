@@ -185,19 +185,7 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false, globa
                          isLowStock ? 'bg-destructive/10 hover:bg-destructive/20' : '',
                          isOutOfStock ? 'bg-destructive/20 hover:bg-destructive/30 opacity-70' : ''
                     )}
-                >{/* Ensure no whitespace between TableRow and TableCell */}
-                    <TableCell className="font-medium">{item.itemName}</TableCell>
-                    <TableCell className="hidden xl:table-cell text-center">{renderPhoto(item)}</TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(Tag, item.category, 'Category')}</TableCell>
-                    <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(Building, item.supplier, 'Supplier')}</TableCell>
-                    <TableCell className="hidden sm:table-cell text-muted-foreground text-xs">{renderLocation(item)}</TableCell>
-                    <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(Barcode, item.barcode, 'Barcode')}</TableCell>
-                    <TableCell className="hidden xl:table-cell text-muted-foreground text-xs">{renderDetail(Info, item.description, 'Description')}</TableCell>
-                    {isAdmin && <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(UserCircle, item.userId, 'User ID', item.userId)}</TableCell>}
-                    <TableCell className="text-right font-mono">{item.currentStock}</TableCell>
-                    <TableCell className="text-right font-mono text-muted-foreground">{item.minimumStock ?? '-'}</TableCell> {/* Changed field */}
-                    <TableCell className="text-center">{getStatus(item)}</TableCell>
-                    <TableCell className="text-center">
+                  ><TableCell className="font-medium">{item.itemName}</TableCell><TableCell className="hidden xl:table-cell text-center">{renderPhoto(item)}</TableCell><TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(Tag, item.category, 'Category')}</TableCell><TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(Building, item.supplier, 'Supplier')}</TableCell><TableCell className="hidden sm:table-cell text-muted-foreground text-xs">{renderLocation(item)}</TableCell><TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(Barcode, item.barcode, 'Barcode')}</TableCell><TableCell className="hidden xl:table-cell text-muted-foreground text-xs">{renderDetail(Info, item.description, 'Description')}</TableCell>{isAdmin && <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(UserCircle, item.userId, 'User ID', item.userId)}</TableCell>}<TableCell className="text-right font-mono">{item.currentStock}</TableCell><TableCell className="text-right font-mono text-muted-foreground">{item.minimumStock ?? '-'}</TableCell>{/* Changed field */}<TableCell className="text-center">{getStatus(item)}</TableCell><TableCell className="text-center">
                       {canPerformAction(item) ? (
                         <div className="flex justify-center gap-1">
                           <TooltipProvider delayDuration={100}>
@@ -236,3 +224,4 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false, globa
     </div>
   );
 }
+
