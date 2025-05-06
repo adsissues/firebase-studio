@@ -37,12 +37,13 @@ export function StockMovementDashboard({ movements, itemLimit = 10 }: StockMovem
      }
    };
 
+   // Slice the movements array based on the itemLimit
    const displayedMovements = movements.slice(0, itemLimit);
 
   return (
     <div className="rounded-lg border shadow-sm overflow-hidden">
       <Table>
-        <TableCaption className="py-4">Recent stock level changes.</TableCaption>
+        <TableCaption className="py-4">Last {displayedMovements.length} stock level changes.</TableCaption> {/* Updated caption */}
         <TableHeader>
           <TableRow>
             <TableHead className="w-[30%] min-w-[100px]">Item Name</TableHead>

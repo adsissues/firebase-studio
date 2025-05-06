@@ -415,17 +415,8 @@
                                   console.warn("Attempted to change userId without admin rights or mismatch. Skipping userId update.");
                               }
                           } else {
-                              // Assign other defined values
-                               // acc[key as keyof typeof acc] = value === '' ? null : value; // Store empty strings as null? Or handle upstream? Let's try undefined.
                                 acc[key as keyof typeof acc] = value === '' ? undefined : value;
                           }
-                      } else {
-                          // If value is undefined, we want to remove it from the update unless it's a required field?
-                           // For optional fields, Firestore update won't add them if undefined.
-                           // Let's explicitly set fields to undefined if they should be cleared.
-                           // This happens automatically if they are undefined in the input `itemData`.
-                           // The goal is primarily to prevent sending `{ field: undefined }` which Firestore rejects.
-                           // Instead, we just omit the field from the final update object.
                       }
                       return acc;
                   }, {} as Partial<Omit<StockItem, 'id'>>);
@@ -955,7 +946,7 @@
                              <p className="text-muted-foreground text-center py-4">No recent stock movements recorded.</p>
                          )}
                         {!isLoadingMovements && stockMovements.length > 0 && (
-                             <StockMovementDashboard movements={stockMovements} />
+                             <StockMovementDashboard movements={stockMovements} itemLimit={15} /> {/* Limit displayed items */}
                         )}
                     </CardContent>
                 </Card>
@@ -1121,3 +1112,5 @@
         );
     }
 
+
+    
