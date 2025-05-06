@@ -42,19 +42,19 @@ export function StockMovementDashboard({ movements, itemLimit = 10 }: StockMovem
 
   return (
     <div className="rounded-lg border shadow-sm overflow-hidden">
-      <Table>
-        <TableCaption className="py-4">Last {displayedMovements.length} stock level changes.</TableCaption> {/* Updated caption */}
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[30%] min-w-[100px]">Item Name</TableHead>
-            <TableHead className="text-center w-[15%]">Type</TableHead>
-            <TableHead className="text-right w-[15%]">Change</TableHead>
-            <TableHead className="text-right w-[15%]">New Qty</TableHead>
-            <TableHead className="hidden sm:table-cell w-[25%]">Timestamp</TableHead>
-             <TableHead className="hidden md:table-cell text-center w-[10%]">User</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+      <Table>{[
+        <TableCaption key="caption" className="py-4">Last {displayedMovements.length} stock level changes.</TableCaption>,
+        <TableHeader key="header">
+          <TableRow>{[
+            <TableHead key="item-name" className="w-[30%] min-w-[100px]">Item Name</TableHead>,
+            <TableHead key="type" className="text-center w-[15%]">Type</TableHead>,
+            <TableHead key="change" className="text-right w-[15%]">Change</TableHead>,
+            <TableHead key="new-qty" className="text-right w-[15%]">New Qty</TableHead>,
+            <TableHead key="timestamp" className="hidden sm:table-cell w-[25%]">Timestamp</TableHead>,
+            <TableHead key="user" className="hidden md:table-cell text-center w-[10%]">User</TableHead>
+          ]}</TableRow>
+        </TableHeader>,
+        <TableBody key="body">
           {displayedMovements.length === 0 ? (
             <TableRow>
               <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
@@ -63,9 +63,9 @@ export function StockMovementDashboard({ movements, itemLimit = 10 }: StockMovem
             </TableRow>
           ) : (
             displayedMovements.map((log) => (
-              <TableRow key={log.id}>
-                <TableCell className="font-medium">{log.itemName || log.itemId}</TableCell>
-                <TableCell className="text-center">
+              <TableRow key={log.id}>{[
+                <TableCell key="itemName" className="font-medium">{log.itemName || log.itemId}</TableCell>,
+                <TableCell key="type" className="text-center">
                    {log.type === 'in' ? (
                       <Badge variant="secondary" className="flex items-center justify-center gap-1 text-xs bg-success/10 text-success border-success/20">
                         <ArrowUpCircle className="h-3 w-3" />
@@ -77,13 +77,13 @@ export function StockMovementDashboard({ movements, itemLimit = 10 }: StockMovem
                         Out
                       </Badge>
                     )}
-                 </TableCell>
-                <TableCell className={`text-right font-mono ${log.quantityChange > 0 ? 'text-success' : 'text-destructive'}`}>
+                 </TableCell>,
+                <TableCell key="quantityChange" className={`text-right font-mono ${log.quantityChange > 0 ? 'text-success' : 'text-destructive'}`}>
                   {log.quantityChange > 0 ? `+${log.quantityChange}` : log.quantityChange}
-                </TableCell>
-                <TableCell className="text-right font-mono">{log.newStockLevel}</TableCell>
-                <TableCell className="hidden sm:table-cell text-muted-foreground text-xs">{formatTimestamp(log.timestamp)}</TableCell>
-                 <TableCell className="hidden md:table-cell text-center">
+                </TableCell>,
+                <TableCell key="newStockLevel" className="text-right font-mono">{log.newStockLevel}</TableCell>,
+                <TableCell key="timestamp" className="hidden sm:table-cell text-muted-foreground text-xs">{formatTimestamp(log.timestamp)}</TableCell>,
+                <TableCell key="user" className="hidden md:table-cell text-center">
                     <TooltipProvider delayDuration={100}>
                        <Tooltip>
                            <TooltipTrigger asChild>
@@ -97,11 +97,11 @@ export function StockMovementDashboard({ movements, itemLimit = 10 }: StockMovem
                        </Tooltip>
                     </TooltipProvider>
                  </TableCell>
-              </TableRow>
+              ]}</TableRow>
             ))
           )}
         </TableBody>
-      </Table>
+      ]}</Table>
     </div>
   );
 }

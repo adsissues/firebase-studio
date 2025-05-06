@@ -17,21 +17,20 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import type { StockItem } from '@/types';
 import { AlertTriangle, MapPin, Barcode, Tag, Building, Info, Image as ImageIcon, MapPinned, Pencil, Trash2, UserCircle, TrendingDown, Circle } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
-import { cn } from "@/lib/utils"; // Import cn utility
+import { cn } from "@/lib/utils";
 
 interface StockDashboardProps {
   items: StockItem[];
   onEdit: (item: StockItem) => void;
   onDelete: (item: StockItem) => void;
   isAdmin?: boolean;
-  globalLowStockThreshold: number; // Add prop for the global threshold
+  globalLowStockThreshold: number;
 }
 
 export function StockDashboard({ items, onEdit, onDelete, isAdmin = false, globalLowStockThreshold }: StockDashboardProps) {
   const { user } = useAuth();
 
   const getStatus = (item: StockItem) => {
-    // Use item's specific minimumStock if set, otherwise fallback to the global threshold
     const effectiveThreshold = item.minimumStock !== undefined ? item.minimumStock : globalLowStockThreshold;
     const { currentStock } = item;
 
@@ -42,19 +41,18 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false, globa
           Out of Stock
         </Badge>
       );
-    } else if (currentStock <= effectiveThreshold) { // Use effectiveThreshold for "Low Stock"
+    } else if (currentStock <= effectiveThreshold) {
        return (
          <Badge variant="destructive" className="flex items-center gap-1 text-xs whitespace-nowrap">
-           <TrendingDown className="h-3 w-3" /> {/* Use TrendingDown for Low */}
+           <TrendingDown className="h-3 w-3" />
            Low Stock
          </Badge>
        );
      }
     else {
-      // Default "Okay" status if not Out or Low
       return (
         <Badge variant="secondary" className="flex items-center gap-1 text-xs whitespace-nowrap">
-           <Circle className="h-3 w-3" /> {/* Use Circle for Okay */}
+           <Circle className="h-3 w-3" />
            Okay
          </Badge>
        );
@@ -145,9 +143,9 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false, globa
 
   return (
     <div className="rounded-lg border shadow-sm overflow-hidden">
-      <Table>
-        <TableCaption className="py-4">Overview of current stock levels.</TableCaption>
-        <TableHeader>
+      <Table>{[
+        <TableCaption key="caption" className="py-4">Overview of current stock levels.</TableCaption>,
+        <TableHeader key="header">
           <TableRow>{[
             <TableHead key="name" className="w-[15%] min-w-[120px]">Item Name</TableHead>,
             <TableHead key="photo" className="hidden xl:table-cell text-center w-[50px]">Photo</TableHead>,
@@ -162,8 +160,8 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false, globa
             <TableHead key="status" className="text-center w-[90px]">Status</TableHead>,
             <TableHead key="actions" className="text-center w-[100px]">Actions</TableHead>
           ]}</TableRow>
-        </TableHeader>
-        <TableBody>
+        </TableHeader>,
+        <TableBody key="body">
           {items.length === 0 ? (
             <TableRow>
               <TableCell colSpan={isAdmin ? 12 : 11} className="h-24 text-center text-muted-foreground">
@@ -172,13 +170,11 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false, globa
             </TableRow>
           ) : (
             items.map((item) => {
-                // Determine effective threshold for highlighting
                 const effectiveThreshold = item.minimumStock !== undefined ? item.minimumStock : globalLowStockThreshold;
                 const isLowStock = item.currentStock > 0 && item.currentStock <= effectiveThreshold;
                 const isOutOfStock = item.currentStock === 0;
 
                return (
-                 // Adjusted background logic based on effectiveThreshold
                  <TableRow
                     key={item.id}
                     className={cn(
@@ -232,7 +228,7 @@ export function StockDashboard({ items, onEdit, onDelete, isAdmin = false, globa
             })
           )}
         </TableBody>
-      </Table>
+      ]}</Table>
     </div>
   );
 }
