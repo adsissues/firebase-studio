@@ -1,4 +1,3 @@
-
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
@@ -66,10 +65,11 @@ const TableRow = React.forwardRef<
       className
     )}
     {...props}
-  >{children}</tr> // Ensure children are rendered directly inside the <tr> tag
+  >
+    {React.Children.toArray(children)}
+  </tr>
 ));
 TableRow.displayName = "TableRow";
-
 
 const TableHead = React.forwardRef<
   HTMLTableCellElement,
@@ -120,4 +120,3 @@ export {
   TableCell,
   TableCaption,
 };
-
