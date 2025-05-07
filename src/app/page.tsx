@@ -4,31 +4,37 @@
     import * as React from 'react';
     import { ItemSearch } from '@/components/item-search';
     import { StockDashboard } from '@/components/stock-dashboard';
-    import { StockMovementDashboard } from '@/components/stock-movement-dashboard'; // Import StockMovementDashboard
-    import { StockOutForm, type StockOutFormDataSubmit } from '@/components/stock-out-form'; // Adjusted import name
-    import { AddStockForm, type AddStockFormData } from '@/components/add-stock-form'; // Renamed component and type
+    import { ActivityFeed } from '@/components/activity-feed'; // Changed from StockMovementDashboard
+    import { StockOutForm, type StockOutFormDataSubmit } from '@/components/stock-out-form';
+    import { AddStockForm, type AddStockFormData } from '@/components/add-stock-form';
     import { EditItemForm, type EditItemFormData } from '@/components/edit-item-form';
     import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
     import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
     import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
     import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-    import type { StockItem, AdminSettings, StockMovementLog } from '@/types'; // Import AdminSettings & StockMovementLog
-    import { useState, useEffect } from 'react'; // Import useEffect
+    import type { StockItem, AdminSettings, StockMovementLog, LocationCoords } from '@/types'; // Import AdminSettings & StockMovementLog
+    import { useState, useEffect } from 'react';
     import { useToast } from "@/hooks/use-toast";
     import { QueryClient, QueryClientProvider, useQuery, useMutation, QueryCache } from '@tanstack/react-query';
     import { db, auth } from '@/lib/firebase/firebase';
-    import { collection, getDocs, addDoc, updateDoc, doc, increment, deleteDoc, writeBatch, query, where, runTransaction, setDoc, getDoc, serverTimestamp } from 'firebase/firestore'; // Import setDoc, getDoc, serverTimestamp
+    import { collection, getDocs, addDoc, updateDoc, doc, increment, deleteDoc, writeBatch, query, where, runTransaction, setDoc, getDoc, serverTimestamp, Timestamp } from 'firebase/firestore'; // Import Timestamp
     import { Skeleton } from '@/components/ui/skeleton';
     import { Button } from '@/components/ui/button';
     import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-    import { AlertTriangle, Loader2, Trash2, LogOut, Settings, Camera, XCircle, VideoOff } from 'lucide-react'; // Added Camera icons
+    import { AlertTriangle, Loader2, Trash2, LogOut, Settings, Camera, XCircle, VideoOff } from 'lucide-react';
     import { RequireAuth } from '@/components/auth/require-auth';
     import { useAuth } from '@/context/auth-context';
     import { signOut } from 'firebase/auth';
-    import { ThemeProvider } from "@/components/theme-provider"; // Import ThemeProvider
+    import { ThemeProvider } from "@/components/theme-provider";
     import { ThemeToggle } from "@/components/theme-toggle";
     import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
-    import { searchItemByPhoto, type SearchItemByPhotoInput } from '@/ai/flows/search-item-by-photo-flow'; // Import photo search flow
+    import { searchItemByPhoto, type SearchItemByPhotoInput } from '@/ai/flows/search-item-by-photo-flow';
+    import { DashboardKPIs, type KPIData } from '@/components/dashboard-kpis'; // Import KPIs
+    import { CategoryChart } from '@/components/charts/category-chart'; // Import charts
+    import { LocationChart } from '@/components/charts/location-chart';
+    import { MovementTrendChart } from '@/components/charts/movement-trend-chart';
+    import { PageHeader } from '@/components/page-header'; // Import PageHeader
+    import { ActionsPanel } from '@/components/actions-panel'; // Import ActionsPanel
 
     const queryClient = new QueryClient({
       queryCache: new QueryCache({
@@ -51,7 +57,7 @@
 
 
     function StockManagementPageContent() {
-      const { user, isAdmin } = useAuth();
+      const { user, isAdmin, loading: authLoading } = useAuth(); // Destructure loading state
       const [searchQuery, setSearchQuery] = useState('');
       const { toast } = useToast();
       const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -149,20 +155,15 @@
              if (!user) return [];
              console.log("Fetching stock movements for user:", user.uid);
              const logsCol = collection(db, 'stockMovements');
-             // Admin sees all logs, user sees logs related to their items (might need adjustment based on exact needs)
-             // This query fetches logs where the logged item's userId matches the current user's ID
-             // OR fetches all logs if the current user is an admin.
              const q = isAdmin ? query(logsCol) : query(logsCol, where("userId", "==", user.uid));
              try {
                 const logSnapshot = await getDocs(q);
                  const logsList = logSnapshot.docs.map(doc => ({
                      id: doc.id,
                      ...doc.data(),
-                     // Ensure timestamp is correctly typed if necessary (though Firestore SDK often handles this)
-                     // timestamp: (doc.data().timestamp as FirebaseTimestamp).toDate() // Example if conversion needed
+                     timestamp: doc.data().timestamp as Timestamp // Ensure timestamp is correctly typed
                  } as StockMovementLog));
                  console.log(`Fetched ${logsList.length} stock movements.`);
-                 // Sort by timestamp descending (already done in component, but good for raw data)
                  logsList.sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
                  return logsList;
              } catch (err) {
@@ -207,6 +208,36 @@
 
                 const { itemName, quantity, barcode } = formData;
                 console.log("Adding stock:", formData);
+
+                // --- Duplicate Barcode Check ---
+                if (barcode) {
+                    const barcodeQuery = query(collection(db, 'stockItems'), where("barcode", "==", barcode));
+                    const barcodeSnapshot = await getDocs(barcodeQuery);
+                    if (!barcodeSnapshot.empty) {
+                        // Check if the found item is the *same* as the one potentially being updated
+                        // (If we are updating an existing item by name/barcode)
+                        let isUpdatingExisting = false;
+                        if (formData.itemName) { // Check if we might be updating by name
+                             const nameQuery = query(collection(db, 'stockItems'), where("itemName", "==", formData.itemName), where("userId", "==", user.uid));
+                             const nameSnapshot = await getDocs(nameQuery);
+                             if (!nameSnapshot.empty && nameSnapshot.docs[0].id === barcodeSnapshot.docs[0].id) {
+                                 isUpdatingExisting = true;
+                             }
+                        }
+                         // If the barcode exists and it's NOT the same item we intend to update, throw error
+                         if (!isUpdatingExisting) {
+                             const existingItem = barcodeSnapshot.docs[0].data();
+                              toast({
+                                  variant: "destructive",
+                                  title: "Duplicate Barcode",
+                                  description: `Barcode ${barcode} is already assigned to item "${existingItem.itemName}". Please use a unique barcode or leave it empty.`,
+                                  duration: 7000,
+                              });
+                             throw new Error("Duplicate barcode detected.");
+                         }
+                    }
+                 }
+                 // --- End Duplicate Barcode Check ---
 
                 const itemsCol = collection(db, 'stockItems');
                 let targetItemQuery;
@@ -374,7 +405,8 @@
                  toast({
                     variant: "destructive",
                     title: "Error Adding Stock",
-                    description: error.message || "Could not add stock. Please try again.",
+                     // Check for the specific duplicate barcode error message
+                    description: error.message === "Duplicate barcode detected." ? error.message : error.message || "Could not add stock. Please try again.",
                  });
              },
         });
@@ -387,6 +419,25 @@
                  if (itemData.userId !== user.uid && !isAdmin) {
                      throw new Error("Permission denied: You can only edit your own items.");
                  }
+
+                 // --- Duplicate Barcode Check (during edit) ---
+                 if (itemData.barcode && itemData.barcode.trim() !== '') {
+                      const barcodeQuery = query(collection(db, 'stockItems'), where("barcode", "==", itemData.barcode));
+                      const barcodeSnapshot = await getDocs(barcodeQuery);
+                      // Check if a document with this barcode exists AND it's not the item being edited
+                      if (!barcodeSnapshot.empty && barcodeSnapshot.docs[0].id !== itemData.id) {
+                          const existingItem = barcodeSnapshot.docs[0].data();
+                          toast({
+                               variant: "destructive",
+                               title: "Duplicate Barcode",
+                               description: `Barcode ${itemData.barcode} is already assigned to item "${existingItem.itemName}". Please use a unique barcode.`,
+                               duration: 7000,
+                           });
+                          throw new Error("Duplicate barcode detected.");
+                      }
+                  }
+                 // --- End Duplicate Barcode Check ---
+
 
                 console.log("Editing item in Firestore:", itemData);
                  const itemDocRef = doc(db, 'stockItems', itemData.id);
@@ -484,7 +535,14 @@
                          title: "Invalid Data Error",
                          description: "There was an issue with the data format provided. Check numeric fields. (Details: " + error.message + ")",
                      });
-                 } else {
+                 } else if (error.message === "Duplicate barcode detected.") {
+                      toast({
+                          variant: "destructive",
+                          title: "Duplicate Barcode",
+                          description: error.message, // Show the specific duplicate error
+                      });
+                 }
+                 else {
                     toast({
                         variant: "destructive",
                         title: "Error Updating Item",
@@ -506,10 +564,10 @@
                 await deleteDoc(itemDocRef);
                 console.log("Item deleted successfully:", itemToDelete.id);
 
-                 // Optional: Log the deletion as a 'stock out' of the remaining quantity if needed
-                 // if (itemToDelete.currentStock > 0) {
-                 //    await logStockMovement(itemToDelete, -itemToDelete.currentStock, 0);
-                 // }
+                // Optional: Log the deletion as a 'stock out' of the remaining quantity if needed
+                 if (itemToDelete.currentStock > 0) {
+                    await logStockMovement(itemToDelete, -itemToDelete.currentStock, 0);
+                 }
                  // Optional: Also delete related movement logs? (Could make history confusing)
                  // const logsRef = collection(db, 'stockMovements');
                  // const q = query(logsRef, where('itemId', '==', itemToDelete.id));
@@ -724,24 +782,23 @@
         setSearchQuery(query);
       };
 
-      const handleStockOutSubmit = (data: StockOutFormDataSubmit) => { // Adjusted type
+      const handleStockOutSubmit = (data: StockOutFormDataSubmit) => {
          stockOutMutation.mutate(data);
        };
 
-      const handleAddStockSubmit = (data: AddStockFormData) => { // Renamed handler
-           addStockMutation.mutate(data); // Use the new mutation
+      const handleAddStockSubmit = (data: AddStockFormData) => {
+           addStockMutation.mutate(data);
       };
 
       const handleEditItemSubmit = (data: EditItemFormData) => {
           if (!itemToEdit) return;
 
-          // Prepare the updated item object, ensuring numeric conversion and handling undefined
           const updatedItem: StockItem = {
-              id: itemToEdit.id, // Keep the original ID
-              userId: itemToEdit.userId || user?.uid || 'unknown', // Keep original or set current user
+              id: itemToEdit.id,
+              userId: itemToEdit.userId || user?.uid || 'unknown',
               itemName: data.itemName,
               currentStock: data.currentStock ?? 0,
-              minimumStock: data.minimumStock === undefined || data.minimumStock === null ? undefined : Number(data.minimumStock), // Ensure number or undefined
+              minimumStock: data.minimumStock === undefined || data.minimumStock === null ? undefined : Number(data.minimumStock),
               barcode: data.barcode || undefined,
               location: data.location || undefined,
               description: data.description || undefined,
@@ -795,7 +852,6 @@
         const filteredItems = stockItems.filter((item) => {
             const query = searchQuery.toLowerCase();
             if (!item || typeof item.itemName !== 'string') return false;
-            // Search across multiple relevant fields
             return (
                 item.itemName.toLowerCase().includes(query) ||
                 (item.barcode && item.barcode.toLowerCase().includes(query)) ||
@@ -806,14 +862,18 @@
             );
         });
 
-       const isMutating = stockOutMutation.isPending || addStockMutation.isPending || editItemMutation.isPending || deleteItemMutation.isPending || saveSettingsMutation.isPending || photoSearchLoading; // Include photo search loading
+       const isMutating = stockOutMutation.isPending || addStockMutation.isPending || editItemMutation.isPending || deleteItemMutation.isPending || saveSettingsMutation.isPending || photoSearchLoading;
+       const isLoading = authLoading || isLoadingItems || isLoadingSettings || isLoadingMovements; // Combine all loading states
+
 
         // Trigger low stock alert checks when items or settings change
         useEffect(() => {
-            if (!isAdmin && !isLoadingItems && !isLoadingSettings && stockItems.length > 0) {
+             // Debounce or limit frequency if needed
+            if (!isLoading && stockItems.length > 0 && !isAdmin) { // Check isAdmin here
                 let lowStockMessages: string[] = [];
                 stockItems.forEach(item => {
-                    const effectiveThreshold = item.minimumStock ?? adminSettings.lowStockThreshold;
+                    // Use item-specific minimum if available, otherwise global threshold
+                    const effectiveThreshold = item.minimumStock !== undefined ? item.minimumStock : adminSettings.lowStockThreshold;
                     if (item.currentStock > 0 && item.currentStock <= effectiveThreshold) {
                          lowStockMessages.push(`${item.itemName} (${item.currentStock})`);
                     }
@@ -837,7 +897,7 @@
                      }
                 }
             }
-        }, [stockItems, adminSettings, isLoadingItems, isLoadingSettings, isAdmin, user, toast]); // Dependencies
+        }, [stockItems, adminSettings, isLoadingItems, isLoadingSettings, isAdmin, user, toast, isLoading]); // Added isLoading to dependencies
 
 
         const handleSaveSettings = (settings: AdminSettings) => {
@@ -848,169 +908,237 @@
         // Refetch handler combining both data types
         const handleRetryFetch = () => {
              if (fetchError) refetchItems();
-             if (isLoadingMovements) refetchMovements(); // Retry movements if loading failed
-             // Optionally refetch settings if there was an error, though less common
-             // if (settingsError) refetchSettings();
-         }; 
+             refetchMovements(); // Always allow refetching movements
+         };
+
+         // Calculate KPIs
+         const kpiData: KPIData | null = React.useMemo(() => {
+             if (isLoading) return null; // Don't calculate if still loading
+
+              const totalItems = stockItems.length;
+              const lowStockItems = stockItems.filter(item => {
+                   const threshold = item.minimumStock ?? adminSettings.lowStockThreshold;
+                   return item.currentStock > 0 && item.currentStock <= threshold;
+              }).length;
+              const outOfStockItems = stockItems.filter(item => item.currentStock === 0).length;
+
+              // Calculate today's transactions
+              const todayStart = new Date();
+              todayStart.setHours(0, 0, 0, 0);
+              const todayEnd = new Date();
+              todayEnd.setHours(23, 59, 59, 999);
+
+              const todayMovements = stockMovements.filter(log => {
+                   const logDate = log.timestamp.toDate();
+                   return logDate >= todayStart && logDate <= todayEnd;
+              });
+
+              const todayIn = todayMovements.filter(log => log.type === 'in').length;
+              const todayOut = todayMovements.filter(log => log.type === 'out').length;
+              // Define "Restock" logic if needed (e.g., based on quantity or a specific flag)
+              const todayRestock = 0; // Placeholder
+
+              return {
+                  totalItems,
+                  lowStockItems,
+                  outOfStockItems,
+                  todayIn,
+                  todayOut,
+                  todayRestock,
+              };
+          }, [stockItems, stockMovements, adminSettings, isLoading]);
 
 
-      const pageTitle = `${isAdmin ? 'Admin Dashboard' : 'Your Stock Management Dashboard'}${user ? ` (Logged in as ${user.email})` : ''}`;
+         // Prepare data for charts
+         const categoryChartData = React.useMemo(() => {
+              if (isLoading) return [];
+              const counts: { [key: string]: number } = {};
+              stockItems.forEach(item => {
+                  const category = item.category || 'Uncategorized';
+                  counts[category] = (counts[category] || 0) + 1;
+              });
+              return Object.entries(counts).map(([name, value]) => ({ name, value }));
+          }, [stockItems, isLoading]);
+
+          const locationChartData = React.useMemo(() => {
+              if (isLoading) return [];
+              const counts: { [key: string]: number } = {};
+              stockItems.forEach(item => {
+                   // Prioritize text location, fallback to coordinates if text is empty
+                   let locationLabel = item.location?.trim();
+                   if (!locationLabel && item.locationCoords) {
+                       locationLabel = `GPS (${item.locationCoords.latitude.toFixed(2)}, ${item.locationCoords.longitude.toFixed(2)})`;
+                   }
+                   locationLabel = locationLabel || 'Unknown Location';
+                   counts[locationLabel] = (counts[locationLabel] || 0) + item.currentStock; // Aggregate by stock quantity
+              });
+              return Object.entries(counts).map(([name, value]) => ({ name, value })).filter(d => d.value > 0); // Only show locations with stock
+          }, [stockItems, isLoading]);
+
+          const movementTrendData = React.useMemo(() => {
+              if (isLoadingMovements) return [];
+               // Aggregate movements by week (or day/month based on preference)
+              const weeklyMovements: { [week: string]: { in: number; out: number } } = {};
+               const now = new Date();
+               const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+               stockMovements
+                   .filter(log => log.timestamp.toDate() >= oneWeekAgo) // Filter last 7 days
+                   .forEach(log => {
+                       const date = log.timestamp.toDate();
+                       const weekStart = new Date(date);
+                       weekStart.setDate(date.getDate() - date.getDay()); // Get Sunday of the week
+                       const weekKey = `${weekStart.getFullYear()}-${(weekStart.getMonth() + 1).toString().padStart(2, '0')}-${weekStart.getDate().toString().padStart(2, '0')}`;
+
+                       if (!weeklyMovements[weekKey]) {
+                           weeklyMovements[weekKey] = { in: 0, out: 0 };
+                       }
+                       if (log.type === 'in') {
+                           weeklyMovements[weekKey].in += log.quantityChange;
+                       } else {
+                           weeklyMovements[weekKey].out += Math.abs(log.quantityChange);
+                       }
+                   });
+
+               // Convert to chart format, sorted by date
+               return Object.entries(weeklyMovements)
+                   .map(([week, data]) => ({ name: week, StockIn: data.in, StockOut: data.out }))
+                   .sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime());
+          }, [stockMovements, isLoadingMovements]);
+
 
       return (
-        <div className="container mx-auto p-4 md:p-8">
-           <header className="mb-8 flex flex-col sm:flex-row justify-between items-center gap-4">
-               <div className="text-center sm:text-left">
-                   <h1 className="text-3xl font-bold text-primary">StockWatch</h1>
-                   <p className="text-xl text-muted-foreground">
-                       {pageTitle}
-                   </p>
-               </div>
-               <div className="flex items-center gap-2">
-                   {isAdmin && (
-                       <Button
-                         variant="outline"
-                         size="icon"
-                         onClick={() => setIsSettingsDialogOpen(true)}
-                         disabled={isLoadingSettings || saveSettingsMutation.isPending}
-                         aria-label="Open Admin Settings"
-                       >
-                         <Settings className="h-5 w-5" />
-                       </Button>
-                   )}
-                   <ThemeToggle />
-                   <Button
-                       variant="outline"
-                       size="icon"
-                       onClick={handleSignOut}
-                       disabled={isMutating}
-                       aria-label="Sign Out"
-                   >
-                       <LogOut className="h-5 w-5" />
-                   </Button>
-               </div>
-           </header>
+        <div className="container mx-auto p-4 md:p-6 lg:p-8">
+           <PageHeader
+             user={user}
+             isAdmin={isAdmin}
+             isLoading={isLoading}
+             onSettingsClick={() => setIsSettingsDialogOpen(true)}
+             onSignOutClick={handleSignOut}
+             lastLogin={user?.metadata?.lastSignInTime ? new Date(user.metadata.lastSignInTime).toLocaleString() : undefined}
+            />
 
-           <main className="space-y-8">
-             <Card className="shadow-md">
-                 <CardHeader>
-                     <CardTitle className="text-2xl">Stock Levels {isAdmin && '(Admin View)'}</CardTitle>
-                 </CardHeader>
-                 <CardContent className="space-y-4">
-                     <div className="flex flex-col sm:flex-row gap-2 items-center">
-                         <div className="flex-grow">
-                            <ItemSearch
-                                searchQuery={searchQuery}
-                                onSearchChange={handleSearchChange}
-                                placeholder="Search by name, barcode, etc..."
-                            />
-                         </div>
-                         <Button
-                            variant="outline"
-                            onClick={() => setIsPhotoSearchOpen(true)}
-                            disabled={isMutating || hasCameraPermission === false}
-                            className="w-full sm:w-auto"
-                            aria-label="Search by Photo"
-                          >
-                            <Camera className="mr-2 h-4 w-4" /> Search by Photo
-                          </Button>
-                          <Button onClick={handleRetryFetch} disabled={isLoadingItems || isMutating} className="w-full sm:w-auto">
-                              {isLoadingItems ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                              {fetchError ? "Retry Fetch" : "Refresh"}
-                          </Button>
-                      </div>
-                     {isLoadingItems && (
-                      <div className="space-y-2 pt-4">
-                         <Skeleton className="h-8 w-full" />
-                         <Skeleton className="h-12 w-full" />
-                         <Skeleton className="h-12 w-full" />
-                      </div>
-                     )}
-                     {fetchError && (
-                        <Alert variant="destructive" className="mt-4">
-                             <AlertTriangle className="h-4 w-4" />
-                             <AlertTitle>Error Loading Stock</AlertTitle>
-                             <AlertDescription>
-                                 Could not load stock items. {(fetchError as Error).message}
-                             </AlertDescription>
-                         </Alert>
-                     )}
-                     {!isLoadingItems && !fetchError && (
-                         <StockDashboard
-                             items={filteredItems}
-                             onEdit={handleEditClick}
-                             onDelete={handleDeleteClick}
-                             isAdmin={isAdmin}
-                             globalLowStockThreshold={adminSettings.lowStockThreshold} // Pass global threshold
-                          />
-                      )}
+            {/* KPIs */}
+            <DashboardKPIs data={kpiData} isLoading={isLoading} />
+
+           {/* Charts */}
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
+               <Card className="shadow-md md:col-span-1">
+                  <CardHeader><CardTitle className="text-lg">Items by Category</CardTitle></CardHeader>
+                  <CardContent>
+                      {isLoading ? <Skeleton className="h-48 w-full" /> : <CategoryChart data={categoryChartData} />}
                   </CardContent>
                </Card>
-
-                
-                {isLoadingMovements ? (
-                     <Card className="shadow-md">
-                         <CardHeader>
-                             <CardTitle className="text-2xl">Recent Stock Movements</CardTitle>
-                         </CardHeader>
-                         <CardContent>
-                            <div className="space-y-2">
-                                <Skeleton className="h-8 w-full" />
-                                <Skeleton className="h-10 w-full" />
-                                <Skeleton className="h-10 w-full" />
-                                <Skeleton className="h-10 w-full" />
-                            </div>
-                         </CardContent>
-                     </Card>
-                 ) : stockMovements.length > 0 ? (
-                     <StockMovementDashboard
-                         movements={stockMovements}
-                         stockItems={stockItems}
-                         globalLowStockThreshold={adminSettings.lowStockThreshold}
-                     />
-                 ) : (
-                     <Card className="shadow-md">
-                          <CardHeader>
-                             <CardTitle className="text-2xl">Recent Stock Movements</CardTitle>
-                         </CardHeader>
-                         <CardContent>
-                             <p className="text-muted-foreground text-center py-4">
-                                 No recent stock movements recorded.
-                             </p>
-                         </CardContent>
-                     </Card>
-                 )}
-            
-
-            <Tabs defaultValue="stock-out" className="w-full">
-               <Card className="shadow-md">
-                   <CardHeader>
-                        <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="stock-out">Stock Out</TabsTrigger>
-                            <TabsTrigger value="add-stock">Add Stock</TabsTrigger>
-                        </TabsList>
-                   </CardHeader>
-                  <TabsContent value="stock-out">
-                     <CardContent>
-                        <StockOutForm
-                             items={stockItems} // Pass all user-visible items
-                             onSubmit={handleStockOutSubmit}
-                             isLoading={stockOutMutation.isPending}
-                           />
-                        
-                     </CardContent>
-                   </TabsContent>
-                   <TabsContent value="add-stock">
-                     <CardContent>
-                        <AddStockForm
-                             onSubmit={handleAddStockSubmit} // Renamed handler
-                             isLoading={addStockMutation.isPending} // Updated mutation name
-                           />
-                        
-                     </CardContent>
-                   </TabsContent>
+                <Card className="shadow-md md:col-span-1">
+                   <CardHeader><CardTitle className="text-lg">Stock by Location</CardTitle></CardHeader>
+                   <CardContent>
+                       {isLoading ? <Skeleton className="h-48 w-full" /> : <LocationChart data={locationChartData} />}
+                   </CardContent>
                 </Card>
-            </Tabs>
+               <Card className="shadow-md md:col-span-1">
+                  <CardHeader><CardTitle className="text-lg">Weekly Movement Trend</CardTitle></CardHeader>
+                  <CardContent>
+                     {isLoadingMovements ? <Skeleton className="h-48 w-full" /> : <MovementTrendChart data={movementTrendData} />}
+                  </CardContent>
+               </Card>
+           </div>
+
+
+           <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column: Stock Table & Actions */}
+              <div className="lg:col-span-2 space-y-6">
+                 <Card className="shadow-md">
+                     <CardHeader>
+                         <CardTitle className="text-2xl">Stock Levels {isAdmin && '(Admin View)'}</CardTitle>
+                     </CardHeader>
+                     <CardContent className="space-y-4">
+                         <ItemSearch
+                             searchQuery={searchQuery}
+                             onSearchChange={handleSearchChange}
+                             placeholder="Search items by name, barcode, etc..."
+                          />
+                         {isLoadingItems && (
+                          <div className="space-y-2 pt-4">
+                             <Skeleton className="h-8 w-full" />
+                             <Skeleton className="h-12 w-full" />
+                             <Skeleton className="h-12 w-full" />
+                          </div>
+                         )}
+                         {fetchError && (
+                            <Alert variant="destructive" className="mt-4">
+                                 <AlertTriangle className="h-4 w-4" />
+                                 <AlertTitle>Error Loading Stock</AlertTitle>
+                                 <AlertDescription>
+                                     Could not load stock items. {(fetchError as Error).message}
+                                     <Button onClick={handleRetryFetch} variant="link" className="ml-2 p-0 h-auto text-destructive-foreground underline">Retry</Button>
+                                 </AlertDescription>
+                             </Alert>
+                         )}
+                         {!isLoadingItems && !fetchError && (
+                             <StockDashboard
+                                 items={filteredItems}
+                                 onEdit={handleEditClick}
+                                 onDelete={handleDeleteClick}
+                                 isAdmin={isAdmin}
+                                 globalLowStockThreshold={adminSettings.lowStockThreshold}
+                              />
+                          )}
+                      </CardContent>
+                   </Card>
+
+                   {/* Combine Add/Out Forms */}
+                    <Card className="shadow-md">
+                         <Tabs defaultValue="add-stock" className="w-full">
+                            <CardHeader className="p-4 border-b">
+                                 <TabsList className="grid w-full grid-cols-2">
+                                     <TabsTrigger value="add-stock">Add Stock</TabsTrigger>
+                                     <TabsTrigger value="stock-out">Stock Out</TabsTrigger>
+                                 </TabsList>
+                            </CardHeader>
+                           <TabsContent value="add-stock">
+                              <CardContent className="p-4">
+                                 <AddStockForm
+                                      onSubmit={handleAddStockSubmit}
+                                      isLoading={addStockMutation.isPending}
+                                    />
+                              </CardContent>
+                            </TabsContent>
+                           <TabsContent value="stock-out">
+                              <CardContent className="p-4">
+                                 <StockOutForm
+                                      items={stockItems}
+                                      onSubmit={handleStockOutSubmit}
+                                      isLoading={stockOutMutation.isPending}
+                                    />
+                              </CardContent>
+                            </TabsContent>
+                         </Tabs>
+                    </Card>
+               </div>
+
+
+              {/* Right Column: Actions Panel & Activity Feed */}
+              <div className="lg:col-span-1 space-y-6">
+                 <ActionsPanel
+                    onPhotoSearchClick={() => setIsPhotoSearchOpen(true)}
+                    onAddStockClick={() => { /* Consider opening Add Stock Tab directly */ }}
+                    onStockOutClick={() => { /* Consider opening Stock Out Tab directly */ }}
+                    isLoading={isMutating || hasCameraPermission === false || isLoading}
+                    frequentlyUsedItems={[]} // TODO: Populate frequently used items
+                    onQuickAction={(action, item) => {
+                        if (action === 'in') handleAddStockSubmit({ itemName: item.itemName, quantity: 1, barcode: item.barcode });
+                        else if (action === 'out') handleStockOutSubmit({ itemId: item.id, quantity: 1 });
+                    }}
+                  />
+
+                  <ActivityFeed
+                    movements={stockMovements}
+                    isLoading={isLoadingMovements}
+                  />
+
+               </div>
           </main>
+
 
           {/* Edit Item Dialog */}
            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
@@ -1056,16 +1184,17 @@
                 </AlertDialogContent>
             </AlertDialog>
 
-               {isAdmin && isSettingsDialogOpen && ( // Render only if admin and dialog should be open
+               {isAdmin && isSettingsDialogOpen && (
                    <AdminSettingsDialog
-                      isOpen={isSettingsDialogOpen} // Control visibility
+                      isOpen={isSettingsDialogOpen}
                       onClose={() => setIsSettingsDialogOpen(false)}
                       onSave={handleSaveSettings}
-                       currentSettings={adminSettings} // Pass fetched settings
-                       isLoading={saveSettingsMutation.isPending} // Pass loading state
+                       currentSettings={adminSettings}
+                       isLoading={saveSettingsMutation.isPending}
                    />
                )}
 
+               {/* Photo Search Dialog */}
                <Dialog open={isPhotoSearchOpen} onOpenChange={setIsPhotoSearchOpen}>
                   <DialogContent className="sm:max-w-md">
                       <DialogHeader>
@@ -1077,7 +1206,6 @@
                        <div className="space-y-4 py-4">
                             <div className="relative aspect-video w-full bg-muted rounded-md overflow-hidden">
                                 <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
-                                {/* Hidden canvas for capture */}
                                 <canvas ref={canvasRef} style={{ display: 'none' }} />
 
                                  {hasCameraPermission === false && (
@@ -1128,7 +1256,6 @@
      }
 
 
-     // Wrap the page component with QueryClientProvider and RequireAuth
      export default function Home() {
          return (
              <QueryClientProvider client={queryClient}>
@@ -1147,8 +1274,12 @@
      }
     
     
+    
+    
 
     
 
+
+    
 
     
