@@ -1,3 +1,4 @@
+
  'use client';
 
     import * as React from 'react';
@@ -161,7 +162,7 @@
                      // timestamp: (doc.data().timestamp as FirebaseTimestamp).toDate() // Example if conversion needed
                  } as StockMovementLog));
                  console.log(`Fetched ${logsList.length} stock movements.`);
-                 // Sort by timestamp descending
+                 // Sort by timestamp descending (already done in component, but good for raw data)
                  logsList.sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
                  return logsList;
              } catch (err) {
@@ -850,7 +851,7 @@
              if (isLoadingMovements) refetchMovements(); // Retry movements if loading failed
              // Optionally refetch settings if there was an error, though less common
              // if (settingsError) refetchSettings();
-         }; // Added missing closing brace
+         }; 
 
 
       const pageTitle = `${isAdmin ? 'Admin Dashboard' : 'Your Stock Management Dashboard'}${user ? ` (Logged in as ${user.email})` : ''}`;
@@ -945,30 +946,39 @@
                   </CardContent>
                </Card>
 
-                <Card className="shadow-md">
-                    <CardHeader>
-                        <CardTitle className="text-2xl">Recent Stock Movements</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {isLoadingMovements && (
+                
+                {isLoadingMovements ? (
+                     <Card className="shadow-md">
+                         <CardHeader>
+                             <CardTitle className="text-2xl">Recent Stock Movements</CardTitle>
+                         </CardHeader>
+                         <CardContent>
                             <div className="space-y-2">
                                 <Skeleton className="h-8 w-full" />
                                 <Skeleton className="h-10 w-full" />
                                 <Skeleton className="h-10 w-full" />
+                                <Skeleton className="h-10 w-full" />
                             </div>
-                        )}
-                         {!isLoadingMovements && stockMovements.length === 0 && (
-                             <p className="text-muted-foreground">
+                         </CardContent>
+                     </Card>
+                 ) : stockMovements.length > 0 ? (
+                     <StockMovementDashboard
+                         movements={stockMovements}
+                         stockItems={stockItems}
+                         globalLowStockThreshold={adminSettings.lowStockThreshold}
+                     />
+                 ) : (
+                     <Card className="shadow-md">
+                          <CardHeader>
+                             <CardTitle className="text-2xl">Recent Stock Movements</CardTitle>
+                         </CardHeader>
+                         <CardContent>
+                             <p className="text-muted-foreground text-center py-4">
                                  No recent stock movements recorded.
                              </p>
-                         )}
-                        {!isLoadingMovements && stockMovements.length > 0 && (
-                             <StockMovementDashboard
-                                  movements={stockMovements} itemLimit={15} />
-                            
-                        )}
-                    </CardContent>
-                </Card>
+                         </CardContent>
+                     </Card>
+                 )}
             
 
             <Tabs defaultValue="stock-out" className="w-full">
@@ -1137,5 +1147,8 @@
      }
     
     
+
+    
+
 
     
