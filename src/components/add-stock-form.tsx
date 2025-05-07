@@ -40,16 +40,14 @@ const formSchema = z.object({
     .int({ message: 'Quantity must be a whole number.' })
     .positive({ message: 'Quantity to add must be positive.' }),
   minimumStock: z.coerce
-  .number({ invalid_type_error: 'Minimum stock must be a number.' })
-  .int({ message: 'Minimum stock must be a whole number.' })
-  .nonnegative({ message: 'Minimum stock cannot be negative.' })
-  .optional(),
+    .number({ invalid_type_error: 'Minimum stock must be a number.' })
+    .int({ message: 'Minimum stock must be a whole number.' })
+    .nonnegative({ message: 'Minimum stock cannot be negative.' })
+    .optional(),
   location: z.string().max(100).optional().or(z.literal('')),
   supplier: z.string().max(100).optional().or(z.literal('')),
+  category: z.string().max(50).optional().or(z.literal('')), // Added category field
   photoUrl: z.string().url({ message: "Please enter a valid URL or capture a photo." }).optional().or(z.literal('')),
-  // Removed description and category for simplicity, can be added back if needed
-  // description: z.string().max(500).optional().or(z.literal('')),
-  // category: z.string().max(50).optional().or(z.literal('')),
   locationCoords: z.object({
     latitude: z.number(),
     longitude: z.number(),
@@ -80,6 +78,7 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
       minimumStock: undefined,
       location: '',
       supplier: '',
+      category: '', // Added category default
       photoUrl: '',
       locationCoords: undefined,
     },
@@ -185,6 +184,7 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
        ...values, // Submit all validated form values
        photoUrl: capturedPhotoUrl || values.photoUrl || undefined, // Prioritize captured, then form, then undefined
        locationCoords: capturedLocation || values.locationCoords || undefined, // Prioritize captured, then form, then undefined
+       // Category is already included in values
      };
      console.log("Data Submitted:", submitData);
     onSubmit(submitData);
@@ -304,6 +304,36 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
                   />
             </div>
 
+             {/* Category and Supplier Fields */}
+             <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Electronics, Food" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                    control={form.control}
+                    name="supplier"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Supplier</FormLabel>
+                        <FormControl>
+                            <Input placeholder="e.g., Acme Corp" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                />
+             </div>
+
             {/* Location Field */}
             <FormField
               control={form.control}
@@ -334,20 +364,6 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
               )}
             />
 
-            {/* Supplier Field */}
-            <FormField
-                control={form.control}
-                name="supplier"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>Supplier</FormLabel>
-                    <FormControl>
-                        <Input placeholder="e.g., Acme Corp" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                    </FormItem>
-                )}
-            />
 
             {/* Photo Section */}
             <FormItem>
@@ -396,3 +412,4 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
     </Form>
   );
 }
+
