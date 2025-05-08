@@ -8,6 +8,7 @@
     import { StockOutForm, type StockOutFormDataSubmit } from '@/components/stock-out-form';
     import { AddStockForm, type AddStockFormData } from '@/components/add-stock-form';
     import { EditItemForm, type EditItemFormData } from '@/components/edit-item-form';
+    import { ViewItemDialog } from '@/components/view-item-dialog'; // Import ViewItemDialog
     import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
     import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
     import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -62,6 +63,8 @@
       const { toast } = useToast();
       const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
       const [itemToEdit, setItemToEdit] = useState<StockItem | null>(null);
+      const [isViewDialogOpen, setIsViewDialogOpen] = useState(false); // State for View dialog
+      const [itemToView, setItemToView] = useState<StockItem | null>(null); // State for item to view
       const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
       const [itemToDelete, setItemToDelete] = useState<StockItem | null>(null);
       const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
@@ -823,6 +826,12 @@
          setIsEditDialogOpen(true);
        };
 
+       const handleViewClick = (item: StockItem) => { // Handler for View click
+         setItemToView(item);
+         setIsViewDialogOpen(true);
+       };
+
+
        const handleDeleteClick = (item: StockItem) => {
          setItemToDelete(item);
          setIsDeleteDialogOpen(true);
@@ -1077,6 +1086,7 @@
                          {!isLoadingItems && !fetchError && (
                              <StockDashboard
                                  items={filteredItems}
+                                 onView={handleViewClick} // Pass handler to StockDashboard
                                  onEdit={handleEditClick}
                                  onDelete={handleDeleteClick}
                                  isAdmin={isAdmin}
@@ -1139,6 +1149,13 @@
                </div>
           </main>
 
+
+          {/* View Item Dialog */}
+           <ViewItemDialog
+             isOpen={isViewDialogOpen}
+             onClose={() => setIsViewDialogOpen(false)}
+             item={itemToView}
+           />
 
           {/* Edit Item Dialog */}
            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
