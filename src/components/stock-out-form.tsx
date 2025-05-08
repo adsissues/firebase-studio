@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'; // Import Card components
 import type { StockItem, StockMovementLog } from '@/types'; // Import StockMovementLog
 import { MinusCircle, Loader2, ScanBarcode, Hash, MessageSquare } from 'lucide-react'; // Added Hash, MessageSquare
 import { useAuth } from '@/context/auth-context';
@@ -80,7 +81,7 @@ export type StockOutFormDataSubmit = Pick<StockOutFormData, 'itemId' | 'quantity
 export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFormProps) {
    const { user, isAdmin } = useAuth();
    const { toast } = useToast();
-   const [isScanningBarcode, setIsScanningBarcode] = React.useState(isScanningBarcode);
+   const [isScanningBarcode, setIsScanningBarcode] = React.useState(false); // Initialized to false
 
   const userVisibleItems = React.useMemo(() => {
       if (!user) return [];
@@ -94,7 +95,7 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
 
   const formSchema = React.useMemo(() => createFormSchema(userVisibleItems), [userVisibleItems]);
 
-  const form = useForm({
+  const form = useForm<StockOutFormData>({ // Use StockOutFormData here
     resolver: zodResolver(formSchema),
     defaultValues: {
       barcode: '',
@@ -160,132 +161,146 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
 
 
   return (
-     
-      
-         
-            
-              Log Stock Out
-            
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 rounded-lg border p-6 shadow-sm">
+         <fieldset disabled={isLoading || !user} className="space-y-4">
+            <h2 className="text-lg font-semibold text-primary mb-4">Log Stock Out</h2>
 
              {/* Barcode Field */}
-             
-               
-                 Barcode
-                 
-                   
-                     
-                      Scan or enter barcode
-                      
-                    
-                    
-                      
-                       
-                      
-                        
-                      
-                    
-                   
+             <FormField
+               control={form.control}
+               name="barcode"
+               render={({ field }) => (
+                 <FormItem>
+                   <FormLabel>Barcode</FormLabel>
+                   <div className="flex gap-2">
+                      <FormControl>
+                        <Input placeholder="Scan or enter barcode" {...field} className="flex-grow" />
+                      </FormControl>
+                       <Button
+                         type="button"
+                         variant="outline"
+                         size="icon"
+                         onClick={handleScanBarcode}
+                         disabled={isScanningBarcode || isLoading}
+                         aria-label="Scan Barcode"
+                       >
+                         {isScanningBarcode ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanBarcode className="h-4 w-4" />}
+                       </Button>
+                        {/* Placeholder for Batch Scan */}
+                        <Button type="button" variant="outline" size="icon" disabled title="Batch Scan (Coming Soon)">
+                            <ScanBarcode className="h-4 w-4 opacity-50" />
+                        </Button>
+                   </div>
+                   <FormDescription>
                      Scan an item's barcode to select it automatically.
-                   
-                 
-               
-            
+                   </FormDescription>
+                   <FormMessage />
+                 </FormItem>
+               )}
+             />
 
           {/* Item Selection */}
-          
-            
-              Item*
-              
-                
-                  
-                    
-                      Select an item
-                    
-                  
-                  
+          <FormField
+            control={form.control}
+            name="itemId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Item*</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select an item" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
                      {!user ? (
-                          Please log in
+                         <SelectItem value="disabled" disabled>Please log in</SelectItem>
                      ) : availableItems.length === 0 ? (
-                       
+                       <SelectItem value="disabled" disabled>
                          No items with stock available
-                       
+                       </SelectItem>
                      ) : (
                        availableItems.map((item) => (
-                        
+                        <SelectItem key={item.id} value={item.id}>
                            {item.itemName} (Available: {item.currentStock}) {item.barcode ? `[${item.barcode}]` : ''}
-                        
+                        </SelectItem>
                        ))
                      )}
-                   
-                
-                
+                   </SelectContent>
+                </Select>
+                <FormDescription>
                   Select item manually if not using barcode.
-                
-              
-            
-          
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           {/* Quantity Field */}
-          
-            
-              Quantity*
-              
-                
-                  
-                      
-                      
-                      
-                       Enter quantity
-                      
-                      
-                       
-                    
-                
-              
-            
-          
+          <FormField
+            control={form.control}
+            name="quantity"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Quantity*</FormLabel>
+                <FormControl>
+                  <Input
+                      type="number"
+                      min="1"
+                      step="1"
+                      placeholder="Enter quantity"
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))}
+                      />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
             {/* Optional Batch Number Field */}
-             
-               
-                 
-                   Batch/Lot Number
-                 
-                 
-                   
-                     Optional batch/lot code
-                   
-                 
-                 
-                   Specify the batch if applicable.
-                 
-               
-             
+             <FormField
+               control={form.control}
+               name="batchNumber"
+               render={({ field }) => (
+                 <FormItem>
+                   <FormLabel className="flex items-center gap-1 text-muted-foreground"><Hash className="h-3 w-3"/>Batch/Lot Number</FormLabel>
+                   <FormControl>
+                     <Input placeholder="Optional batch/lot code" {...field} />
+                   </FormControl>
+                    <FormDescription className="text-xs">Specify the batch if applicable.</FormDescription>
+                   <FormMessage />
+                 </FormItem>
+               )}
+             />
 
             {/* Optional Notes Field */}
-             
-               
-                 
-                   Notes
-                 
-                 
-                   
-                     Optional notes about this stock movement...
-                   
-                 
-               
-             
+             <FormField
+               control={form.control}
+               name="notes"
+               render={({ field }) => (
+                 <FormItem>
+                   <FormLabel className="flex items-center gap-1 text-muted-foreground"><MessageSquare className="h-3 w-3"/>Notes</FormLabel>
+                   <FormControl>
+                     <Textarea placeholder="Optional notes about this stock movement..." {...field} />
+                   </FormControl>
+                   <FormMessage />
+                 </FormItem>
+               )}
+             />
 
-         
-         
-            
-              
-               
-             
+         </fieldset>
+         <Button type="submit" className="w-full bg-destructive hover:bg-destructive/90" disabled={isLoading || isScanningBarcode || !user}>
+            {isLoading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <MinusCircle className="mr-2 h-4 w-4" />
+            )}
              Log Stock Out
-        
-      
-    
+        </Button>
+      </form>
+    </Form>
   );
 }
-

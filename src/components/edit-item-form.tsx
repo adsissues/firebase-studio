@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import {
-  Form,
+  Form, // Ensure Form is imported
   FormControl,
   FormField,
   FormItem,
@@ -18,7 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Save, Loader2, Camera, MapPin, ScanBarcode, VideoOff, XCircle, DollarSign, Clock, Hash } from 'lucide-react'; // Added new icons
+import { Save, Loader2, Camera, MapPin, ScanBarcode, VideoOff, XCircle, DollarSign, Clock, Hash } from 'lucide-react';
 import type { StockItem, LocationCoords } from '@/types';
 import { scanBarcode } from '@/services/barcode-scanner';
 import { captureProductPhoto } from '@/services/camera';
@@ -87,7 +87,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
   const [capturedLocation, setCapturedLocation] = React.useState<LocationCoords | null>(item.locationCoords || null);
   const [showCameraFeed, setShowCameraFeed] = React.useState(false);
   const [isCapturingLocation, setIsCapturingLocation] = React.useState(false);
-  const [isScanningBarcode, setIsScanningBarcode] = React.useState(isScanningBarcode);
+  const [isScanningBarcode, setIsScanningBarcode] = React.useState(false); // Corrected state name
 
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -374,7 +374,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                            aria-label="Get Current Location"
                          >
                            {isCapturingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
-                         Button>
+                         </Button>
                     </div>
                   <FormDescription>
                      Manually enter location or {capturedLocation ? `use captured coordinates (Lat: ${capturedLocation.latitude.toFixed(4)}, Lon: ${capturedLocation.longitude.toFixed(4)}).` : 'capture current GPS coordinates.'}
@@ -455,46 +455,41 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                             <video ref={videoRef} className="w-full aspect-video rounded-md bg-muted" autoPlay muted playsInline />
                             {hasCameraPermission === false && ( <Alert variant="destructive"><VideoOff className="h-4 w-4" /><AlertTitle>Camera Access Denied</AlertTitle></Alert> )}
                              {hasCameraPermission === null && ( <Alert><Loader2 className="h-4 w-4 animate-spin" /><AlertTitle>Accessing Camera</AlertTitle></Alert> )}
-                            
-                               Capture New Photo
-                           
-                            
+                             <Button type="button" onClick={handleCapturePhoto} disabled={!hasCameraPermission || isLoading}>
+                               <Camera className="mr-2 h-4 w-4" /> Capture New Photo
+                           </Button>
+                            <canvas ref={canvasRef} style={{ display: 'none' }} />
                         </div>
                     )}
-                    
-                        
-                            Open Camera to Replace
-                        
-                    
+                     <Button type="button" variant="outline" onClick={() => setShowCameraFeed(prev => !prev)} disabled={isLoading}>
+                        <Camera className="mr-2 h-4 w-4" /> {showCameraFeed ? 'Hide Camera' : (capturedPhotoUrl ? 'Replace Photo' : 'Open Camera')}
+                    </Button>
                     {capturedPhotoUrl && !showCameraFeed && (
-                      
-                        
-                            Remove photo
-                        
-                      
+                       <div className="mt-2">
+                         <img src={capturedPhotoUrl} alt={item.itemName || 'Product image'} className="rounded-md border max-w-xs max-h-40 object-contain" data-ai-hint="product image" />
+                         <Button variant="link" size="sm" onClick={() => { setCapturedPhotoUrl(null); form.setValue('photoUrl', ''); }} className="text-destructive p-0 h-auto mt-1">Remove photo</Button>
+                       </div>
                     )}
-                    Optional: Update the photo.
-                     
-                 
+                    <FormDescription>Optional: Update the photo.</FormDescription>
+                     <FormField control={form.control} name="photoUrl" render={({ field }) => <FormMessage />} /> {/* Display potential URL validation errors */}
+                 </div>
              </FormItem>
         </fieldset>
 
-        
-
-            
-                
-                     Cancel
-                  
-                
-                  
-                    
-                  
-                  Save Changes
-                
-             
-        
-      
+        <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
+               <XCircle className="mr-2 h-4 w-4" /> Cancel
+            </Button>
+            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isLoading || isCapturingLocation || isScanningBarcode}>
+                 {isLoading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
+                 Save Changes
+               </Button>
+         </div>
+      </form>
     </Form>
   );
 }
-

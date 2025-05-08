@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Camera, ScanBarcode, PlusCircle, MinusCircle, SearchIcon, Clock, Layers, RefreshCw } from 'lucide-react'; // Added Layers, RefreshCw
 import type { StockItem } from '@/types';
-import { Restock } from 'lucide-react'; // Restock icon was likely intended to be used here
+// Removed incorrect import: import { Restock } from 'lucide-react';
 
 interface ActionsPanelProps {
   onPhotoSearchClick: () => void;
@@ -103,9 +103,9 @@ export function ActionsPanel({
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onQuickAction('out', item)} disabled={isLoading || item.currentStock <= 0} title={`Remove 1 ${item.itemName}`}>
                             <MinusCircle className="h-4 w-4 text-destructive" />
                          </Button>
-                         {/* Consider adding a restock button if applicable */}
+                         {/* Use RefreshCcw for restock action */}
                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onQuickAction('restock', item)} disabled={isLoading} title={`Restock ${item.itemName}`}>
-                             <Restock className="h-4 w-4 text-blue-500" />
+                             <RefreshCcw className="h-4 w-4 text-blue-500" />
                          </Button>
                      </div>
                    </div>
