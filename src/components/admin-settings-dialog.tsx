@@ -15,26 +15,24 @@
     import { Label } from '@/components/ui/label';
     import { Switch } from '@/components/ui/switch';
     import { Input } from '@/components/ui/input';
-    import { Bell, Mail, Save, XCircle, AlertTriangle, Loader2 } from 'lucide-react'; // Added Loader2
+    import { Bell, Mail, Save, XCircle, AlertTriangle, Loader2, Settings2, Bot, CheckSquare, ClockIcon } from 'lucide-react'; // Added icons
+    import type { AdminSettings } from '@/types'; // Import updated type
 
     interface AdminSettingsDialogProps {
       isOpen: boolean;
       onClose: () => void;
       onSave: (settings: AdminSettings) => void;
-      currentSettings?: AdminSettings; // Optional current settings to pre-populate
-      isLoading?: boolean; // Add loading state
+      currentSettings?: AdminSettings;
+      isLoading?: boolean;
     }
 
-    export interface AdminSettings {
-      emailNotifications: boolean;
-      pushNotifications: boolean; // Placeholder for future push notification implementation
-      lowStockThreshold: number; // Threshold for low stock notifications
-    }
-
+    // Use the default values defined in the main page, passed via currentSettings
     const defaultSettings: AdminSettings = {
       emailNotifications: true,
-      pushNotifications: false, // Default push notifications to off
-      lowStockThreshold: 10, // Default threshold
+      pushNotifications: false,
+      lowStockThreshold: 10,
+      workflowApprovalRequired: false,
+      defaultLeadTime: 7,
     };
 
     export function AdminSettingsDialog({
@@ -42,146 +40,219 @@
       onClose,
       onSave,
       currentSettings = defaultSettings,
-      isLoading = false, // Initialize loading state
+      isLoading = false,
     }: AdminSettingsDialogProps) {
       const [emailEnabled, setEmailEnabled] = React.useState(currentSettings.emailNotifications);
       const [pushEnabled, setPushEnabled] = React.useState(currentSettings.pushNotifications);
       const [threshold, setThreshold] = React.useState(currentSettings.lowStockThreshold);
       const [thresholdError, setThresholdError] = React.useState<string | null>(null);
+      // State for new settings placeholders
+      const [workflowApproval, setWorkflowApproval] = React.useState(currentSettings.workflowApprovalRequired ?? false);
+      const [defaultLeadTime, setDefaultLeadTime] = React.useState(currentSettings.defaultLeadTime ?? 7);
+      const [leadTimeError, setLeadTimeError] = React.useState<string | null>(null);
 
-      // Reset state when dialog opens/closes or currentSettings change
+
       React.useEffect(() => {
         setEmailEnabled(currentSettings.emailNotifications);
         setPushEnabled(currentSettings.pushNotifications);
         setThreshold(currentSettings.lowStockThreshold);
-        setThresholdError(null); // Reset error on open
+        setWorkflowApproval(currentSettings.workflowApprovalRequired ?? false);
+        setDefaultLeadTime(currentSettings.defaultLeadTime ?? 7);
+        setThresholdError(null);
+        setLeadTimeError(null);
       }, [isOpen, currentSettings]);
 
       const handleSave = () => {
-          if (isLoading) return; // Prevent saving if already loading
+          if (isLoading) return;
 
+          let hasError = false;
           if (threshold <= 0) {
             setThresholdError("Low stock threshold must be a positive number.");
-            return;
+            hasError = true;
+          } else {
+             setThresholdError(null);
           }
-          setThresholdError(null);
+
+           if (defaultLeadTime < 0) {
+             setLeadTimeError("Default lead time cannot be negative.");
+             hasError = true;
+           } else {
+              setLeadTimeError(null);
+           }
+
+          if (hasError) return;
+
           onSave({
             emailNotifications: emailEnabled,
             pushNotifications: pushEnabled,
             lowStockThreshold: threshold,
+            workflowApprovalRequired: workflowApproval, // Save new settings
+            defaultLeadTime: defaultLeadTime,
           });
-          // Closing is handled by parent component via onSave's onSuccess callback typically
       };
 
       const handleThresholdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
           const value = parseInt(e.target.value, 10);
-           // Allow empty input temporarily, but validate on save
           if (isNaN(value)) {
-              setThreshold(0); // Or handle empty string case if needed
+              setThreshold(0);
           } else {
               setThreshold(value);
           }
-          // Clear error on change
            if (thresholdError && value > 0) {
              setThresholdError(null);
            }
       };
 
+      const handleLeadTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+          const value = parseInt(e.target.value, 10);
+           if (isNaN(value)) {
+               setDefaultLeadTime(0);
+           } else {
+               setDefaultLeadTime(value);
+           }
+            if (leadTimeError && value >= 0) {
+              setLeadTimeError(null);
+            }
+       };
+
+
       return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-          <DialogContent className="sm:max-w-[480px]">
-            <DialogHeader>
-              <DialogTitle>Admin Notification Settings</DialogTitle>
-              <DialogDescription>
-                Configure the global low stock alert threshold and notification methods. Item-specific minimums override the global threshold.
-              </DialogDescription>
-            </DialogHeader>
+        
+          
+            
+              
+                Admin Settings
+              
+              Configure global settings for notifications, workflows, and forecasting.
+            
+          
 
-             <fieldset disabled={isLoading} className="grid gap-6 py-4"> {/* Disable fields when loading */}
-               {/* Low Stock Threshold */}
-               <div className="grid grid-cols-4 items-center gap-4">
-                 <Label htmlFor="low-stock-threshold" className="col-span-1 text-right">
-                   Global Low Stock Threshold
-                 </Label>
-                 <div className="col-span-3 space-y-1">
-                    <Input
-                      id="low-stock-threshold"
-                      type="number"
-                      min="1" // Ensure positive input in browser
-                      step="1"
-                      value={threshold}
-                      onChange={handleThresholdChange}
-                      className={`w-24 ${thresholdError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
-                    />
-                    {thresholdError && (
-                      <p className="text-sm text-destructive flex items-center gap-1">
-                          <AlertTriangle className="h-3 w-3" /> {thresholdError}
-                      </p>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                        Notify when stock drops to this level or below (unless item has specific minimum).
-                    </p>
-                 </div>
-               </div>
+           
 
-              {/* Email Notifications */}
-              <div className="flex items-center justify-between space-x-4 rounded-md border p-4">
-                <div className="flex items-center space-x-3">
-                   <Mail className="h-5 w-5 text-primary" />
-                   <Label htmlFor="email-notifications" className="flex flex-col space-y-1">
-                     <span>Email Notifications</span>
-                     <span className="font-normal leading-snug text-muted-foreground">
-                       Receive email alerts for low stock items.
-                     </span>
-                   </Label>
-                 </div>
-                <Switch
-                  id="email-notifications"
-                  checked={emailEnabled}
-                  onCheckedChange={setEmailEnabled}
-                  aria-label="Toggle email notifications"
-                  disabled={isLoading} // Disable switch when loading
-                />
-              </div>
+               {/* Notifications Section */}
+               
+                  
+                   {/* Low Stock Threshold */}
+                   
+                     
+                       Low Stock Threshold
+                     
+                     
+                        
+                          
+                          
+                        
+                        {thresholdError && (
+                          
+                              
+                              {thresholdError}
+                          
+                        )}
+                        
+                            Global alert level (item-specific minimums override this).
+                        
+                     
+                   
+                    {/* Email Notifications */}
+                    
+                       
+                         
+                         Email Low Stock Alerts
+                       
+                       
+                         
+                         
+                         aria-label="Toggle email notifications"
+                         disabled={isLoading}
+                       
+                    
+                    {/* Push Notifications (Placeholder) */}
+                    
+                       
+                         
+                         Push Notifications (Coming Soon)
+                       
+                       
+                         
+                         
+                         aria-label="Toggle push notifications (disabled)"
+                       
+                     
+                
 
-              {/* Push Notifications (Placeholder) */}
-              <div className="flex items-center justify-between space-x-4 rounded-md border p-4 opacity-50 cursor-not-allowed">
-                 <div className="flex items-center space-x-3">
-                    <Bell className="h-5 w-5 text-muted-foreground" />
-                    <Label htmlFor="push-notifications" className="flex flex-col space-y-1">
-                      <span>Push Notifications</span>
-                      <span className="font-normal leading-snug text-muted-foreground">
-                         (Coming soon) Receive push alerts via browser/app.
-                      </span>
-                    </Label>
-                  </div>
-                 <Switch
-                   id="push-notifications"
-                   checked={pushEnabled}
-                   onCheckedChange={setPushEnabled}
-                   disabled // Always disable push notifications for now
-                   aria-label="Toggle push notifications (disabled)"
-                 />
-               </div>
-            </fieldset>
+                 {/* Workflow Section Placeholder */}
+                 
+                   
+                       Workflows (Coming Soon)
+                    
+                    
+                       
+                         
+                         Require Approval for Large Movements
+                       
+                       
+                         
+                         
+                         aria-label="Toggle workflow approval"
+                         disabled={isLoading}
+                       
+                    
+                     
+                         Configure automated purchase orders and approval rules later.
+                     
+                 
 
-            <DialogFooter className="sm:justify-end">
-              <DialogClose asChild>
-                  <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}> {/* Disable cancel when loading */}
-                     <XCircle className="mr-2 h-4 w-4" /> Cancel
-                  </Button>
-              </DialogClose>
-              <Button type="button" onClick={handleSave} disabled={isLoading}> {/* Disable save when loading */}
-                  {isLoading ? (
-                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                   ) : (
-                     <Save className="mr-2 h-4 w-4" />
-                   )}
-                  {isLoading ? 'Saving...' : 'Save Settings'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+                  {/* Forecasting/Analytics Section Placeholder */}
+                 
+                   
+                       Forecasting (Coming Soon)
+                    
+                    {/* Default Lead Time */}
+                   
+                     
+                       Default Lead Time (Days)
+                     
+                     
+                        
+                          
+                          
+                        
+                        {leadTimeError && (
+                           
+                               
+                               {leadTimeError}
+                           
+                        )}
+                        
+                            Used for automatic reorder point calculations (item-specific times override this).
+                        
+                     
+                   
+                 
+
+                 {/* Integrations Section Placeholder */}
+                  
+                     
+                         Integrations (Coming Soon)
+                     
+                     
+                         Connect with supplier portals, shipping platforms, and e-commerce later.
+                     
+                  
+
+
+            
+
+            
+
+                  
+                     Cancel
+                  
+                 Save Settings
+              
+            
+          
+        
       );
     }
 

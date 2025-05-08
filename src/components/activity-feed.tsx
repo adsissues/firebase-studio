@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { StockMovementLog } from '@/types';
 import { format, isToday, isYesterday, formatDistanceToNow } from 'date-fns';
-import { ArrowDownCircle, ArrowUpCircle, UserCircle, SearchIcon, FilterIcon, RefreshCcw } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, UserCircle, SearchIcon, FilterIcon, RefreshCw } from 'lucide-react'; // Import RefreshCw for restock
 import { cn } from "@/lib/utils";
 
 interface ActivityFeedProps {
@@ -24,7 +24,8 @@ interface GroupedLogs {
 
 export function ActivityFeed({ movements, isLoading = false }: ActivityFeedProps) {
   const [searchTerm, setSearchTerm] = React.useState('');
-  const [filterType, setFilterType] = React.useState<'all' | 'in' | 'out'>('all');
+  // Update filter type to include 'restock'
+  const [filterType, setFilterType] = React.useState<'all' | 'in' | 'out' | 'restock'>('all');
 
   const formatTimestamp = (timestamp: StockMovementLog['timestamp']): string => {
     if (!timestamp || typeof timestamp.toDate !== 'function') return 'Invalid date';
@@ -62,106 +63,138 @@ export function ActivityFeed({ movements, isLoading = false }: ActivityFeedProps
       }
       groups[dateGroupLabel].push(log);
     });
+    // Sort groups within each date descending by timestamp
+    for (const dateGroup in groups) {
+       groups[dateGroup].sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
+    }
     return groups;
   }, [filteredMovements]);
 
   const dateGroups = Object.keys(groupedLogs).sort((a, b) => {
-    if (a === "Today") return -1;
-    if (b === "Today") return 1;
-    if (a === "Yesterday") return -1;
-    if (b === "Yesterday") return 1;
-    // Sort other dates chronologically descending
-    try {
-        const dateA = new Date(a);
-        const dateB = new Date(b);
-        return dateB.getTime() - dateA.getTime();
-    } catch (e) {
-        // Handle potential invalid date strings if necessary
-        return 0;
-    }
+    // Custom sort logic to keep Today/Yesterday at the top
+    const getDateValue = (label: string): number => {
+        if (label === "Today") return new Date().setHours(0, 0, 0, 0);
+        if (label === "Yesterday") return new Date(new Date().setDate(new Date().getDate() - 1)).setHours(0, 0, 0, 0);
+        try {
+            return new Date(label).getTime();
+        } catch {
+            return 0; // Fallback for invalid dates
+        }
+    };
+    return getDateValue(b) - getDateValue(a); // Sort descending
 });
 
 
+  const getIconAndColor = (type: 'in' | 'out' | 'restock') => {
+    switch (type) {
+      case 'in': return { Icon: ArrowUpCircle, color: 'text-success' };
+      case 'out': return { Icon: ArrowDownCircle, color: 'text-destructive' };
+      case 'restock': return { Icon: RefreshCw, color: 'text-blue-500' }; // Use RefreshCw for restock
+      default: return { Icon: ArrowUpCircle, color: 'text-muted-foreground' }; // Fallback
+    }
+  };
+
+  const getTypeLabel = (type: 'in' | 'out' | 'restock') => {
+      switch (type) {
+          case 'in': return 'In';
+          case 'out': return 'Out';
+          case 'restock': return 'Restock';
+          default: return 'Unknown';
+      }
+  };
+
+
   return (
-    <Card className="shadow-lg rounded-xl h-full flex flex-col">
-      <CardHeader className="border-b p-4">
-        <CardTitle className="text-xl text-primary flex items-center justify-between">
-            <span>Activity Feed</span>
-             {/* Add a refresh button or other controls if needed */}
-        </CardTitle>
-         <div className="flex gap-2 mt-2">
-           <div className="relative flex-grow">
-             <SearchIcon className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-             <Input
-               type="search"
-               placeholder="Search item or user..."
-               value={searchTerm}
-               onChange={(e) => setSearchTerm(e.target.value)}
-               className="pl-8 text-xs h-8"
-               disabled={isLoading}
-             />
-           </div>
-           <Select value={filterType} onValueChange={(value: 'all' | 'in' | 'out') => setFilterType(value)} disabled={isLoading}>
-             <SelectTrigger className="w-[100px] text-xs h-8">
-               <FilterIcon className="mr-1 h-3 w-3" />
-               <SelectValue placeholder="Type" />
-             </SelectTrigger>
-             <SelectContent>
-               <SelectItem value="all">All</SelectItem>
-               <SelectItem value="in">In</SelectItem>
-               <SelectItem value="out">Out</SelectItem>
-             </SelectContent>
-           </Select>
-         </div>
-      </CardHeader>
-      <CardContent className="p-0 flex-grow overflow-hidden">
-        <ScrollArea className="h-full p-4">
+    
+      
+        
+            
+                Activity Feed
+            
+             
+               
+                 
+                   
+                     
+                    
+                    
+                     
+                      Search item or user...
+                    
+                  
+                  {/* Update Select to include 'restock' */}
+                  
+                    
+                      
+                       Type
+                      
+                    
+                    
+                      
+                        All Types
+                      
+                      
+                        In
+                      
+                      
+                        Out
+                      
+                      
+                        Restock
+                      
+                    
+                  
+                
+             
+        
+        
           {isLoading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
+            
+              {[...Array(5)].map((_, i) => )}
+            
           ) : dateGroups.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No matching activity found.</p>
+            No matching activity found.
           ) : (
-             dateGroups.map(dateGroup => (
-               <div key={dateGroup} className="mb-6 last:mb-0">
-                 <h3 className="text-sm font-semibold text-muted-foreground mb-2 sticky top-0 bg-background/80 backdrop-blur-sm py-1 px-2 -mx-2 z-10">{dateGroup}</h3>
-                 <ul className="space-y-3">
-                   {groupedLogs[dateGroup].map(log => (
-                     <li key={log.id} className="flex items-start space-x-3 text-sm">
-                       <div className="flex-shrink-0 pt-0.5">
-                         {log.type === 'in' ? (
-                           <ArrowUpCircle className="h-4 w-4 text-success" />
-                         ) : (
-                           <ArrowDownCircle className="h-4 w-4 text-destructive" />
-                         )}
-                       </div>
-                       <div className="flex-grow">
-                         <p className="leading-tight">
-                            <span className={`font-medium ${log.type === 'in' ? 'text-success' : 'text-destructive'}`}>
-                              {log.type === 'in' ? 'In:' : 'Out:'} {Math.abs(log.quantityChange)}
-                            </span>
-                            <span className="font-semibold mx-1">{log.itemName}</span>
-                            <span className="text-muted-foreground">(New Qty: {log.newStockLevel})</span>
-                          </p>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <UserCircle className="h-3 w-3" /> {log.userEmail || log.userId} • {formatTimestamp(log.timestamp)}
-                          </p>
-                       </div>
-                     </li>
-                   ))}
-                 </ul>
-               </div>
+             {dateGroups.map(dateGroup => (
+               
+                 
+                   {dateGroup}
+                  
+                 
+                   {groupedLogs[dateGroup].map(log => {
+                        const { Icon, color } = getIconAndColor(log.type);
+                        const typeLabel = getTypeLabel(log.type);
+                        return (
+                             
+                               
+                                 
+                               
+                               
+                                 
+                                     
+                                       {typeLabel}: {Math.abs(log.quantityChange)}
+                                     
+                                     {log.itemName}
+                                     (New Qty: {log.newStockLevel})
+                                      {log.batchNumber && Batch: {log.batchNumber}}
+                                  
+                                  
+                                     
+                                       {log.userEmail || log.userId} • {formatTimestamp(log.timestamp)}
+                                     
+                                    {log.notes && Note: {log.notes}}
+                                 
+                               
+                             
+                         );
+                   })}
+                 
+               
              ))
           )}
-        </ScrollArea>
-      </CardContent>
-    </Card>
+        
+      
+    
   );
 }
-    
 
-    

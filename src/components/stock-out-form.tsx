@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -12,9 +13,10 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-  FormDescription, // Import FormDescription
+  FormDescription,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea'; // Import Textarea
 import {
   Select,
   SelectContent,
@@ -22,30 +24,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { StockItem } from '@/types';
-import { MinusCircle, Loader2, ScanBarcode } from 'lucide-react'; // Added ScanBarcode
+import type { StockItem, StockMovementLog } from '@/types'; // Import StockMovementLog
+import { MinusCircle, Loader2, ScanBarcode, Hash, MessageSquare } from 'lucide-react'; // Added Hash, MessageSquare
 import { useAuth } from '@/context/auth-context';
-import { scanBarcode } from '@/services/barcode-scanner'; // Import barcode scanner service
-import { useToast } from "@/hooks/use-toast"; // Import useToast
+import { scanBarcode } from '@/services/barcode-scanner';
+import { useToast } from "@/hooks/use-toast";
 
 interface StockOutFormProps {
-  items: StockItem[]; // Receive all items fetched by parent
-  onSubmit: (data: StockOutFormDataSubmit) => void; // Use specific submit type
+  items: StockItem[];
+  onSubmit: (data: StockOutFormDataSubmit) => void;
   isLoading?: boolean;
 }
 
-// Dynamic schema based on selected item's stock
+// Updated schema to include optional notes and batch number
 const createFormSchema = (items: StockItem[]) => z.object({
-  barcode: z.string().optional().or(z.literal('')), // Add optional barcode field
+  barcode: z.string().optional().or(z.literal('')),
   itemId: z.string().min(1, { message: 'Please select an item or scan a barcode.' }),
   quantity: z.coerce
     .number({ invalid_type_error: 'Quantity must be a number.' })
     .int({ message: 'Quantity must be a whole number.' })
     .positive({ message: 'Quantity must be greater than zero.' }),
+  batchNumber: z.string().max(50).optional().or(z.literal('')), // Optional batch number
+  notes: z.string().max(200).optional().or(z.literal('')), // Optional notes
 }).refine(
   (data) => {
     const selectedItem = items.find(item => item.id === data.itemId);
-    if (!selectedItem) return true; // Let itemId validation handle this
+    if (!selectedItem) return true;
     return data.quantity <= selectedItem.currentStock;
   },
   (data) => {
@@ -55,85 +59,81 @@ const createFormSchema = (items: StockItem[]) => z.object({
       path: ['quantity'],
     };
   }
-).refine( // Add refinement to check barcode against selected item
+).refine(
     (data) => {
-        if (!data.barcode || !data.itemId) return true; // Skip if barcode or item not set
+        if (!data.barcode || !data.itemId) return true;
         const selectedItem = items.find(item => item.id === data.itemId);
-        // Barcode is optional on item, so allow if item has no barcode
         return !selectedItem || !selectedItem.barcode || selectedItem.barcode === data.barcode;
     },
     {
         message: "Barcode does not match the selected item.",
-        path: ['barcode'], // Or potentially 'itemId' if you want to clear the item
+        path: ['barcode'],
     }
 );
 
 
-// Type for form state, includes barcode
+// Type for form state, includes new fields
 export type StockOutFormData = z.infer<ReturnType<typeof createFormSchema>>;
-// Type for data submitted, only requires itemId and quantity
-export type StockOutFormDataSubmit = Pick<StockOutFormData, 'itemId' | 'quantity'>;
+// Type for data submitted, now potentially including notes and batch
+export type StockOutFormDataSubmit = Pick<StockOutFormData, 'itemId' | 'quantity' | 'notes' | 'batchNumber'>;
 
 export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFormProps) {
-   const { user, isAdmin } = useAuth(); // Get user and admin status
+   const { user, isAdmin } = useAuth();
    const { toast } = useToast();
-   const [isScanningBarcode, setIsScanningBarcode] = React.useState(false);
+   const [isScanningBarcode, setIsScanningBarcode] = React.useState(isScanningBarcode);
 
-  // Filter items based on user ownership or admin status *before* creating schema/form
   const userVisibleItems = React.useMemo(() => {
-      if (!user) return []; // No items visible if not logged in
-      if (isAdmin) return items; // Admin sees all items
-      return items.filter(item => item.userId === user.uid); // User sees only their items
+      if (!user) return [];
+      if (isAdmin) return items;
+      return items.filter(item => item.userId === user.uid);
   }, [items, user, isAdmin]);
 
-   // Filter out items with 0 stock from the user-visible items
    const availableItems = React.useMemo(() => {
        return userVisibleItems.filter(item => item.currentStock > 0);
    }, [userVisibleItems]);
 
-
-  // Recreate schema based on *all* user-visible items (validation needs access to original stock)
   const formSchema = React.useMemo(() => createFormSchema(userVisibleItems), [userVisibleItems]);
 
-  const form = useForm<StockOutFormData>({
+  const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
       barcode: '',
       itemId: '',
       quantity: 1,
+      batchNumber: '', // Initialize new fields
+      notes: '',
     },
-    context: { items: userVisibleItems }, // Pass user-visible items to resolver context
-    mode: "onChange", // Validate on change for better feedback
+    context: { items: userVisibleItems },
+    mode: "onChange",
   });
 
     const handleScanBarcode = async () => {
         setIsScanningBarcode(true);
         try {
-            const result = await scanBarcode(); // Call the service
+            await new Promise(resolve => setTimeout(resolve, 100)); // Short delay
+            const result = await scanBarcode();
             const scannedBarcode = result.barcode;
             form.setValue('barcode', scannedBarcode, { shouldValidate: true });
 
-            // Find item matching the scanned barcode among *user visible* items
             const matchedItem = userVisibleItems.find(item => item.barcode === scannedBarcode);
 
             if (matchedItem) {
                  if (matchedItem.currentStock > 0) {
                     form.setValue('itemId', matchedItem.id, { shouldValidate: true });
+                    form.setValue('batchNumber', matchedItem.batchNumber || '', { shouldValidate: true }); // Pre-fill batch if item has one
                     toast({ title: "Item Found", description: `${matchedItem.itemName} selected.` });
-                    // Optionally focus quantity field
-                    // document.getElementById('quantity-input-id')?.focus();
                  } else {
-                     form.setValue('itemId', '', { shouldValidate: true }); // Clear item selection if out of stock
+                     form.setValue('itemId', '', { shouldValidate: true });
                      toast({ variant: "destructive", title: "Out of Stock", description: `${matchedItem.itemName} has no stock available.` });
                  }
             } else {
-                form.setValue('itemId', '', { shouldValidate: true }); // Clear item selection if not found
+                form.setValue('itemId', '', { shouldValidate: true });
                 toast({ variant: "destructive", title: "Barcode Not Found", description: "No matching item found for this barcode." });
             }
         } catch (error) {
             console.error("Barcode scan error:", error);
             toast({ variant: "destructive", title: "Scan Error", description: "Could not scan barcode." });
-             form.setValue('itemId', '', { shouldValidate: true }); // Clear item on scan error
+             form.setValue('itemId', '', { shouldValidate: true });
         } finally {
             setIsScanningBarcode(false);
         }
@@ -142,148 +142,150 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
 
   function handleFormSubmit(values: StockOutFormData) {
     console.log("Stock Out:", values);
-    // Submit only the required data (itemId, quantity)
-    onSubmit({ itemId: values.itemId, quantity: values.quantity });
+    // Submit includes optional fields now
+    onSubmit({
+        itemId: values.itemId,
+        quantity: values.quantity,
+        notes: values.notes || undefined,
+        batchNumber: values.batchNumber || undefined
+    });
   }
 
    React.useEffect(() => {
      if (!isLoading && form.formState.isSubmitSuccessful) {
-        form.reset({ barcode: '', itemId: '', quantity: 1 });
+        // Reset includes new fields
+        form.reset({ barcode: '', itemId: '', quantity: 1, batchNumber: '', notes: '' });
      }
    }, [isLoading, form.formState.isSubmitSuccessful, form.reset]);
 
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 p-6">
-         <fieldset disabled={isLoading || !user || isScanningBarcode} className="space-y-4"> {/* Disable if loading, scanning or not logged in */}
-           <h2 className="text-lg font-semibold text-primary mb-4">Log Stock Out</h2>
+     
+      
+         
+            
+              Log Stock Out
+            
 
-            {/* Barcode Field */}
-            <FormField
-              control={form.control}
-              name="barcode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Barcode</FormLabel>
-                  <div className="flex gap-2">
-                    <FormControl>
-                      <Input
-                        placeholder="Scan or enter barcode"
-                        {...field}
-                        className="flex-grow"
-                        onChange={(e) => {
-                            field.onChange(e);
-                            // Optional: Find item when barcode is manually typed
-                            // const typedBarcode = e.target.value;
-                            // const matchedItem = userVisibleItems.find(item => item.barcode === typedBarcode);
-                            // if (matchedItem && matchedItem.currentStock > 0) {
-                            //     form.setValue('itemId', matchedItem.id, { shouldValidate: true });
-                            // } else if (typedBarcode === '') {
-                            //     // Optional: clear item if barcode is cleared
-                            //     // form.setValue('itemId', '', { shouldValidate: true });
-                            // }
-                            // form.trigger(['itemId', 'barcode']); // Re-validate both
-                        }}
-                        />
-                    </FormControl>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={handleScanBarcode}
-                      disabled={isScanningBarcode || isLoading || !user}
-                      aria-label="Scan Barcode"
-                    >
-                      {isScanningBarcode ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanBarcode className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                   <FormDescription>
+             {/* Barcode Field */}
+             
+               
+                 Barcode
+                 
+                   
+                     
+                      Scan or enter barcode
+                      
+                    
+                    
+                      
+                       
+                      
+                        
+                      
+                    
+                   
                      Scan an item's barcode to select it automatically.
-                   </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                   
+                 
+               
+            
 
-          <FormField
-            control={form.control}
-            name="itemId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Item</FormLabel>
-                <Select
-                  onValueChange={(value) => {
-                      field.onChange(value);
-                      // Find the selected item and update barcode field if manual selection happens
-                      const selectedItem = userVisibleItems.find(item => item.id === value);
-                      form.setValue('barcode', selectedItem?.barcode || '', { shouldValidate: true });
-                      form.trigger("quantity"); // Re-validate quantity based on new item's stock
-                  }}
-                  value={field.value || ''}
-                  disabled={!user} // Disable if not logged in
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select an item" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
+          {/* Item Selection */}
+          
+            
+              Item*
+              
+                
+                  
+                    
+                      Select an item
+                    
+                  
+                  
                      {!user ? (
-                         <SelectItem value="login-required" disabled>Please log in</SelectItem>
+                          Please log in
                      ) : availableItems.length === 0 ? (
-                       <SelectItem value="no-items" disabled>
+                       
                          No items with stock available
-                       </SelectItem>
+                       
                      ) : (
-                       // Show all *available* items (stock > 0) for manual selection
                        availableItems.map((item) => (
-                         <SelectItem key={item.id} value={item.id}>
+                        
                            {item.itemName} (Available: {item.currentStock}) {item.barcode ? `[${item.barcode}]` : ''}
-                         </SelectItem>
+                        
                        ))
                      )}
-                   </SelectContent>
-                </Select>
-                 <FormDescription>
-                   Select an item manually if not using barcode scanner.
-                 </FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="quantity"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Quantity</FormLabel>
-                <FormControl>
-                  <Input
-                      id="quantity-input-id" // Added ID for potential focus() call
-                      type="number"
-                      min="1"
-                      placeholder="Enter quantity"
-                      {...field}
-                      value={field.value ?? ''}
-                      onChange={e => field.onChange(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
-                       disabled={!user || !form.watch('itemId')} // Disable if no item selected or not logged in
-                    />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-         </fieldset>
-        <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading || !user || isScanningBarcode}>
-           {isLoading ? (
-             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-           ) : (
-             <MinusCircle className="mr-2 h-4 w-4" />
-           )}
-           {isLoading ? 'Logging...' : 'Log Stock Out'}
-        </Button>
-      </form>
-    </Form>
+                   
+                
+                
+                  Select item manually if not using barcode.
+                
+              
+            
+          
+
+          {/* Quantity Field */}
+          
+            
+              Quantity*
+              
+                
+                  
+                      
+                      
+                      
+                       Enter quantity
+                      
+                      
+                       
+                    
+                
+              
+            
+          
+
+            {/* Optional Batch Number Field */}
+             
+               
+                 
+                   Batch/Lot Number
+                 
+                 
+                   
+                     Optional batch/lot code
+                   
+                 
+                 
+                   Specify the batch if applicable.
+                 
+               
+             
+
+            {/* Optional Notes Field */}
+             
+               
+                 
+                   Notes
+                 
+                 
+                   
+                     Optional notes about this stock movement...
+                   
+                 
+               
+             
+
+         
+         
+            
+              
+               
+             
+             Log Stock Out
+        
+      
+    
   );
 }
+

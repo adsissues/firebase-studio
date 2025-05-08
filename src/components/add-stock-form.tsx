@@ -18,20 +18,20 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { PlusCircle, Loader2, Camera, MapPin, ScanBarcode, VideoOff, PackagePlus } from 'lucide-react'; // Changed icon
+import { PlusCircle, Loader2, Camera, MapPin, ScanBarcode, VideoOff, PackagePlus, DollarSign, Clock, Hash } from 'lucide-react'; // Added new icons
 import type { StockItem, LocationCoords } from '@/types';
 import { scanBarcode } from '@/services/barcode-scanner';
 import { captureProductPhoto } from '@/services/camera';
 import { getCurrentLocation } from '@/services/location';
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from '@/context/auth-context'; // Import useAuth for user context
+import { useAuth } from '@/context/auth-context';
 
 interface AddStockFormProps {
   onSubmit: (data: AddStockFormData) => void;
   isLoading?: boolean;
 }
 
-// Updated schema for Add Stock form
+// Updated schema for Add Stock form including new optional fields
 const formSchema = z.object({
   barcode: z.string().max(50).optional().or(z.literal('')),
   itemName: z.string().min(1, { message: 'Item name is required.' }).max(100),
@@ -46,26 +46,37 @@ const formSchema = z.object({
     .optional(),
   location: z.string().max(100).optional().or(z.literal('')),
   supplier: z.string().max(100).optional().or(z.literal('')),
-  category: z.string().max(50).optional().or(z.literal('')), // Added category field
+  category: z.string().max(50).optional().or(z.literal('')),
   photoUrl: z.string().url({ message: "Please enter a valid URL or capture a photo." }).optional().or(z.literal('')),
   locationCoords: z.object({
     latitude: z.number(),
     longitude: z.number(),
   }).optional(),
+  // New optional fields for future enhancements
+  costPrice: z.coerce
+    .number({ invalid_type_error: 'Cost price must be a number.' })
+    .nonnegative({ message: 'Cost price cannot be negative.' })
+    .optional(),
+  leadTime: z.coerce
+    .number({ invalid_type_error: 'Lead time must be a number.' })
+    .int({ message: 'Lead time must be a whole number.' })
+    .nonnegative({ message: 'Lead time cannot be negative.' })
+    .optional(),
+  batchNumber: z.string().max(50).optional().or(z.literal('')),
 });
 
-// Type for data submitted from this form
+// Type for data submitted from this form includes new fields
 export type AddStockFormData = z.infer<typeof formSchema>;
 
 export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps) {
   const { toast } = useToast();
-  const { user } = useAuth(); // Get user for context if needed (e.g., disabling form)
+  const { user } = useAuth();
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const [hasCameraPermission, setHasCameraPermission] = React.useState<boolean | null>(null);
   const [capturedPhotoUrl, setCapturedPhotoUrl] = React.useState<string | null>(null);
   const [isCapturingLocation, setIsCapturingLocation] = React.useState(false);
-  const [isScanningBarcode, setIsScanningBarcode] = React.useState(false);
+  const [isScanningBarcode, setIsScanningBarcode] = React.useState(isScanningBarcode);
   const [capturedLocation, setCapturedLocation] = React.useState<LocationCoords | null>(null);
   const [showCameraFeed, setShowCameraFeed] = React.useState(false);
 
@@ -74,17 +85,19 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
     defaultValues: {
       barcode: '',
       itemName: '',
-      quantity: 1, // Default quantity to add is 1
+      quantity: 1,
       minimumStock: undefined,
       location: '',
       supplier: '',
-      category: '', // Added category default
+      category: '',
       photoUrl: '',
       locationCoords: undefined,
+      costPrice: undefined,
+      leadTime: undefined,
+      batchNumber: '',
     },
   });
 
-   // Camera permission effect (same as before)
    React.useEffect(() => {
        let stream: MediaStream | null = null;
        const getCameraPermission = async () => {
@@ -120,11 +133,14 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
   const handleScanBarcode = async () => {
     setIsScanningBarcode(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Simulate delay and call service
+      await new Promise(resolve => setTimeout(resolve, 100)); // Reduced delay
       const result = await scanBarcode();
       form.setValue('barcode', result.barcode, { shouldValidate: true });
       toast({ title: "Barcode Scanned", description: `Barcode: ${result.barcode}` });
-      // Optionally: Try to auto-fill item name based on barcode lookup here?
+      // TODO: Optionally fetch item details based on barcode from DB
+      // const existingItem = await fetchItemByBarcode(result.barcode);
+      // if (existingItem) { form.reset({...existingItem, quantity: 1}); }
     } catch (error) {
       console.error("Barcode scan error:", error);
       toast({ variant: "destructive", title: "Scan Error", description: "Could not scan barcode." });
@@ -181,16 +197,14 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
   function handleFormSubmit(values: AddStockFormData) {
     console.log("Adding Stock (Raw Form Values):", values);
      const submitData: AddStockFormData = {
-       ...values, // Submit all validated form values
-       photoUrl: capturedPhotoUrl || values.photoUrl || undefined, // Prioritize captured, then form, then undefined
-       locationCoords: capturedLocation || values.locationCoords || undefined, // Prioritize captured, then form, then undefined
-       // Category is already included in values
+       ...values,
+       photoUrl: capturedPhotoUrl || values.photoUrl || undefined,
+       locationCoords: capturedLocation || values.locationCoords || undefined,
      };
      console.log("Data Submitted:", submitData);
     onSubmit(submitData);
   }
 
-  // Reset form effect
   React.useEffect(() => {
     if (!isLoading && form.formState.isSubmitSuccessful) {
        form.reset();
@@ -202,13 +216,13 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
           videoRef.current.srcObject = null;
        }
     }
-  }, [isLoading, form.formState.isSubmitSuccessful, form.reset]);
+  }, [isLoading, form.formState.isSubmitSuccessful, form.reset]); // form.reset added as dependency
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 rounded-lg border p-6 shadow-sm">
-        <fieldset disabled={isLoading || !user} className="space-y-4"> {/* Disable if loading or not logged in */}
-            <h2 className="text-lg font-semibold text-primary mb-4">Add Stock</h2>
+        <fieldset disabled={isLoading || !user} className="space-y-4">
+            <h2 className="text-lg font-semibold text-primary mb-4">Add Stock / Restock Item</h2>
 
             {/* Barcode Field */}
              <FormField
@@ -231,9 +245,13 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
                        >
                          {isScanningBarcode ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanBarcode className="h-4 w-4" />}
                        </Button>
+                        {/* Placeholder for Batch Scan Button */}
+                        <Button type="button" variant="outline" size="icon" disabled title="Batch Scan (Coming Soon)">
+                            <ScanBarcode className="h-4 w-4 opacity-50" /> {/* Differentiate visually */}
+                        </Button>
                    </div>
                    <FormDescription>
-                     Scanning or entering a barcode helps find existing items faster.
+                     Scan barcode to auto-fill or identify existing items. Batch Scan coming soon.
                    </FormDescription>
                    <FormMessage />
                  </FormItem>
@@ -251,14 +269,14 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
                     <Input placeholder="e.g., Large Red Box" {...field} />
                   </FormControl>
                   <FormDescription>
-                     Enter the name of the item you are adding stock for.
+                     Name of the item being added or restocked.
                    </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            {/* Quantity and Maximum Stock Fields */}
+            {/* Quantity and Minimum Stock Fields */}
              <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -269,7 +287,7 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
                       <FormControl>
                         <Input
                           type="number"
-                          min="1" // Minimum quantity to add is 1
+                          min="1"
                           step="1"
                           placeholder="1"
                           {...field}
@@ -293,11 +311,11 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
                            step="1"
                            placeholder="Optional min level"
                            {...field}
-                           value={field.value ?? ''} // Handle undefined/null
-                           onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))} // Set to undefined if empty
+                           value={field.value ?? ''}
+                           onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))}
                            />
                        </FormControl>
-                       <FormDescription>Min quantity to keep.</FormDescription>
+                       <FormDescription>Min quantity alert.</FormDescription>
                        <FormMessage />
                      </FormItem>
                    )}
@@ -364,9 +382,71 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
               )}
             />
 
+            {/* Optional Fields for Future Enhancements */}
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t mt-4">
+                <FormField
+                  control={form.control}
+                  name="costPrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-1 text-muted-foreground"><DollarSign className="h-3 w-3"/>Cost Price</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="Optional cost"
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                          />
+                      </FormControl>
+                       <FormDescription className="text-xs">Per item cost.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="leadTime"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-1 text-muted-foreground"><Clock className="h-3 w-3"/>Lead Time (Days)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="Optional supplier lead time"
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))}
+                          />
+                      </FormControl>
+                       <FormDescription className="text-xs">Delivery time.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="batchNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                       <FormLabel className="flex items-center gap-1 text-muted-foreground"><Hash className="h-3 w-3"/>Batch/Lot Number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Optional batch code" {...field} />
+                      </FormControl>
+                       <FormDescription className="text-xs">For tracking batches.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+             </div>
+
 
             {/* Photo Section */}
-            <FormItem>
+            <FormItem className="pt-4 border-t mt-4">
                <FormLabel>Product Photo</FormLabel>
                <div className="flex flex-col gap-2">
                     {showCameraFeed && (
@@ -404,9 +484,9 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
           {isLoading ? (
              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
            ) : (
-             <PackagePlus className="mr-2 h-4 w-4" /> // Updated Icon
+             <PackagePlus className="mr-2 h-4 w-4" />
            )}
-          {isLoading ? 'Adding...' : 'Add Stock'}
+          {isLoading ? 'Adding...' : 'Add Stock / Restock'}
         </Button>
       </form>
     </Form>

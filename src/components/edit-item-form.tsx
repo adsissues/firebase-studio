@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import * as React from 'react';
@@ -19,7 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Save, Loader2, Camera, MapPin, ScanBarcode, VideoOff, XCircle } from 'lucide-react';
+import { Save, Loader2, Camera, MapPin, ScanBarcode, VideoOff, XCircle, DollarSign, Clock, Hash } from 'lucide-react'; // Added new icons
 import type { StockItem, LocationCoords } from '@/types';
 import { scanBarcode } from '@/services/barcode-scanner';
 import { captureProductPhoto } from '@/services/camera';
@@ -33,18 +32,18 @@ interface EditItemFormProps {
   onCancel: () => void; // Function to call when cancelling
 }
 
-// Updated schema to use minimumStock instead of maximumStock
+// Updated schema to include new optional fields
 const formSchema = z.object({
   itemName: z.string().min(1, { message: 'Item name is required.' }).max(100),
   currentStock: z.coerce
     .number({ invalid_type_error: 'Current stock must be a number.' })
     .int({ message: 'Current stock must be a whole number.' })
     .nonnegative({ message: 'Current stock cannot be negative.' }),
-  minimumStock: z.coerce // Changed from maximumStock
+  minimumStock: z.coerce
     .number({ invalid_type_error: 'Minimum stock must be a number.' })
     .int({ message: 'Minimum stock must be a whole number.' })
     .nonnegative({ message: 'Minimum stock cannot be negative.' })
-    .optional(), // Keep optional
+    .optional(),
   barcode: z.string().max(50).optional().or(z.literal('')),
   location: z.string().max(100).optional().or(z.literal('')),
   description: z.string().max(500).optional().or(z.literal('')),
@@ -55,13 +54,27 @@ const formSchema = z.object({
     latitude: z.number(),
     longitude: z.number(),
   }).optional(),
+  // New optional fields
+   costPrice: z.coerce
+    .number({ invalid_type_error: 'Cost price must be a number.' })
+    .nonnegative({ message: 'Cost price cannot be negative.' })
+    .optional(),
+  leadTime: z.coerce
+    .number({ invalid_type_error: 'Lead time must be a number.' })
+    .int({ message: 'Lead time must be a whole number.' })
+    .nonnegative({ message: 'Lead time cannot be negative.' })
+    .optional(),
+  batchNumber: z.string().max(50).optional().or(z.literal('')),
 });
 
 // Update EditItemFormData type to reflect the schema change
 export type EditItemFormData = Omit<z.infer<typeof formSchema>, 'locationCoords' | 'photoUrl'> & {
     photoUrl?: string;
     locationCoords?: LocationCoords;
-    minimumStock?: number; // Ensure minimumStock is here
+    minimumStock?: number;
+    costPrice?: number; // Add new optional fields
+    leadTime?: number;
+    batchNumber?: string;
 };
 
 
@@ -73,8 +86,8 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
   const [capturedPhotoUrl, setCapturedPhotoUrl] = React.useState<string | null>(item.photoUrl || null);
   const [capturedLocation, setCapturedLocation] = React.useState<LocationCoords | null>(item.locationCoords || null);
   const [showCameraFeed, setShowCameraFeed] = React.useState(false);
-  const [isCapturingLocation, setIsCapturingLocation] = React.useState(false); // Added state
-  const [isScanningBarcode, setIsScanningBarcode] = React.useState(false); // Added state
+  const [isCapturingLocation, setIsCapturingLocation] = React.useState(false);
+  const [isScanningBarcode, setIsScanningBarcode] = React.useState(isScanningBarcode);
 
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -82,7 +95,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
     defaultValues: {
       itemName: item.itemName,
       currentStock: item.currentStock,
-      minimumStock: item.minimumStock || undefined, // Changed from maximumStock
+      minimumStock: item.minimumStock ?? undefined,
       barcode: item.barcode || '',
       location: item.location || '',
       description: item.description || '',
@@ -90,10 +103,12 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
       supplier: item.supplier || '',
       photoUrl: item.photoUrl || '',
       locationCoords: item.locationCoords || undefined,
+      costPrice: item.costPrice ?? undefined, // Initialize new fields
+      leadTime: item.leadTime ?? undefined,
+      batchNumber: item.batchNumber || '',
     },
   });
 
-   // Camera permission effect
    React.useEffect(() => {
        let stream: MediaStream | null = null;
        const getCameraPermission = async () => {
@@ -124,7 +139,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
   const handleScanBarcode = async () => {
     setIsScanningBarcode(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 100)); // Reduced delay
       const result = await scanBarcode();
       form.setValue('barcode', result.barcode, { shouldValidate: true });
       toast({ title: "Barcode Scanned", description: `Barcode: ${result.barcode}` });
@@ -173,6 +188,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
     } catch (error: any) {
       console.error("Location fetch error:", error);
        toast({ variant: "destructive", title: "Location Error", description: error.message || "Could not fetch location." });
+       // Revert to original location on error
        setCapturedLocation(item.locationCoords || null);
        form.setValue('locationCoords', item.locationCoords || undefined);
     } finally {
@@ -185,7 +201,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
      const submitData: EditItemFormData = {
        itemName: values.itemName,
        currentStock: values.currentStock ?? 0,
-       minimumStock: values.minimumStock, // Changed from maximumStock
+       minimumStock: values.minimumStock,
        barcode: values.barcode || undefined,
        location: values.location || undefined,
        description: values.description || undefined,
@@ -193,6 +209,9 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
        supplier: values.supplier || undefined,
        photoUrl: capturedPhotoUrl || values.photoUrl || undefined,
        locationCoords: capturedLocation || values.locationCoords || undefined,
+       costPrice: values.costPrice, // Include new fields
+       leadTime: values.leadTime,
+       batchNumber: values.batchNumber || undefined,
      };
      console.log("Data Submitted:", submitData);
     onSubmit(submitData);
@@ -239,19 +258,19 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                 />
                 <FormField
                   control={form.control}
-                  name="minimumStock" // Changed from maximumStock
+                  name="minimumStock"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Min. Stock Level</FormLabel> {/* Changed label */}
+                      <FormLabel>Min. Stock Level</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
                           min="0"
                           step="1"
-                          placeholder="Optional" // Indicate it's optional
+                          placeholder="Optional"
                           {...field}
                           value={field.value ?? ''}
-                           onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))} // Set to undefined if empty
+                           onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))}
                           />
                       </FormControl>
                       <FormMessage />
@@ -281,6 +300,10 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                        >
                          {isScanningBarcode ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanBarcode className="h-4 w-4" />}
                        </Button>
+                        {/* Placeholder for Batch Scan */}
+                        <Button type="button" variant="outline" size="icon" disabled title="Batch Scan (Coming Soon)">
+                            <ScanBarcode className="h-4 w-4 opacity-50" />
+                        </Button>
                    </div>
                    <FormMessage />
                  </FormItem>
@@ -351,7 +374,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                            aria-label="Get Current Location"
                          >
                            {isCapturingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
-                         </Button>
+                         Button>
                     </div>
                   <FormDescription>
                      Manually enter location or {capturedLocation ? `use captured coordinates (Lat: ${capturedLocation.latitude.toFixed(4)}, Lon: ${capturedLocation.longitude.toFixed(4)}).` : 'capture current GPS coordinates.'}
@@ -361,8 +384,70 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
               )}
             />
 
+             {/* Optional Fields for Future Enhancements */}
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t mt-4">
+                 <FormField
+                  control={form.control}
+                  name="costPrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-1 text-muted-foreground"><DollarSign className="h-3 w-3"/>Cost Price</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="Optional cost"
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                          />
+                      </FormControl>
+                       <FormDescription className="text-xs">Per item cost.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="leadTime"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-1 text-muted-foreground"><Clock className="h-3 w-3"/>Lead Time (Days)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          placeholder="Optional supplier lead time"
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))}
+                          />
+                      </FormControl>
+                       <FormDescription className="text-xs">Delivery time.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="batchNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                       <FormLabel className="flex items-center gap-1 text-muted-foreground"><Hash className="h-3 w-3"/>Batch/Lot Number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Optional batch code" {...field} />
+                      </FormControl>
+                       <FormDescription className="text-xs">For tracking batches.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+             </div>
+
             {/* Photo Section */}
-            <FormItem>
+            <FormItem className="pt-4 border-t mt-4">
                <FormLabel>Product Photo</FormLabel>
                <div className="flex flex-col gap-2">
                     {showCameraFeed && (
@@ -370,37 +455,46 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                             <video ref={videoRef} className="w-full aspect-video rounded-md bg-muted" autoPlay muted playsInline />
                             {hasCameraPermission === false && ( <Alert variant="destructive"><VideoOff className="h-4 w-4" /><AlertTitle>Camera Access Denied</AlertTitle></Alert> )}
                              {hasCameraPermission === null && ( <Alert><Loader2 className="h-4 w-4 animate-spin" /><AlertTitle>Accessing Camera</AlertTitle></Alert> )}
-                            <Button type="button" onClick={handleCapturePhoto} disabled={!hasCameraPermission || isLoading}>
-                               <Camera className="mr-2 h-4 w-4" /> Capture New Photo
-                           </Button>
-                            <canvas ref={canvasRef} style={{ display: 'none' }} />
+                            
+                               Capture New Photo
+                           
+                            
                         </div>
                     )}
-                    <Button type="button" variant="outline" onClick={() => setShowCameraFeed(prev => !prev)} disabled={isLoading}>
-                        <Camera className="mr-2 h-4 w-4" /> {showCameraFeed ? 'Hide Camera' : 'Open Camera to Replace'}
-                    </Button>
+                    
+                        
+                            Open Camera to Replace
+                        
+                    
                     {capturedPhotoUrl && !showCameraFeed && (
-                      <div className="mt-2">
-                        <img src={capturedPhotoUrl} alt="Product" className="rounded-md border max-w-xs max-h-40 object-contain" data-ai-hint="product image" />
-                         <Button variant="link" size="sm" onClick={() => { setCapturedPhotoUrl(null); form.setValue('photoUrl', ''); }} className="text-destructive p-0 h-auto mt-1">Remove photo</Button>
-                      </div>
+                      
+                        
+                            Remove photo
+                        
+                      
                     )}
-                    <FormDescription>Optionally update the photo.</FormDescription>
-                     <FormField control={form.control} name="photoUrl" render={({ field }) => <FormMessage />} />
-                 </div>
+                    Optional: Update the photo.
+                     
+                 
              </FormItem>
         </fieldset>
 
-        <div className="flex justify-end gap-2 pt-4 border-t">
-             <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
-                <XCircle className="mr-2 h-4 w-4" /> Cancel
-             </Button>
-            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isLoading || isCapturingLocation || isScanningBarcode}>
-              {isLoading ? ( <Loader2 className="mr-2 h-4 w-4 animate-spin" /> ) : ( <Save className="mr-2 h-4 w-4" /> )}
-              {isLoading ? 'Saving...' : 'Save Changes'}
-            </Button>
-         </div>
-      </form>
+        
+
+            
+                
+                     Cancel
+                  
+                
+                  
+                    
+                  
+                  Save Changes
+                
+             
+        
+      
     </Form>
   );
 }
+

@@ -9,7 +9,7 @@
     import { AddStockForm, type AddStockFormData } from '@/components/add-stock-form';
     import { EditItemForm, type EditItemFormData } from '@/components/edit-item-form';
     import { ViewItemDialog } from '@/components/view-item-dialog'; // Import ViewItemDialog
-    import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+    import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card'; // Added CardDescription, CardFooter
     import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
     import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
     import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -22,7 +22,7 @@
     import { Skeleton } from '@/components/ui/skeleton';
     import { Button } from '@/components/ui/button';
     import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-    import { AlertTriangle, Loader2, Trash2, LogOut, Settings, Camera, XCircle, VideoOff } from 'lucide-react';
+    import { AlertTriangle, Loader2, Trash2, LogOut, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2 } from 'lucide-react'; // Added new icons
     import { RequireAuth } from '@/components/auth/require-auth';
     import { useAuth } from '@/context/auth-context';
     import { signOut } from 'firebase/auth';
@@ -36,8 +36,6 @@
     import { MovementTrendChart } from '@/components/charts/movement-trend-chart';
     import { PageHeader } from '@/components/page-header'; // Import PageHeader
     import { ActionsPanel } from '@/components/actions-panel'; // Import ActionsPanel
-    // Removed import for McpChat as dependency is removed
-    // import { McpChat } from '@/components/mcp-chat'; // Import MCP Chat component
 
     const queryClient = new QueryClient({
       queryCache: new QueryCache({
@@ -56,6 +54,8 @@
         emailNotifications: true,
         pushNotifications: false,
         lowStockThreshold: 10,
+        workflowApprovalRequired: false, // Default workflow setting
+        defaultLeadTime: 7, // Default lead time setting
     };
 
 
@@ -86,8 +86,10 @@
                 try {
                     const docSnap = await getDoc(settingsDocRef);
                     if (docSnap.exists()) {
-                        console.log("Admin settings found:", docSnap.data());
-                        return docSnap.data() as AdminSettings;
+                        const fetchedSettings = docSnap.data() as AdminSettings;
+                        console.log("Admin settings found:", fetchedSettings);
+                        // Merge fetched settings with defaults to ensure all keys exist
+                        return { ...defaultAdminSettings, ...fetchedSettings };
                     } else {
                         console.log("No admin settings found, using defaults.");
                         // Optionally create default settings document here if it doesn't exist
@@ -137,6 +139,9 @@
                   photoUrl: item.photoUrl || undefined,
                   locationCoords: item.locationCoords || undefined,
                   userId: item.userId || user.uid, // Ensure userId is present
+                  costPrice: item.costPrice !== undefined ? Number(item.costPrice) : undefined, // Ensure optional fields are typed correctly
+                  leadTime: item.leadTime !== undefined ? Number(item.leadTime) : undefined,
+                  batchNumber: item.batchNumber || undefined,
               }));
           } catch (err) {
               console.error("Error fetching stock items:", err);
@@ -183,7 +188,7 @@
       });
 
       // Helper function to log stock movements
-      const logStockMovement = async (item: StockItem, quantityChange: number, newStockLevel: number) => {
+      const logStockMovement = async (item: StockItem, quantityChange: number, newStockLevel: number, type: 'in' | 'out' | 'restock' = quantityChange > 0 ? 'in' : 'out') => {
         if (!user || !db) return;
         try {
             const logData: Omit<StockMovementLog, 'id' | 'timestamp'> & { timestamp: any } = {
@@ -191,10 +196,11 @@
                 itemName: item.itemName,
                 quantityChange: quantityChange,
                 newStockLevel: newStockLevel,
-                type: quantityChange > 0 ? 'in' : 'out',
+                type: type, // Use provided type
                 userId: user.uid,
                 userEmail: user.email || undefined,
                 timestamp: serverTimestamp(), // Use server timestamp
+                batchNumber: item.batchNumber || undefined, // Include batch number if available
             };
             await addDoc(collection(db, 'stockMovements'), logData);
             console.log("Stock movement logged:", logData);
@@ -219,17 +225,14 @@
                     const barcodeQuery = query(collection(db, 'stockItems'), where("barcode", "==", barcode));
                     const barcodeSnapshot = await getDocs(barcodeQuery);
                     if (!barcodeSnapshot.empty) {
-                        // Check if the found item is the *same* as the one potentially being updated
-                        // (If we are updating an existing item by name/barcode)
                         let isUpdatingExisting = false;
-                        if (formData.itemName) { // Check if we might be updating by name
+                        if (formData.itemName) {
                              const nameQuery = query(collection(db, 'stockItems'), where("itemName", "==", formData.itemName), where("userId", "==", user.uid));
                              const nameSnapshot = await getDocs(nameQuery);
                              if (!nameSnapshot.empty && nameSnapshot.docs[0].id === barcodeSnapshot.docs[0].id) {
                                  isUpdatingExisting = true;
                              }
                         }
-                         // If the barcode exists and it's NOT the same item we intend to update, throw error
                          if (!isUpdatingExisting) {
                              const existingItem = barcodeSnapshot.docs[0].data();
                               toast({
@@ -247,125 +250,107 @@
                 const itemsCol = collection(db, 'stockItems');
                 let targetItemQuery;
 
-                // Prioritize finding by barcode if provided and user is owner/admin
                 const barcodeQueryConstraint = barcode ? [where("barcode", "==", barcode)] : [];
-                const nameQueryConstraint = itemName ? [where("itemName", "==", itemName)] : []; // Use only if barcode not provided
-
-                 // Base query constraints (userId for non-admins)
+                const nameQueryConstraint = itemName ? [where("itemName", "==", itemName)] : [];
                 const baseConstraints = !isAdmin ? [where("userId", "==", user.uid)] : [];
-
-                // Combine constraints: Use barcode if present, otherwise use name
                 const queryConstraints = barcode
                     ? [...baseConstraints, ...barcodeQueryConstraint]
                     : [...baseConstraints, ...nameQueryConstraint];
 
-
-                 if (queryConstraints.length > (isAdmin ? 0 : 1)) { // Ensure we have a lookup field (barcode or name)
+                 if (queryConstraints.length > (isAdmin ? 0 : 1)) {
                      targetItemQuery = query(itemsCol, ...queryConstraints);
                  } else {
-                      // Cannot look up without barcode or name if creating a new item
-                      // This case should ideally be handled by creating a new item directly
-                       // If barcode is provided but doesn't match anything, we still proceed to add new below
                       targetItemQuery = null;
                  }
-
 
                  let querySnapshot;
                   if (targetItemQuery) {
                       querySnapshot = await getDocs(targetItemQuery);
                   }
 
-
-                // Prepare data for update/add, removing undefined
+                // Prepare data for update/add, including new optional fields
                  const dataToSave = Object.entries(formData).reduce((acc, [key, value]) => {
-                      if (value !== undefined && key !== 'quantity') { // Exclude quantity from base data
-                         // Convert numeric fields explicitly if needed, though zod coerce helps
+                      if (value !== undefined && key !== 'quantity') {
                          if (key === 'minimumStock' && typeof value === 'string') {
                             acc[key as keyof typeof acc] = value === '' ? undefined : Number(value);
+                          } else if ((key === 'costPrice' || key === 'leadTime') && typeof value === 'string') {
+                             acc[key as keyof typeof acc] = value === '' ? undefined : Number(value);
                           } else {
-                             acc[key as keyof typeof acc] = value === '' ? undefined : value; // Handle empty strings for text fields
+                             acc[key as keyof typeof acc] = value === '' ? undefined : value;
                           }
                       }
                       return acc;
-                  }, {} as Partial<Omit<StockItem, 'id' | 'userId' | 'currentStock'>> & { userId?: string }); // Ensure correct type
+                  }, {} as Partial<Omit<StockItem, 'id' | 'userId' | 'currentStock'>> & { userId?: string });
 
-                  dataToSave.userId = user.uid; // Ensure userId is set for the current user
+                  dataToSave.userId = user.uid;
 
                  if (querySnapshot && !querySnapshot.empty) {
                      // --- Item exists, update stock ---
-                     const existingDoc = querySnapshot.docs[0]; // Assume first match is the one
+                     const existingDoc = querySnapshot.docs[0];
                      const itemDocRef = doc(db, 'stockItems', existingDoc.id);
                      console.log("Item exists, updating stock for ID:", existingDoc.id);
                      let finalStockLevel = 0;
                      let existingItemData: StockItem | null = null;
 
-                      // Use a transaction to safely update stock and other fields
                       await runTransaction(db, async (transaction) => {
                            const sfDoc = await transaction.get(itemDocRef);
                            if (!sfDoc.exists()) {
                                throw "Document does not exist!";
                            }
                            const currentData = sfDoc.data() as Omit<StockItem, 'id'>;
-                           existingItemData = { ...currentData, id: existingDoc.id }; // Capture existing data for logging
-                           const updatedData = { ...dataToSave }; // Start with cleaned form data from the form
+                           existingItemData = { ...currentData, id: existingDoc.id };
+                           const updatedData = { ...dataToSave };
 
-                           // Ensure minimumStock is updated or kept
-                           if (formData.minimumStock !== undefined) {
-                              updatedData.minimumStock = formData.minimumStock;
-                           } else if (currentData.minimumStock !== undefined) {
-                               updatedData.minimumStock = currentData.minimumStock; // Keep existing if not provided
-                           } else {
-                                delete updatedData.minimumStock; // Remove if not provided and not existing
-                           }
+                           // Merge optional fields correctly (keep existing if not provided in form)
+                           updatedData.minimumStock = formData.minimumStock ?? currentData.minimumStock;
+                           updatedData.costPrice = formData.costPrice ?? currentData.costPrice;
+                           updatedData.leadTime = formData.leadTime ?? currentData.leadTime;
+                           updatedData.batchNumber = formData.batchNumber ?? currentData.batchNumber;
 
-                           // Ensure other optional fields are only updated if provided in the form
-                           // Only include fields in updatedData if they were actually in dataToSave (i.e., provided in the form)
                             const finalUpdateData = Object.keys(updatedData).reduce((acc, key) => {
                                if (updatedData[key as keyof typeof updatedData] !== undefined) {
-                                   acc[key as keyof typeof acc] = updatedData[key as keyof updatedData];
+                                   acc[key as keyof typeof acc] = updatedData[key as keyof typeof updatedData];
+                               } else {
+                                   // If the value became undefined, delete the field
+                                   acc[key as keyof typeof acc] = deleteField();
                                }
                                return acc;
-                           }, {} as Partial<StockItem>);
+                           }, {} as Record<string, any>);
 
 
-                           // Atomically increment the current stock
                            const newStock = (currentData.currentStock || 0) + quantity;
-                           finalStockLevel = newStock; // Capture final stock level for logging
+                           finalStockLevel = newStock;
                            transaction.update(itemDocRef, { ...finalUpdateData, currentStock: newStock });
                        });
 
                       if (existingItemData) {
-                           await logStockMovement(existingItemData, quantity, finalStockLevel);
+                           await logStockMovement(existingItemData, quantity, finalStockLevel, 'in'); // Log as 'in'
                       }
 
-                      const updatedDocSnap = await getDoc(itemDocRef); // Re-fetch to get the final state
+                      const updatedDocSnap = await getDoc(itemDocRef);
                       const resultData = { ...updatedDocSnap.data(), id: updatedDocSnap.id } as StockItem;
-
 
                       // Check for low stock after update
                       const effectiveThreshold = resultData.minimumStock ?? adminSettings.lowStockThreshold;
                       if (resultData.currentStock > 0 && resultData.currentStock <= effectiveThreshold) {
                            toast({
-                               variant: "default", // Or maybe a different variant like 'warning' if you add one
+                               variant: "default",
                                title: "Low Stock Warning",
                                description: `${resultData.itemName} stock is low (${resultData.currentStock} <= ${effectiveThreshold}). Consider restocking.`,
-                               duration: 7000, // Increased duration
+                               duration: 7000,
                             });
                        }
-
 
                      return { ...resultData, quantityAdded: quantity };
                  } else {
                      // --- Item does not exist, add new ---
                      console.log("Item does not exist, adding new item:", itemName);
-                     // Set initial current stock to the quantity added
                      const newItemDataWithStock = {
                          ...dataToSave,
                          currentStock: quantity,
-                         userId: user.uid, // Ensure user ID is set for the new item
+                         userId: user.uid,
                      };
 
-                       // Remove undefined fields before adding
                       const finalNewItemData = Object.entries(newItemDataWithStock).reduce((acc, [key, value]) => {
                           if (value !== undefined) {
                              acc[key as keyof typeof acc] = value;
@@ -379,20 +364,17 @@
 
                      const newItem = { id: docRef.id, ...finalNewItemData } as StockItem;
 
-                     // Log the initial stock addition
-                     await logStockMovement(newItem, quantity, newItem.currentStock);
+                     await logStockMovement(newItem, quantity, newItem.currentStock, 'in'); // Log as 'in'
 
-                      // Check for low stock immediately after adding
                       const effectiveThreshold = newItem.minimumStock ?? adminSettings.lowStockThreshold;
                       if (newItem.currentStock > 0 && newItem.currentStock <= effectiveThreshold) {
                            toast({
-                               variant: "default", // Or 'warning'
+                               variant: "default",
                                title: "Low Stock Warning",
                                description: `${newItem.itemName} stock is low (${newItem.currentStock} <= ${effectiveThreshold}). Consider restocking.`,
-                               duration: 7000, // Increased duration
+                               duration: 7000,
                            });
                        }
-
 
                      return { ...newItem, quantityAdded: quantity };
                  }
@@ -410,7 +392,6 @@
                  toast({
                     variant: "destructive",
                     title: "Error Adding Stock",
-                     // Check for the specific duplicate barcode error message
                     description: error.message === "Duplicate barcode detected." ? error.message : error.message || "Could not add stock. Please try again.",
                  });
              },
@@ -429,7 +410,6 @@
                  if (itemData.barcode && itemData.barcode.trim() !== '') {
                       const barcodeQuery = query(collection(db, 'stockItems'), where("barcode", "==", itemData.barcode));
                       const barcodeSnapshot = await getDocs(barcodeQuery);
-                      // Check if a document with this barcode exists AND it's not the item being edited
                       if (!barcodeSnapshot.empty && barcodeSnapshot.docs[0].id !== itemData.id) {
                           const existingItem = barcodeSnapshot.docs[0].data();
                           toast({
@@ -443,12 +423,10 @@
                   }
                  // --- End Duplicate Barcode Check ---
 
-
                 console.log("Editing item in Firestore:", itemData);
                  const itemDocRef = doc(db, 'stockItems', itemData.id);
                  const { id, ...updateData } = itemData;
 
-                 // Get current data before update for comparison if logging stock changes
                   let originalStock = 0;
                   try {
                        const currentDoc = await getDoc(itemDocRef);
@@ -457,40 +435,41 @@
                        }
                    } catch (e) { console.error("Could not fetch original stock before edit:", e); }
 
-
                  // Clean data: remove undefined fields, ensure numbers are numbers
                  const cleanData = Object.entries(updateData).reduce((acc, [key, value]) => {
                       if (value !== undefined) {
-                          if (key === 'currentStock' || key === 'minimumStock') {
-                              acc[key as keyof typeof acc] = Number(value);
+                          if (key === 'currentStock' || key === 'minimumStock' || key === 'costPrice' || key === 'leadTime') {
+                              acc[key as keyof typeof acc] = value === '' ? undefined : Number(value); // Allow empty string to remove numeric value
                           } else if (key === 'userId') {
-                              // Allow userId update only if admin or matches current user (redundant check, but safe)
                               if (isAdmin || value === user.uid) {
                                   acc[key as keyof typeof acc] = value;
-                              } else {
-                                  console.warn("Attempted to change userId without admin rights or mismatch. Skipping userId update.");
                               }
                           } else {
                                 acc[key as keyof typeof acc] = value === '' ? undefined : value;
                           }
+                      } else {
+                           // Explicitly set to undefined if value is undefined (e.g. from form state)
+                           acc[key as keyof typeof acc] = undefined;
                       }
                       return acc;
                   }, {} as Partial<Omit<StockItem, 'id'>>);
 
-                  // Remove fields that ended up as undefined AFTER cleaning
+
                   // Use deleteField() for fields that should be explicitly removed if now undefined
-                  const finalUpdateData: Record<string, any> = {}; // Use Record<string, any> for flexibility
-                  for (const [key, value] of Object.entries(cleanData)) {
-                     if (value === undefined) {
-                        // Check if this key existed in the original item to decide if we need to delete it
-                        const originalValue = item[key as keyof StockItem];
-                        if (originalValue !== undefined) {
-                            finalUpdateData[key] = deleteField(); // Use deleteField() to remove the field
-                        }
-                        // If original value was also undefined, do nothing
-                     } else {
-                         finalUpdateData[key] = value;
-                     }
+                  const finalUpdateData: Record<string, any> = {};
+                  const originalItemForCheck = await getDoc(itemDocRef).then(snap => snap.data() || {}); // Get original data for check
+
+                  for (const key in cleanData) {
+                     const typedKey = key as keyof typeof cleanData;
+                     const newValue = cleanData[typedKey];
+                     const originalValue = originalItemForCheck[typedKey];
+
+                      if (newValue === undefined && originalValue !== undefined) {
+                         finalUpdateData[key] = deleteField(); // Use deleteField() to remove the field
+                      } else if (newValue !== undefined) {
+                          finalUpdateData[key] = newValue;
+                      }
+                     // If newValue is undefined AND originalValue was undefined, do nothing
                   }
 
 
@@ -498,37 +477,32 @@
                      console.log("No changes detected after cleaning data. Skipping update.");
                      return itemData; // Return original data if no changes
                  }
-                 console.log("Cleaned data for update:", finalUpdateData);
+                 console.log("Final cleaned data for update:", finalUpdateData);
 
                 await updateDoc(itemDocRef, finalUpdateData);
                 console.log("Item updated successfully:", itemData.id);
 
-                // Log stock movement if currentStock was changed during edit
                 const newStock = finalUpdateData.currentStock;
                  if (newStock !== undefined && newStock !== originalStock) {
                      const quantityChange = newStock - originalStock;
-                     // Need the full item data for logging
-                     const updatedItemForLog: StockItem = { ...itemData, currentStock: newStock }; // Use submitted data + new stock
-                     await logStockMovement(updatedItemForLog, quantityChange, newStock);
+                     const updatedItemForLog: StockItem = { ...itemData, currentStock: newStock };
+                     await logStockMovement(updatedItemForLog, quantityChange, newStock); // Type determined by change
                  }
 
-                // Re-fetch the updated item data to check stock levels
                  const updatedDocSnap = await getDoc(itemDocRef);
                  const updatedItemResult = { id: updatedDocSnap.id, ...updatedDocSnap.data() } as StockItem;
 
-                 // Check for low stock after edit
                  const effectiveThreshold = updatedItemResult.minimumStock ?? adminSettings.lowStockThreshold;
                  if (updatedItemResult.currentStock > 0 && updatedItemResult.currentStock <= effectiveThreshold) {
                       toast({
-                           variant: "default", // Or 'warning'
+                           variant: "default",
                            title: "Low Stock Warning",
                            description: `${updatedItemResult.itemName} stock is now low (${updatedItemResult.currentStock} <= ${effectiveThreshold}). Consider restocking.`,
-                           duration: 7000, // Increased duration
+                           duration: 7000,
                        });
                   }
 
-
-                return updatedItemResult; // Return the actual updated data
+                return updatedItemResult;
             },
             onSuccess: (updatedItem) => {
                  queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
@@ -540,7 +514,7 @@
                     description: `${updatedItem.itemName} has been updated.`,
                 });
             },
-            onError: (error: any, originalItemData) => { // Receive original item data on error
+            onError: (error: any, originalItemData) => {
                 console.error("Error updating item:", error);
                  if (error.code === 'invalid-argument') {
                      toast({
@@ -552,7 +526,7 @@
                       toast({
                           variant: "destructive",
                           title: "Duplicate Barcode",
-                          description: error.message, // Show the specific duplicate error
+                          description: error.message,
                       });
                  }
                  else {
@@ -577,19 +551,9 @@
                 await deleteDoc(itemDocRef);
                 console.log("Item deleted successfully:", itemToDelete.id);
 
-                // Optional: Log the deletion as a 'stock out' of the remaining quantity if needed
                  if (itemToDelete.currentStock > 0) {
-                    await logStockMovement(itemToDelete, -itemToDelete.currentStock, 0);
+                    await logStockMovement(itemToDelete, -itemToDelete.currentStock, 0, 'out'); // Log as 'out'
                  }
-                 // Optional: Also delete related movement logs? (Could make history confusing)
-                 // const logsRef = collection(db, 'stockMovements');
-                 // const q = query(logsRef, where('itemId', '==', itemToDelete.id));
-                 // const logsSnapshot = await getDocs(q);
-                 // const batch = writeBatch(db);
-                 // logsSnapshot.forEach(doc => batch.delete(doc.ref));
-                 // await batch.commit();
-
-
                 return itemToDelete.id;
             },
             onSuccess: (itemId) => {
@@ -632,7 +596,6 @@
                  console.log("Processing stock out for item:", data.itemId, "Quantity:", data.quantity);
                  const itemDocRef = doc(db, 'stockItems', data.itemId);
 
-                 // Use transaction for atomic update and fetch
                  let updatedStockLevel = 0;
                  await runTransaction(db, async (transaction) => {
                     const sfDoc = await transaction.get(itemDocRef);
@@ -642,7 +605,7 @@
                     const currentStock = sfDoc.data().currentStock || 0;
                     updatedStockLevel = currentStock - data.quantity;
                      if (updatedStockLevel < 0) {
-                        throw new Error("Stock out quantity exceeds available stock."); // Prevent negative stock
+                        throw new Error("Stock out quantity exceeds available stock.");
                     }
                     transaction.update(itemDocRef, { currentStock: increment(-data.quantity) });
                  });
@@ -650,17 +613,15 @@
 
                  console.log("Stock updated successfully for item:", data.itemId);
 
-                  // Log the stock out movement
-                  await logStockMovement(itemToUpdate, -data.quantity, updatedStockLevel);
+                  await logStockMovement(itemToUpdate, -data.quantity, updatedStockLevel, 'out'); // Log as 'out'
 
-                 // Check for low stock after stock out
                  const effectiveThreshold = itemToUpdate.minimumStock ?? adminSettings.lowStockThreshold;
                  if (updatedStockLevel > 0 && updatedStockLevel <= effectiveThreshold) {
                       toast({
-                           variant: "default", // Or 'warning'
+                           variant: "default",
                            title: "Low Stock Warning",
                            description: `${itemToUpdate.itemName} stock is now low (${updatedStockLevel} <= ${effectiveThreshold}). Consider restocking.`,
-                           duration: 7000, // Increased duration
+                           duration: 7000,
                        });
                   }
 
@@ -691,14 +652,15 @@
                 if (!isAdmin || !db) throw new Error("Permission denied or DB not available.");
                 console.log("Saving admin settings to Firestore:", newSettings);
                 const settingsDocRef = doc(db, 'settings', 'admin');
-                await setDoc(settingsDocRef, newSettings, { merge: true }); // Use setDoc with merge to update or create
+                await setDoc(settingsDocRef, newSettings, { merge: true }); // Use merge to only update provided fields
                 return newSettings;
             },
             onSuccess: (savedSettings) => {
-                queryClient.invalidateQueries({ queryKey: ['adminSettings'] }); // Refetch settings after save
+                 queryClient.setQueryData(['adminSettings'], (old: AdminSettings | undefined) => ({...defaultAdminSettings, ...old, ...savedSettings})); // Optimistically update cache
+                 refetchSettings(); // Also refetch to ensure consistency
                 toast({
                     title: "Settings Saved",
-                    description: "Notification preferences have been updated.",
+                    description: "Admin settings have been updated.",
                 });
                 setIsSettingsDialogOpen(false);
             },
@@ -714,7 +676,6 @@
 
 
         // --- Photo Search ---
-         // Camera permission effect for photo search
         React.useEffect(() => {
             let stream: MediaStream | null = null;
             const getCameraPermission = async () => {
@@ -734,7 +695,7 @@
                 } catch (error) {
                     console.error('Error accessing camera for photo search:', error);
                     setHasCameraPermission(false);
-                    setIsPhotoSearchOpen(false); // Close dialog if permission denied
+                    setIsPhotoSearchOpen(false);
                     toast({ variant: 'destructive', title: 'Camera Access Denied', description: 'Please enable camera permissions for photo search.' });
                 }
             };
@@ -759,7 +720,7 @@
               const context = canvas.getContext('2d');
               if (context) {
                  context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                 const dataUrl = canvas.toDataURL('image/jpeg', 0.8); // Use JPEG for smaller size
+                 const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
 
                  if (dataUrl && dataUrl !== 'data:,') {
                       setPhotoSearchLoading(true);
@@ -770,9 +731,9 @@
                          console.log("Photo search result:", result);
 
                          if (result.itemName) {
-                            setSearchQuery(result.itemName); // Set search query to the identified item name
+                            setSearchQuery(result.itemName);
                             toast({ title: "Item Found by Photo", description: `Searching for "${result.itemName}".` });
-                            setIsPhotoSearchOpen(false); // Close dialog on success
+                            setIsPhotoSearchOpen(false);
                          } else {
                             toast({ variant: "destructive", title: "Item Not Found", description: "Could not identify an item from the photo." });
                          }
@@ -806,6 +767,7 @@
       const handleEditItemSubmit = (data: EditItemFormData) => {
           if (!itemToEdit) return;
 
+          // Include optional fields from form data if they exist
           const updatedItem: StockItem = {
               id: itemToEdit.id,
               userId: itemToEdit.userId || user?.uid || 'unknown',
@@ -819,6 +781,9 @@
               supplier: data.supplier || undefined,
               photoUrl: data.photoUrl || undefined,
               locationCoords: data.locationCoords || undefined,
+              costPrice: data.costPrice === undefined || data.costPrice === null ? undefined : Number(data.costPrice),
+              leadTime: data.leadTime === undefined || data.leadTime === null ? undefined : Number(data.leadTime),
+              batchNumber: data.batchNumber || undefined,
           };
 
 
@@ -836,7 +801,7 @@
          setIsEditDialogOpen(true);
        };
 
-       const handleViewClick = (item: StockItem) => { // Handler for View click
+       const handleViewClick = (item: StockItem) => {
          setItemToView(item);
          setIsViewDialogOpen(true);
        };
@@ -860,7 +825,7 @@
         }
         try {
           await signOut(auth);
-          queryClient.clear(); // Clear React Query cache on sign out
+          queryClient.clear();
           toast({ title: "Signed Out", description: "You have been successfully signed out." });
         } catch (error) {
           console.error("Error signing out:", error);
@@ -882,16 +847,14 @@
         });
 
        const isMutating = stockOutMutation.isPending || addStockMutation.isPending || editItemMutation.isPending || deleteItemMutation.isPending || saveSettingsMutation.isPending || photoSearchLoading;
-       const isLoading = authLoading || isLoadingItems || isLoadingSettings || isLoadingMovements; // Combine all loading states
+       const isLoading = authLoading || isLoadingItems || isLoadingSettings || isLoadingMovements;
 
 
         // Trigger low stock alert checks when items or settings change
         useEffect(() => {
-             // Debounce or limit frequency if needed
-            if (!isLoading && stockItems.length > 0) { // Only check if not loading and items exist
+            if (!isLoading && stockItems.length > 0) {
                 let lowStockMessages: string[] = [];
                 stockItems.forEach(item => {
-                    // Use item-specific minimum if available, otherwise global threshold
                     const effectiveThreshold = item.minimumStock !== undefined ? item.minimumStock : adminSettings.lowStockThreshold;
                     if (item.currentStock > 0 && item.currentStock <= effectiveThreshold) {
                          lowStockMessages.push(`${item.itemName} (${item.currentStock})`);
@@ -900,23 +863,20 @@
 
                 if (lowStockMessages.length > 0) {
                     toast({
-                        variant: "destructive", // Use destructive variant for higher visibility
+                        variant: "destructive",
                         title: `Low Stock Alert (${lowStockMessages.length} item${lowStockMessages.length > 1 ? 's' : ''})`,
                         description: `Restock needed for: ${lowStockMessages.join(', ')}.`,
-                        duration: 10000, // Show for longer
+                        duration: 10000,
                     });
-                    // TODO: Implement email/push notifications based on adminSettings if enabled
                     if (adminSettings.emailNotifications) {
                         console.log("TODO: Send email notification for low stock:", lowStockMessages);
-                        // sendLowStockEmail(user?.email, lowStockMessages); // Example function call
                     }
                      if (adminSettings.pushNotifications) {
                          console.log("TODO: Send push notification for low stock:", lowStockMessages);
-                         // sendLowStockPushNotification(user?.pushToken, lowStockMessages); // Example function call
                      }
                 }
             }
-        }, [stockItems, adminSettings, isLoading, toast]); // Simplified dependencies
+        }, [stockItems, adminSettings, isLoading, toast]);
 
 
         const handleSaveSettings = (settings: AdminSettings) => {
@@ -924,15 +884,14 @@
         };
 
 
-        // Refetch handler combining both data types
         const handleRetryFetch = () => {
              if (fetchError) refetchItems();
-             refetchMovements(); // Always allow refetching movements
+             refetchMovements();
          };
 
          // Calculate KPIs
          const kpiData: KPIData | null = React.useMemo(() => {
-             if (isLoading) return null; // Don't calculate if still loading
+             if (isLoading) return null;
 
               const totalItems = stockItems.length;
               const lowStockItems = stockItems.filter(item => {
@@ -941,7 +900,6 @@
               }).length;
               const outOfStockItems = stockItems.filter(item => item.currentStock === 0).length;
 
-              // Calculate today's transactions
               const todayStart = new Date();
               todayStart.setHours(0, 0, 0, 0);
               const todayEnd = new Date();
@@ -954,8 +912,7 @@
 
               const todayIn = todayMovements.filter(log => log.type === 'in').length;
               const todayOut = todayMovements.filter(log => log.type === 'out').length;
-              // Define "Restock" logic if needed (e.g., based on quantity or a specific flag)
-              const todayRestock = 0; // Placeholder
+              const todayRestock = todayMovements.filter(log => log.type === 'restock').length;
 
               return {
                   totalItems,
@@ -983,45 +940,44 @@
               if (isLoading) return [];
               const counts: { [key: string]: number } = {};
               stockItems.forEach(item => {
-                   // Prioritize text location, fallback to coordinates if text is empty
                    let locationLabel = item.location?.trim();
                    if (!locationLabel && item.locationCoords) {
                        locationLabel = `GPS (${item.locationCoords.latitude.toFixed(2)}, ${item.locationCoords.longitude.toFixed(2)})`;
                    }
                    locationLabel = locationLabel || 'Unknown Location';
-                   counts[locationLabel] = (counts[locationLabel] || 0) + item.currentStock; // Aggregate by stock quantity
+                   counts[locationLabel] = (counts[locationLabel] || 0) + item.currentStock;
               });
-              return Object.entries(counts).map(([name, value]) => ({ name, value })).filter(d => d.value > 0); // Only show locations with stock
+              return Object.entries(counts).map(([name, value]) => ({ name, value })).filter(d => d.value > 0);
           }, [stockItems, isLoading]);
 
           const movementTrendData = React.useMemo(() => {
               if (isLoadingMovements) return [];
-               // Aggregate movements by week (or day/month based on preference)
-              const weeklyMovements: { [week: string]: { in: number; out: number } } = {};
+              const weeklyMovements: { [week: string]: { in: number; out: number; restock: number } } = {}; // Added restock
                const now = new Date();
                const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
                stockMovements
-                   .filter(log => log.timestamp.toDate() >= oneWeekAgo) // Filter last 7 days
+                   .filter(log => log.timestamp.toDate() >= oneWeekAgo)
                    .forEach(log => {
                        const date = log.timestamp.toDate();
                        const weekStart = new Date(date);
-                       weekStart.setDate(date.getDate() - date.getDay()); // Get Sunday of the week
+                       weekStart.setDate(date.getDate() - date.getDay());
                        const weekKey = `${weekStart.getFullYear()}-${(weekStart.getMonth() + 1).toString().padStart(2, '0')}-${weekStart.getDate().toString().padStart(2, '0')}`;
 
                        if (!weeklyMovements[weekKey]) {
-                           weeklyMovements[weekKey] = { in: 0, out: 0 };
+                           weeklyMovements[weekKey] = { in: 0, out: 0, restock: 0 };
                        }
                        if (log.type === 'in') {
                            weeklyMovements[weekKey].in += log.quantityChange;
-                       } else {
+                       } else if (log.type === 'out') {
                            weeklyMovements[weekKey].out += Math.abs(log.quantityChange);
+                       } else if (log.type === 'restock') {
+                            weeklyMovements[weekKey].restock += log.quantityChange; // Assuming restock is positive
                        }
                    });
 
-               // Convert to chart format, sorted by date
                return Object.entries(weeklyMovements)
-                   .map(([week, data]) => ({ name: week, StockIn: data.in, StockOut: data.out }))
+                   .map(([week, data]) => ({ name: week, StockIn: data.in, StockOut: data.out, Restock: data.restock })) // Added Restock
                    .sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime());
           }, [stockMovements, isLoadingMovements]);
 
@@ -1063,8 +1019,9 @@
            </div>
 
 
+           {/* Main Content Area */}
            <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left Column: Stock Table & Actions */}
+              {/* Left/Center Column: Stock Table & Forms */}
               <div className="lg:col-span-2 space-y-6">
                  <Card className="shadow-md">
                      <CardHeader>
@@ -1096,7 +1053,7 @@
                          {!isLoadingItems && !fetchError && (
                              <StockDashboard
                                  items={filteredItems}
-                                 onView={handleViewClick} // Pass handler to StockDashboard
+                                 onView={handleViewClick}
                                  onEdit={handleEditClick}
                                  onDelete={handleDeleteClick}
                                  isAdmin={isAdmin}
@@ -1106,12 +1063,12 @@
                       </CardContent>
                    </Card>
 
-                   {/* Combine Add/Out Forms */}
+                    {/* Add/Out Forms */}
                     <Card className="shadow-md">
                          <Tabs defaultValue="add-stock" className="w-full">
                             <CardHeader className="p-4 border-b">
                                  <TabsList className="grid w-full grid-cols-2">
-                                     <TabsTrigger value="add-stock">Add Stock</TabsTrigger>
+                                     <TabsTrigger value="add-stock">Add/Restock</TabsTrigger>
                                      <TabsTrigger value="stock-out">Stock Out</TabsTrigger>
                                  </TabsList>
                             </CardHeader>
@@ -1137,7 +1094,7 @@
                </div>
 
 
-              {/* Right Column: Actions Panel, MCP Chat & Activity Feed */}
+              {/* Right Column: Actions, Feed & Advanced Features */}
               <div className="lg:col-span-1 space-y-6 flex flex-col">
                  <ActionsPanel
                     onPhotoSearchClick={() => setIsPhotoSearchOpen(true)}
@@ -1146,30 +1103,85 @@
                     isLoading={isMutating || hasCameraPermission === false || isLoading}
                     frequentlyUsedItems={[]} // TODO: Populate frequently used items
                     onQuickAction={(action, item) => {
+                        // Simple quick actions - consider enhancing logic (e.g., restock template)
                         if (action === 'in') handleAddStockSubmit({ itemName: item.itemName, quantity: 1, barcode: item.barcode });
                         else if (action === 'out') handleStockOutSubmit({ itemId: item.id, quantity: 1 });
                     }}
                   />
 
-                  {/* MCP Chat Component Placeholder - Render only if McpChat exists */}
-                  {/* {typeof McpChat !== 'undefined' && (
-                     <div className="flex-grow min-h-[300px]">
-                       <McpChat />
-                     </div>
-                  )} */}
-                   {/* Placeholder while McpChat is removed */}
-                   <Card className="shadow-lg rounded-xl h-full flex flex-col">
-                      <CardHeader><CardTitle>Tool Chat (Coming Soon)</CardTitle></CardHeader>
-                      <CardContent className="flex-grow flex items-center justify-center text-muted-foreground">
-                          <p>MCP Chat integration pending.</p>
-                      </CardContent>
+                    {/* Activity Feed */}
+                   <ActivityFeed
+                      movements={stockMovements}
+                      isLoading={isLoadingMovements}
+                    />
+
+                   {/* Placeholders for Advanced Features */}
+                   <Card className="shadow-md">
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2"><BarChart2 className="h-5 w-5"/>Advanced Reporting</CardTitle>
+                            <CardDescription>Analyze inventory performance.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+                                <li>Inventory Turnover (Coming Soon)</li>
+                                <li>Cost Analysis (Coming Soon)</li>
+                                <li>Supplier Performance (Coming Soon)</li>
+                            </ul>
+                        </CardContent>
+                        <CardFooter>
+                             <Button variant="outline" size="sm" disabled>View Reports</Button>
+                        </CardFooter>
                    </Card>
 
+                   <Card className="shadow-md">
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2"><BrainCircuit className="h-5 w-5"/>Predictive Analytics</CardTitle>
+                            <CardDescription>Forecast demand and optimize stock.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                             <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+                                <li>Demand Forecasting (Coming Soon)</li>
+                                <li>Automatic Reorder Points (Coming Soon)</li>
+                             </ul>
+                        </CardContent>
+                        <CardFooter>
+                             <Button variant="outline" size="sm" disabled>View Predictions</Button>
+                         </CardFooter>
+                   </Card>
 
-                  <ActivityFeed
-                    movements={stockMovements}
-                    isLoading={isLoadingMovements}
-                  />
+                   <Card className="shadow-md">
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2"><Bot className="h-5 w-5"/>Automated Workflows</CardTitle>
+                            <CardDescription>Streamline inventory processes.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                             <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+                                <li>Auto Purchase Orders (Coming Soon)</li>
+                                <li>Movement Approvals (Coming Soon)</li>
+                             </ul>
+                        </CardContent>
+                         <CardFooter>
+                             <Button variant="outline" size="sm" disabled>Configure Workflows</Button>
+                         </CardFooter>
+                   </Card>
+
+                   <Card className="shadow-md">
+                       <CardHeader>
+                           <CardTitle className="text-lg flex items-center gap-2"><Settings2 className="h-5 w-5"/>Integrations</CardTitle>
+                            <CardDescription>Connect with other platforms.</CardDescription>
+                       </CardHeader>
+                       <CardContent>
+                             <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
+                                <li>Supplier Portals (Coming Soon)</li>
+                                <li>Shipping Platforms (Coming Soon)</li>
+                                <li>E-commerce (Coming Soon)</li>
+                             </ul>
+                       </CardContent>
+                        <CardFooter>
+                            <Button variant="outline" size="sm" disabled>Manage Integrations</Button>
+                        </CardFooter>
+                   </Card>
+
 
                </div>
           </main>
