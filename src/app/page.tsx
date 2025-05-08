@@ -18,7 +18,7 @@
     import { useToast } from "@/hooks/use-toast";
     import { QueryClient, QueryClientProvider, useQuery, useMutation, QueryCache } from '@tanstack/react-query';
     import { db, auth } from '@/lib/firebase/firebase';
-    import { collection, getDocs, addDoc, updateDoc, doc, increment, deleteDoc, writeBatch, query, where, runTransaction, setDoc, getDoc, serverTimestamp, Timestamp } from 'firebase/firestore'; // Import Timestamp
+    import { collection, getDocs, addDoc, updateDoc, doc, increment, deleteDoc, writeBatch, query, where, runTransaction, setDoc, getDoc, serverTimestamp, Timestamp, deleteField } from 'firebase/firestore'; // Import Timestamp, deleteField
     import { Skeleton } from '@/components/ui/skeleton';
     import { Button } from '@/components/ui/button';
     import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -36,6 +36,8 @@
     import { MovementTrendChart } from '@/components/charts/movement-trend-chart';
     import { PageHeader } from '@/components/page-header'; // Import PageHeader
     import { ActionsPanel } from '@/components/actions-panel'; // Import ActionsPanel
+    // Removed import for McpChat as dependency is removed
+    // import { McpChat } from '@/components/mcp-chat'; // Import MCP Chat component
 
     const queryClient = new QueryClient({
       queryCache: new QueryCache({
@@ -476,12 +478,20 @@
                   }, {} as Partial<Omit<StockItem, 'id'>>);
 
                   // Remove fields that ended up as undefined AFTER cleaning
-                  const finalUpdateData = Object.entries(cleanData).reduce((acc, [key, value]) => {
-                      if (value !== undefined) {
-                         acc[key as keyof typeof acc] = value;
-                      }
-                      return acc;
-                  }, {} as Partial<Omit<StockItem, 'id'>>);
+                  // Use deleteField() for fields that should be explicitly removed if now undefined
+                  const finalUpdateData: Record<string, any> = {}; // Use Record<string, any> for flexibility
+                  for (const [key, value] of Object.entries(cleanData)) {
+                     if (value === undefined) {
+                        // Check if this key existed in the original item to decide if we need to delete it
+                        const originalValue = item[key as keyof StockItem];
+                        if (originalValue !== undefined) {
+                            finalUpdateData[key] = deleteField(); // Use deleteField() to remove the field
+                        }
+                        // If original value was also undefined, do nothing
+                     } else {
+                         finalUpdateData[key] = value;
+                     }
+                  }
 
 
                  if (Object.keys(finalUpdateData).length === 0) {
@@ -878,7 +888,7 @@
         // Trigger low stock alert checks when items or settings change
         useEffect(() => {
              // Debounce or limit frequency if needed
-            if (!isLoading && stockItems.length > 0 && !isAdmin) { // Check isAdmin here
+            if (!isLoading && stockItems.length > 0) { // Only check if not loading and items exist
                 let lowStockMessages: string[] = [];
                 stockItems.forEach(item => {
                     // Use item-specific minimum if available, otherwise global threshold
@@ -906,7 +916,7 @@
                      }
                 }
             }
-        }, [stockItems, adminSettings, isLoadingItems, isLoadingSettings, isAdmin, user, toast, isLoading]); // Added isLoading to dependencies
+        }, [stockItems, adminSettings, isLoading, toast]); // Simplified dependencies
 
 
         const handleSaveSettings = (settings: AdminSettings) => {
@@ -1064,7 +1074,7 @@
                          <ItemSearch
                              searchQuery={searchQuery}
                              onSearchChange={handleSearchChange}
-                             placeholder="Search items by name, barcode, etc..."
+                             placeholder="Search items by name, barcode, category, etc..."
                           />
                          {isLoadingItems && (
                           <div className="space-y-2 pt-4">
@@ -1127,8 +1137,8 @@
                </div>
 
 
-              {/* Right Column: Actions Panel & Activity Feed */}
-              <div className="lg:col-span-1 space-y-6">
+              {/* Right Column: Actions Panel, MCP Chat & Activity Feed */}
+              <div className="lg:col-span-1 space-y-6 flex flex-col">
                  <ActionsPanel
                     onPhotoSearchClick={() => setIsPhotoSearchOpen(true)}
                     onAddStockClick={() => { /* Consider opening Add Stock Tab directly */ }}
@@ -1140,6 +1150,21 @@
                         else if (action === 'out') handleStockOutSubmit({ itemId: item.id, quantity: 1 });
                     }}
                   />
+
+                  {/* MCP Chat Component Placeholder - Render only if McpChat exists */}
+                  {/* {typeof McpChat !== 'undefined' && (
+                     <div className="flex-grow min-h-[300px]">
+                       <McpChat />
+                     </div>
+                  )} */}
+                   {/* Placeholder while McpChat is removed */}
+                   <Card className="shadow-lg rounded-xl h-full flex flex-col">
+                      <CardHeader><CardTitle>Tool Chat (Coming Soon)</CardTitle></CardHeader>
+                      <CardContent className="flex-grow flex items-center justify-center text-muted-foreground">
+                          <p>MCP Chat integration pending.</p>
+                      </CardContent>
+                   </Card>
+
 
                   <ActivityFeed
                     movements={stockMovements}
@@ -1289,14 +1314,5 @@
               </QueryClientProvider>
          );
      }
-    
-    
-    
-    
-
-    
 
 
-    
-
-    
