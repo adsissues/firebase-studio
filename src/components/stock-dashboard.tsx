@@ -28,24 +28,39 @@ interface StockDashboardProps {
   globalLowStockThreshold: number;
 }
 
+// Helper function to determine the status priority for sorting
+const getItemStatusPriority = (item: StockItem, threshold: number): number => {
+    const effectiveThreshold = item.minimumStock !== undefined ? item.minimumStock : threshold;
+    const { currentStock } = item;
+
+    if (currentStock > 0 && currentStock <= effectiveThreshold) {
+      return 1; // Low Stock - Highest priority
+    } else if (currentStock === 0) {
+      return 3; // Out of Stock - Lowest priority
+    } else {
+      return 2; // Okay - Middle priority
+    }
+};
+
+
 export function StockDashboard({ items, onView, onEdit, onDelete, isAdmin = false, globalLowStockThreshold }: StockDashboardProps) {
   const { user } = useAuth();
 
-  const getStatus = (item: StockItem) => {
+  const getStatusBadge = (item: StockItem) => {
     const effectiveThreshold = item.minimumStock !== undefined ? item.minimumStock : globalLowStockThreshold;
     const { currentStock } = item;
 
     if (currentStock === 0) {
       return (
         <Badge variant="destructive" className="flex items-center gap-1 text-xs whitespace-nowrap">
-          <AlertTriangle className="h-3 w-3" />
+          <AlertTriangle className="mr-1 h-3 w-3" />
           Out of Stock
         </Badge>
       );
     } else if (currentStock <= effectiveThreshold) {
        return (
          <Badge variant="destructive" className="flex items-center gap-1 text-xs whitespace-nowrap">
-           <TrendingDown className="h-3 w-3" />
+           <TrendingDown className="mr-1 h-3 w-3" />
            Low Stock
          </Badge>
        );
@@ -53,7 +68,7 @@ export function StockDashboard({ items, onView, onEdit, onDelete, isAdmin = fals
     else {
       return (
         <Badge variant="secondary" className="flex items-center gap-1 text-xs whitespace-nowrap">
-           <Circle className="h-3 w-3" />
+           <Circle className="mr-1 h-3 w-3" />
            Okay
          </Badge>
        );
@@ -141,6 +156,15 @@ export function StockDashboard({ items, onView, onEdit, onDelete, isAdmin = fals
     return item.userId === user.uid;
   };
 
+  // Sort items: Low Stock first, then Okay, then Out of Stock
+  const sortedItems = React.useMemo(() => {
+    return [...items].sort((a, b) => {
+      const priorityA = getItemStatusPriority(a, globalLowStockThreshold);
+      const priorityB = getItemStatusPriority(b, globalLowStockThreshold);
+      return priorityA - priorityB; // Sorts in ascending order (1, 2, 3)
+    });
+  }, [items, globalLowStockThreshold]);
+
 
   return (
     <div className="rounded-lg border shadow-sm overflow-hidden">
@@ -165,17 +189,17 @@ export function StockDashboard({ items, onView, onEdit, onDelete, isAdmin = fals
           </TableRow>
         </TableHeader>
         <TableBody key="body">
-          {items.length === 0 ? (
+          {sortedItems.length === 0 ? (
             <TableRow>
               <TableCell colSpan={isAdmin ? 12 : 11} className="h-24 text-center text-muted-foreground">
                 No stock items found matching your search.
               </TableCell>
             </TableRow>
           ) : (
-            items.map((item) => {
-                const effectiveThreshold = item.minimumStock !== undefined ? item.minimumStock : globalLowStockThreshold;
-                const isLowStock = item.currentStock > 0 && item.currentStock <= effectiveThreshold;
-                const isOutOfStock = item.currentStock === 0;
+            sortedItems.map((item) => {
+                const statusPriority = getItemStatusPriority(item, globalLowStockThreshold);
+                const isLowStock = statusPriority === 1;
+                const isOutOfStock = statusPriority === 3;
 
                return (
                  <TableRow
@@ -196,7 +220,7 @@ export function StockDashboard({ items, onView, onEdit, onDelete, isAdmin = fals
                       isAdmin && <TableCell key="owner" className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(UserCircle, item.userId, 'User ID', item.userId)}</TableCell>,
                       <TableCell key="current" className="text-right font-mono">{item.currentStock}</TableCell>,
                       <TableCell key="min" className="text-right font-mono text-muted-foreground">{item.minimumStock ?? '-'}</TableCell>,
-                      <TableCell key="status" className="text-center">{getStatus(item)}</TableCell>,
+                      <TableCell key="status" className="text-center">{getStatusBadge(item)}</TableCell>,
                       <TableCell key="actions" className="text-center">
                         {canPerformAction(item) ? (
                           <div className="flex justify-center gap-1">
