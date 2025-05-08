@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from 'react';
@@ -8,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Camera, ScanBarcode, PlusCircle, MinusCircle, SearchIcon, Clock, Layers, RefreshCw } from 'lucide-react'; // Added Layers, RefreshCw
 import type { StockItem } from '@/types';
+import { Restock } from 'lucide-react';
 
 interface ActionsPanelProps {
   onPhotoSearchClick: () => void;
@@ -37,7 +37,9 @@ export function ActionsPanel({
     
       
         
-          Quick Actions
+          
+            Quick Actions
+          
         
         
           {/* Search & Scan Buttons */}
@@ -58,17 +60,21 @@ export function ActionsPanel({
 
            {/* Quick Action Templates Placeholder */}
            
-             Action Templates (Coming Soon)
              
+               Action Templates (Coming Soon)
+             
+              
                 Template: Regular Delivery
                 Template: Transfer
              
+           
          
 
         {/* Frequently Used Items (Optional Section) */}
         {frequentlyUsedItems.length > 0 && (
            
-             Frequent Items
+             
+               Frequent Items
              
               
                 
@@ -85,22 +91,31 @@ export function ActionsPanel({
                      
                         
                           
-                        
+                            
+                          
+                          
+                            
+                          
                          
                            
-                         
-                        
+                            
+                          
                          
                            
+                            
+                          
                          
-                        
+                           
+                            
                           
                         
                      
                    
                 ))}
                  {filteredFrequentItems.length === 0 && searchTerm && (
-                    No matching frequent items.
+                    
+                      No matching frequent items.
+                    
                 )}
              
            
@@ -109,5 +124,4 @@ export function ActionsPanel({
     
   );
 }
-
-    
+"
