@@ -6,9 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Camera, ScanBarcode, PlusCircle, MinusCircle, SearchIcon, Clock, Layers, RefreshCw } from 'lucide-react'; // Added Layers, RefreshCw
+import { Camera, ScanBarcode, PlusCircle, MinusCircle, SearchIcon, RefreshCw as RestockIcon } from 'lucide-react'; // Use RestockIcon alias
 import type { StockItem } from '@/types';
-// Removed incorrect import: import { Restock } from 'lucide-react';
 
 interface ActionsPanelProps {
   onPhotoSearchClick: () => void;
@@ -41,7 +40,7 @@ export function ActionsPanel({
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Search & Scan Buttons */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2"> {/* Adjust columns if removing batch scan */}
           <Button
             variant="outline"
             onClick={onPhotoSearchClick}
@@ -58,24 +57,10 @@ export function ActionsPanel({
           >
             <ScanBarcode className="mr-2" /> Scan Item
           </Button>
-          <Button
-              variant="outline"
-              disabled={isLoading}
-              title="Batch Scan (Coming Soon)"
-              className="flex-grow"
-          >
-              <Layers className="mr-2"/> Batch Scan
-          </Button>
+           {/* Batch Scan button removed */}
         </div>
 
-         {/* Quick Action Templates Placeholder */}
-         <div className="space-y-2 pt-4 border-t">
-            <h4 className="text-sm font-medium text-muted-foreground">Action Templates (Coming Soon)</h4>
-           <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" disabled><Clock className="mr-1 h-3 w-3"/> Template: Regular Delivery</Button>
-                <Button variant="outline" size="sm" disabled><RefreshCw className="mr-1 h-3 w-3"/> Template: Transfer</Button>
-            </div>
-        </div>
+         {/* Action Templates section removed */}
 
 
         {/* Frequently Used Items (Optional Section) */}
@@ -103,9 +88,9 @@ export function ActionsPanel({
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onQuickAction('out', item)} disabled={isLoading || item.currentStock <= 0} title={`Remove 1 ${item.itemName}`}>
                             <MinusCircle className="h-4 w-4 text-destructive" />
                          </Button>
-                         {/* Use RefreshCcw for restock action */}
+                         {/* Use RestockIcon for restock action */}
                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onQuickAction('restock', item)} disabled={isLoading} title={`Restock ${item.itemName}`}>
-                             <RefreshCcw className="h-4 w-4 text-blue-500" />
+                             <RestockIcon className="h-4 w-4 text-blue-500" />
                          </Button>
                      </div>
                    </div>

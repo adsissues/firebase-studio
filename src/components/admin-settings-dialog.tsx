@@ -15,7 +15,7 @@
     import { Label } from '@/components/ui/label';
     import { Switch } from '@/components/ui/switch';
     import { Input } from '@/components/ui/input';
-    import { Bell, Mail, Save, XCircle, AlertTriangle, Loader2, Settings2, Bot, CheckSquare, ClockIcon } from 'lucide-react'; // Added icons
+    import { Bell, Mail, Save, XCircle, AlertTriangle, Loader2 } from 'lucide-react'; // Removed unused icons
     import type { AdminSettings } from '@/types'; // Import updated type
 
     interface AdminSettingsDialogProps {
@@ -31,8 +31,8 @@
       emailNotifications: true,
       pushNotifications: false,
       lowStockThreshold: 10,
-      workflowApprovalRequired: false,
-      defaultLeadTime: 7,
+      workflowApprovalRequired: false, // Kept for potential future use in type, but UI removed
+      defaultLeadTime: 7, // Kept for potential future use in type, but UI removed
     };
 
     export function AdminSettingsDialog({
@@ -46,20 +46,21 @@
       const [pushEnabled, setPushEnabled] = React.useState(currentSettings.pushNotifications);
       const [threshold, setThreshold] = React.useState(currentSettings.lowStockThreshold);
       const [thresholdError, setThresholdError] = React.useState<string | null>(null);
-      // State for new settings placeholders
-      const [workflowApproval, setWorkflowApproval] = React.useState(currentSettings.workflowApprovalRequired ?? false);
-      const [defaultLeadTime, setDefaultLeadTime] = React.useState(currentSettings.defaultLeadTime ?? 7);
-      const [leadTimeError, setLeadTimeError] = React.useState<string | null>(null);
+      // State for removed settings placeholders - removed
+      // const [workflowApproval, setWorkflowApproval] = React.useState(currentSettings.workflowApprovalRequired ?? false);
+      // const [defaultLeadTime, setDefaultLeadTime] = React.useState(currentSettings.defaultLeadTime ?? 7);
+      // const [leadTimeError, setLeadTimeError] = React.useState<string | null>(null);
 
 
       React.useEffect(() => {
         setEmailEnabled(currentSettings.emailNotifications);
         setPushEnabled(currentSettings.pushNotifications);
         setThreshold(currentSettings.lowStockThreshold);
-        setWorkflowApproval(currentSettings.workflowApprovalRequired ?? false);
-        setDefaultLeadTime(currentSettings.defaultLeadTime ?? 7);
+        // Removed state updates for removed settings
+        // setWorkflowApproval(currentSettings.workflowApprovalRequired ?? false);
+        // setDefaultLeadTime(currentSettings.defaultLeadTime ?? 7);
         setThresholdError(null);
-        setLeadTimeError(null);
+        // setLeadTimeError(null);
       }, [isOpen, currentSettings]);
 
       const handleSave = () => {
@@ -73,21 +74,22 @@
              setThresholdError(null);
           }
 
-           if (defaultLeadTime < 0) {
-             setLeadTimeError("Default lead time cannot be negative.");
-             hasError = true;
-           } else {
-              setLeadTimeError(null);
-           }
+           // Lead time validation removed
+           // if (defaultLeadTime < 0) {
+           //   setLeadTimeError("Default lead time cannot be negative.");
+           //   hasError = true;
+           // } else {
+           //    setLeadTimeError(null);
+           // }
 
           if (hasError) return;
 
+          // Save only existing settings
           onSave({
             emailNotifications: emailEnabled,
             pushNotifications: pushEnabled,
             lowStockThreshold: threshold,
-            workflowApprovalRequired: workflowApproval, // Save new settings
-            defaultLeadTime: defaultLeadTime,
+            // Removed workflowApproval and defaultLeadTime from save data
           });
       };
 
@@ -103,18 +105,7 @@
            }
       };
 
-      const handleLeadTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-          const value = parseInt(e.target.value, 10);
-           if (isNaN(value)) {
-               setDefaultLeadTime(0);
-           } else {
-               setDefaultLeadTime(value);
-           }
-            if (leadTimeError && value >= 0) {
-              setLeadTimeError(null);
-            }
-       };
-
+      // handleLeadTimeChange removed
 
       return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -122,7 +113,7 @@
             <DialogHeader>
               <DialogTitle>Admin Settings</DialogTitle>
               <DialogDescription>
-                Configure global settings for notifications, workflows, and forecasting.
+                Configure global settings for notifications.
               </DialogDescription>
             </DialogHeader>
 
@@ -182,62 +173,9 @@
                      </div>
                 </div>
 
-                 {/* Workflow Section Placeholder */}
-                 <div className="space-y-4 border p-4 rounded-md opacity-50">
-                    <h3 className="font-semibold text-lg mb-2 flex items-center gap-2"><Bot className="h-5 w-5"/>Workflows (Coming Soon)</h3>
-                    <div className="flex items-center justify-between space-x-2">
-                      <Label htmlFor="workflow-approval" className="flex items-center gap-2">
-                        <CheckSquare className="h-4 w-4"/> Require Approval for Large Movements
-                      </Label>
-                      <Switch
-                        id="workflow-approval"
-                        checked={workflowApproval}
-                        onCheckedChange={setWorkflowApproval}
-                        disabled={true} // Placeholder
-                        aria-label="Toggle workflow approval"
-                      />
-                    </div>
-                     <p className="text-xs text-muted-foreground">
-                         Configure automated purchase orders and approval rules later.
-                     </p>
-                 </div>
-
-                  {/* Forecasting/Analytics Section Placeholder */}
-                 <div className="space-y-4 border p-4 rounded-md opacity-50">
-                    <h3 className="font-semibold text-lg mb-2 flex items-center gap-2"><ClockIcon className="h-5 w-5"/>Forecasting (Coming Soon)</h3>
-                    {/* Default Lead Time */}
-                   <div className="space-y-1">
-                     <Label htmlFor="default-lead-time" className="text-sm font-medium">
-                       Default Lead Time (Days)
-                     </Label>
-                     <Input
-                        id="default-lead-time"
-                        type="number"
-                        value={defaultLeadTime}
-                        onChange={handleLeadTimeChange}
-                        className={leadTimeError ? 'border-destructive' : ''}
-                        min="0"
-                        step="1"
-                        disabled={true} // Placeholder
-                      />
-                      {leadTimeError && (
-                         <p className="text-xs text-destructive flex items-center gap-1">
-                             <AlertTriangle className="h-3 w-3"/>{leadTimeError}
-                         </p>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                          Used for automatic reorder point calculations (item-specific times override this).
-                      </p>
-                   </div>
-                 </div>
-
-                 {/* Integrations Section Placeholder */}
-                  <div className="space-y-4 border p-4 rounded-md opacity-50">
-                     <h3 className="font-semibold text-lg mb-2 flex items-center gap-2"><Settings2 className="h-5 w-5"/>Integrations (Coming Soon)</h3>
-                     <p className="text-xs text-muted-foreground">
-                         Connect with supplier portals, shipping platforms, and e-commerce later.
-                     </p>
-                  </div>
+                 {/* Workflow Section Placeholder Removed */}
+                 {/* Forecasting/Analytics Section Placeholder Removed */}
+                 {/* Integrations Section Placeholder Removed */}
 
             </div>
 

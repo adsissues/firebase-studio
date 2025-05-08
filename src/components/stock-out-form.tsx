@@ -16,7 +16,7 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea'; // Import Textarea
+// Removed Textarea import as notes are removed
 import {
   Select,
   SelectContent,
@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'; // Import Card components
 import type { StockItem, StockMovementLog } from '@/types'; // Import StockMovementLog
-import { MinusCircle, Loader2, ScanBarcode, Hash, MessageSquare } from 'lucide-react'; // Added Hash, MessageSquare
+import { MinusCircle, Loader2, ScanBarcode } from 'lucide-react'; // Removed unused icons Hash, MessageSquare
 import { useAuth } from '@/context/auth-context';
 import { scanBarcode } from '@/services/barcode-scanner';
 import { useToast } from "@/hooks/use-toast";
@@ -37,7 +37,7 @@ interface StockOutFormProps {
   isLoading?: boolean;
 }
 
-// Updated schema to include optional notes and batch number
+// Updated schema - removed optional notes and batch number
 const createFormSchema = (items: StockItem[]) => z.object({
   barcode: z.string().optional().or(z.literal('')),
   itemId: z.string().min(1, { message: 'Please select an item or scan a barcode.' }),
@@ -45,8 +45,7 @@ const createFormSchema = (items: StockItem[]) => z.object({
     .number({ invalid_type_error: 'Quantity must be a number.' })
     .int({ message: 'Quantity must be a whole number.' })
     .positive({ message: 'Quantity must be greater than zero.' }),
-  batchNumber: z.string().max(50).optional().or(z.literal('')), // Optional batch number
-  notes: z.string().max(200).optional().or(z.literal('')), // Optional notes
+  // Removed batchNumber and notes
 }).refine(
   (data) => {
     const selectedItem = items.find(item => item.id === data.itemId);
@@ -73,15 +72,15 @@ const createFormSchema = (items: StockItem[]) => z.object({
 );
 
 
-// Type for form state, includes new fields
-export type StockOutFormData = z.infer<ReturnType<typeof createFormSchema>>;
-// Type for data submitted, now potentially including notes and batch
-export type StockOutFormDataSubmit = Pick<StockOutFormData, 'itemId' | 'quantity' | 'notes' | 'batchNumber'>;
+// Type for form state - reflects removed fields
+export type StockOutFormData = Omit<z.infer<ReturnType<typeof createFormSchema>>, 'batchNumber' | 'notes'>;
+// Type for data submitted - reflects removed fields
+export type StockOutFormDataSubmit = Pick<StockOutFormData, 'itemId' | 'quantity'>;
 
 export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFormProps) {
    const { user, isAdmin } = useAuth();
    const { toast } = useToast();
-   const [isScanningBarcode, setIsScanningBarcode] = React.useState(false); // Initialized to false
+   const [isScanningBarcode, setIsScanningBarcode] = React.useState(false);
 
   const userVisibleItems = React.useMemo(() => {
       if (!user) return [];
@@ -101,8 +100,7 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
       barcode: '',
       itemId: '',
       quantity: 1,
-      batchNumber: '', // Initialize new fields
-      notes: '',
+      // Removed batchNumber and notes default values
     },
     context: { items: userVisibleItems },
     mode: "onChange",
@@ -121,7 +119,7 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
             if (matchedItem) {
                  if (matchedItem.currentStock > 0) {
                     form.setValue('itemId', matchedItem.id, { shouldValidate: true });
-                    form.setValue('batchNumber', matchedItem.batchNumber || '', { shouldValidate: true }); // Pre-fill batch if item has one
+                    // Removed pre-fill for batchNumber
                     toast({ title: "Item Found", description: `${matchedItem.itemName} selected.` });
                  } else {
                      form.setValue('itemId', '', { shouldValidate: true });
@@ -143,19 +141,17 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
 
   function handleFormSubmit(values: StockOutFormData) {
     console.log("Stock Out:", values);
-    // Submit includes optional fields now
+    // Submit only itemId and quantity
     onSubmit({
         itemId: values.itemId,
         quantity: values.quantity,
-        notes: values.notes || undefined,
-        batchNumber: values.batchNumber || undefined
     });
   }
 
    React.useEffect(() => {
      if (!isLoading && form.formState.isSubmitSuccessful) {
-        // Reset includes new fields
-        form.reset({ barcode: '', itemId: '', quantity: 1, batchNumber: '', notes: '' });
+        // Reset includes removed fields
+        form.reset({ barcode: '', itemId: '', quantity: 1 });
      }
    }, [isLoading, form.formState.isSubmitSuccessful, form.reset]);
 
@@ -187,10 +183,7 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
                        >
                          {isScanningBarcode ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanBarcode className="h-4 w-4" />}
                        </Button>
-                        {/* Placeholder for Batch Scan */}
-                        <Button type="button" variant="outline" size="icon" disabled title="Batch Scan (Coming Soon)">
-                            <ScanBarcode className="h-4 w-4 opacity-50" />
-                        </Button>
+                        {/* Batch Scan button removed */}
                    </div>
                    <FormDescription>
                      Scan an item's barcode to select it automatically.
@@ -260,36 +253,8 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
             )}
           />
 
-            {/* Optional Batch Number Field */}
-             <FormField
-               control={form.control}
-               name="batchNumber"
-               render={({ field }) => (
-                 <FormItem>
-                   <FormLabel className="flex items-center gap-1 text-muted-foreground"><Hash className="h-3 w-3"/>Batch/Lot Number</FormLabel>
-                   <FormControl>
-                     <Input placeholder="Optional batch/lot code" {...field} />
-                   </FormControl>
-                    <FormDescription className="text-xs">Specify the batch if applicable.</FormDescription>
-                   <FormMessage />
-                 </FormItem>
-               )}
-             />
-
-            {/* Optional Notes Field */}
-             <FormField
-               control={form.control}
-               name="notes"
-               render={({ field }) => (
-                 <FormItem>
-                   <FormLabel className="flex items-center gap-1 text-muted-foreground"><MessageSquare className="h-3 w-3"/>Notes</FormLabel>
-                   <FormControl>
-                     <Textarea placeholder="Optional notes about this stock movement..." {...field} />
-                   </FormControl>
-                   <FormMessage />
-                 </FormItem>
-               )}
-             />
+            {/* Optional Batch Number Field Removed */}
+            {/* Optional Notes Field Removed */}
 
          </fieldset>
          <Button type="submit" className="w-full bg-destructive hover:bg-destructive/90" disabled={isLoading || isScanningBarcode || !user}>

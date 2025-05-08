@@ -1094,7 +1094,7 @@
                </div>
 
 
-              {/* Right Column: Actions, Feed & Advanced Features */}
+              {/* Right Column: Actions, Feed */}
               <div className="lg:col-span-1 space-y-6 flex flex-col">
                  <ActionsPanel
                     onPhotoSearchClick={() => setIsPhotoSearchOpen(true)}
@@ -1109,79 +1109,11 @@
                     }}
                   />
 
-                    {/* Activity Feed */}
+                   {/* Activity Feed */}
                    <ActivityFeed
                       movements={stockMovements}
                       isLoading={isLoadingMovements}
                     />
-
-                   {/* Placeholders for Advanced Features */}
-                   <Card className="shadow-md">
-                        <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2"><BarChart2 className="h-5 w-5"/>Advanced Reporting</CardTitle>
-                            <CardDescription>Analyze inventory performance.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
-                                <li>Inventory Turnover (Coming Soon)</li>
-                                <li>Cost Analysis (Coming Soon)</li>
-                                <li>Supplier Performance (Coming Soon)</li>
-                            </ul>
-                        </CardContent>
-                        <CardFooter>
-                             <Button variant="outline" size="sm" disabled>View Reports</Button>
-                        </CardFooter>
-                   </Card>
-
-                   <Card className="shadow-md">
-                        <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2"><BrainCircuit className="h-5 w-5"/>Predictive Analytics</CardTitle>
-                            <CardDescription>Forecast demand and optimize stock.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                             <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
-                                <li>Demand Forecasting (Coming Soon)</li>
-                                <li>Automatic Reorder Points (Coming Soon)</li>
-                             </ul>
-                        </CardContent>
-                        <CardFooter>
-                             <Button variant="outline" size="sm" disabled>View Predictions</Button>
-                         </CardFooter>
-                   </Card>
-
-                   <Card className="shadow-md">
-                        <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2"><Bot className="h-5 w-5"/>Automated Workflows</CardTitle>
-                            <CardDescription>Streamline inventory processes.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                             <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
-                                <li>Auto Purchase Orders (Coming Soon)</li>
-                                <li>Movement Approvals (Coming Soon)</li>
-                             </ul>
-                        </CardContent>
-                         <CardFooter>
-                             <Button variant="outline" size="sm" disabled>Configure Workflows</Button>
-                         </CardFooter>
-                   </Card>
-
-                   <Card className="shadow-md">
-                       <CardHeader>
-                           <CardTitle className="text-lg flex items-center gap-2"><Settings2 className="h-5 w-5"/>Integrations</CardTitle>
-                            <CardDescription>Connect with other platforms.</CardDescription>
-                       </CardHeader>
-                       <CardContent>
-                             <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
-                                <li>Supplier Portals (Coming Soon)</li>
-                                <li>Shipping Platforms (Coming Soon)</li>
-                                <li>E-commerce (Coming Soon)</li>
-                             </ul>
-                       </CardContent>
-                        <CardFooter>
-                            <Button variant="outline" size="sm" disabled>Manage Integrations</Button>
-                        </CardFooter>
-                   </Card>
-
 
                </div>
           </main>
@@ -1326,5 +1258,6 @@
               </QueryClientProvider>
          );
      }
+
 
 

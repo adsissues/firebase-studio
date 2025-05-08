@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { StockItem } from '@/types';
-import { Barcode, MapPin, Tag, Building, Info, Package, AlertTriangle, Circle, MapPinned, XCircle, ImageIcon, UserCircle, DollarSign, Clock, Hash, TrendingDown } from 'lucide-react'; // Added TrendingDown
+import { Barcode, MapPin, Tag, Building, Info, Package, AlertTriangle, Circle, MapPinned, XCircle, ImageIcon, UserCircle, TrendingDown } from 'lucide-react'; // Removed unused icons DollarSign, Clock, Hash
 import { useAuth } from '@/context/auth-context';
 import { cn } from "@/lib/utils"; // Import cn utility
 
@@ -57,11 +57,12 @@ export function ViewItemDialog({ isOpen, onClose, item }: ViewItemDialogProps) {
     if (value === undefined || value === null || value === '') return null;
     const Icon = icon;
     let displayValue = String(value); // Ensure displayValue is a string
-    if (formatAsCurrency && typeof value === 'number') {
-        displayValue = `$${value.toFixed(2)}`; // Simple currency formatting
-    } else if (label === "Lead Time (Days)" && typeof value === 'number') {
-         displayValue = `${value} days`;
-    }
+    // Currency and Lead Time formatting removed as fields are removed
+    // if (formatAsCurrency && typeof value === 'number') {
+    //     displayValue = `$${value.toFixed(2)}`; // Simple currency formatting
+    // } else if (label === "Lead Time (Days)" && typeof value === 'number') {
+    //      displayValue = `${value} days`;
+    // }
 
     return (
        <div className="grid grid-cols-3 gap-2 py-2 border-b last:border-b-0">
@@ -104,12 +105,12 @@ export function ViewItemDialog({ isOpen, onClose, item }: ViewItemDialogProps) {
             {renderDetailRow("Category", item.category, Tag)}
             {renderDetailRow("Supplier", item.supplier, Building)}
             {renderDetailRow("Barcode", item.barcode, Barcode)}
-            {renderDetailRow("Batch Number", item.batchNumber, Hash)} {/* Added Batch Number */}
+            {/* Batch Number row removed */}
             {renderDetailRow("Storage Location", item.location, MapPin)}
             {item.locationCoords && renderDetailRow("GPS Coordinates", `Lat: ${item.locationCoords.latitude.toFixed(5)}, Lon: ${item.locationCoords.longitude.toFixed(5)}`, MapPinned)}
             {renderDetailRow("Description", item.description, Info)}
-            {renderDetailRow("Cost Price", item.costPrice, DollarSign, true)} {/* Added Cost Price */}
-            {renderDetailRow("Lead Time (Days)", item.leadTime, Clock)} {/* Added Lead Time */}
+            {/* Cost Price row removed */}
+            {/* Lead Time row removed */}
             {isAdmin && renderDetailRow("Owner User ID", item.userId, UserCircle)}
           </div>
         </ScrollArea>

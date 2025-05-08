@@ -20,10 +20,7 @@ export interface StockItem {
   photoUrl?: string; // Optional photo data URI or URL
   locationCoords?: LocationCoords; // Optional geographical coordinates
   userId: string; // Added userId to associate item with a user
-  // Fields for future enhancements
-  costPrice?: number; // Optional: For cost analysis
-  leadTime?: number; // Optional: Days for supplier delivery (for reorder points)
-  batchNumber?: string; // Optional: For batch tracking
+  // Removed fields: costPrice, leadTime, batchNumber
 }
 
 // Define a User type extending FirebaseUser with role information
@@ -36,9 +33,9 @@ export interface AdminSettings {
   emailNotifications: boolean;
   pushNotifications: boolean; // Placeholder for future push notification implementation
   lowStockThreshold: number; // Global threshold for low stock notifications, unless overridden by item.minimumStock
-  // Placeholders for future settings
-  workflowApprovalRequired?: boolean; // Example workflow setting
-  defaultLeadTime?: number; // Example setting for forecasting
+  // Removed fields: workflowApprovalRequired, defaultLeadTime
+  workflowApprovalRequired?: boolean; // Keep in type definition for potential future reinstatement
+  defaultLeadTime?: number; // Keep in type definition for potential future reinstatement
 }
 
 // Represents a single stock movement event
@@ -52,30 +49,25 @@ export interface StockMovementLog {
     timestamp: Timestamp; // Firestore Timestamp of the event
     userId: string; // ID of the user who performed the action
     userEmail?: string; // Optional: Email of the user for display
-    batchNumber?: string; // Optional: Link movement to a specific batch
-    notes?: string; // Optional: Notes for the movement
+    batchNumber?: string; // Kept optional batch number, even if form input removed for now
+    notes?: string; // Kept optional notes, even if form input removed for now
 }
 
 
-// Placeholder for Stock Out log data if needed later
-// export interface StockOutLog {
+// Removed placeholder types for reporting/analytics
+
+// export interface InventoryTurnoverReport {
 //     itemId: string;
-//     quantity: number;
+//     itemName: string;
+//     turnoverRate: number;
+//     period: string; // e.g., 'monthly', 'quarterly'
 // }
 
-// Placeholder types for future reporting/analytics
-export interface InventoryTurnoverReport {
-    itemId: string;
-    itemName: string;
-    turnoverRate: number;
-    period: string; // e.g., 'monthly', 'quarterly'
-}
-
-export interface SupplierPerformance {
-    supplierId: string;
-    supplierName: string;
-    averageDeliveryTime: number; // days
-    onTimeDeliveryRate: number; // percentage
-    qualityIssueRate: number; // percentage
-}
+// export interface SupplierPerformance {
+//     supplierId: string;
+//     supplierName: string;
+//     averageDeliveryTime: number; // days
+//     onTimeDeliveryRate: number; // percentage
+//     qualityIssueRate: number; // percentage
+// }
 

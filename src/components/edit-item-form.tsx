@@ -18,7 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Save, Loader2, Camera, MapPin, ScanBarcode, VideoOff, XCircle, DollarSign, Clock, Hash } from 'lucide-react';
+import { Save, Loader2, Camera, MapPin, ScanBarcode, VideoOff, XCircle } from 'lucide-react'; // Removed unused icons
 import type { StockItem, LocationCoords } from '@/types';
 import { scanBarcode } from '@/services/barcode-scanner';
 import { captureProductPhoto } from '@/services/camera';
@@ -32,7 +32,7 @@ interface EditItemFormProps {
   onCancel: () => void; // Function to call when cancelling
 }
 
-// Updated schema to include new optional fields
+// Updated schema - removed optional future fields
 const formSchema = z.object({
   itemName: z.string().min(1, { message: 'Item name is required.' }).max(100),
   currentStock: z.coerce
@@ -54,27 +54,15 @@ const formSchema = z.object({
     latitude: z.number(),
     longitude: z.number(),
   }).optional(),
-  // New optional fields
-   costPrice: z.coerce
-    .number({ invalid_type_error: 'Cost price must be a number.' })
-    .nonnegative({ message: 'Cost price cannot be negative.' })
-    .optional(),
-  leadTime: z.coerce
-    .number({ invalid_type_error: 'Lead time must be a number.' })
-    .int({ message: 'Lead time must be a whole number.' })
-    .nonnegative({ message: 'Lead time cannot be negative.' })
-    .optional(),
-  batchNumber: z.string().max(50).optional().or(z.literal('')),
+  // Removed optional fields: costPrice, leadTime, batchNumber
 });
 
-// Update EditItemFormData type to reflect the schema change
+// Update EditItemFormData type - reflects removed fields
 export type EditItemFormData = Omit<z.infer<typeof formSchema>, 'locationCoords' | 'photoUrl'> & {
     photoUrl?: string;
     locationCoords?: LocationCoords;
     minimumStock?: number;
-    costPrice?: number; // Add new optional fields
-    leadTime?: number;
-    batchNumber?: string;
+    // Removed optional fields: costPrice, leadTime, batchNumber
 };
 
 
@@ -87,7 +75,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
   const [capturedLocation, setCapturedLocation] = React.useState<LocationCoords | null>(item.locationCoords || null);
   const [showCameraFeed, setShowCameraFeed] = React.useState(false);
   const [isCapturingLocation, setIsCapturingLocation] = React.useState(false);
-  const [isScanningBarcode, setIsScanningBarcode] = React.useState(false); // Corrected state name
+  const [isScanningBarcode, setIsScanningBarcode] = React.useState(false);
 
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -103,9 +91,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
       supplier: item.supplier || '',
       photoUrl: item.photoUrl || '',
       locationCoords: item.locationCoords || undefined,
-      costPrice: item.costPrice ?? undefined, // Initialize new fields
-      leadTime: item.leadTime ?? undefined,
-      batchNumber: item.batchNumber || '',
+      // Removed default values for costPrice, leadTime, batchNumber
     },
   });
 
@@ -209,9 +195,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
        supplier: values.supplier || undefined,
        photoUrl: capturedPhotoUrl || values.photoUrl || undefined,
        locationCoords: capturedLocation || values.locationCoords || undefined,
-       costPrice: values.costPrice, // Include new fields
-       leadTime: values.leadTime,
-       batchNumber: values.batchNumber || undefined,
+       // Removed costPrice, leadTime, batchNumber
      };
      console.log("Data Submitted:", submitData);
     onSubmit(submitData);
@@ -300,10 +284,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                        >
                          {isScanningBarcode ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanBarcode className="h-4 w-4" />}
                        </Button>
-                        {/* Placeholder for Batch Scan */}
-                        <Button type="button" variant="outline" size="icon" disabled title="Batch Scan (Coming Soon)">
-                            <ScanBarcode className="h-4 w-4 opacity-50" />
-                        </Button>
+                        {/* Batch Scan button removed */}
                    </div>
                    <FormMessage />
                  </FormItem>
@@ -384,67 +365,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
               )}
             />
 
-             {/* Optional Fields for Future Enhancements */}
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t mt-4">
-                 <FormField
-                  control={form.control}
-                  name="costPrice"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center gap-1 text-muted-foreground"><DollarSign className="h-3 w-3"/>Cost Price</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="Optional cost"
-                          {...field}
-                          value={field.value ?? ''}
-                          onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))}
-                          />
-                      </FormControl>
-                       <FormDescription className="text-xs">Per item cost.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                 <FormField
-                  control={form.control}
-                  name="leadTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center gap-1 text-muted-foreground"><Clock className="h-3 w-3"/>Lead Time (Days)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="1"
-                          placeholder="Optional supplier lead time"
-                          {...field}
-                          value={field.value ?? ''}
-                          onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))}
-                          />
-                      </FormControl>
-                       <FormDescription className="text-xs">Delivery time.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                 <FormField
-                  control={form.control}
-                  name="batchNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                       <FormLabel className="flex items-center gap-1 text-muted-foreground"><Hash className="h-3 w-3"/>Batch/Lot Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Optional batch code" {...field} />
-                      </FormControl>
-                       <FormDescription className="text-xs">For tracking batches.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-             </div>
+             {/* Removed Optional Fields section */}
 
             {/* Photo Section */}
             <FormItem className="pt-4 border-t mt-4">
