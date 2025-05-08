@@ -76,7 +76,7 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
   const [hasCameraPermission, setHasCameraPermission] = React.useState<boolean | null>(null);
   const [capturedPhotoUrl, setCapturedPhotoUrl] = React.useState<string | null>(null);
   const [isCapturingLocation, setIsCapturingLocation] = React.useState(false);
-  const [isScanningBarcode, setIsScanningBarcode] = React.useState(isScanningBarcode);
+  const [isScanningBarcode, setIsScanningBarcode] = React.useState(false); // Fixed initialization
   const [capturedLocation, setCapturedLocation] = React.useState<LocationCoords | null>(null);
   const [showCameraFeed, setShowCameraFeed] = React.useState(false);
 
@@ -492,4 +492,5 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
     </Form>
   );
 }
+
 
