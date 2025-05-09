@@ -39,6 +39,7 @@
     import { PageHeader } from '@/components/page-header'; // Import PageHeader
     import { ActionsPanel } from '@/components/actions-panel'; // Import ActionsPanel
     import { Separator } from '@/components/ui/separator';
+    import { Badge } from "@/components/ui/badge"; // Import Badge component
 
     const queryClient = new QueryClient({
       queryCache: new QueryCache({
@@ -140,7 +141,7 @@
                   photoUrl: item.photoUrl || undefined,
                   locationCoords: item.locationCoords || undefined,
                   userId: item.userId || user.uid, 
-                  // costPrice: item.costPrice !== undefined ? Number(item.costPrice) : undefined, // Re-add if needed for value reports
+                  costPrice: item.costPrice !== undefined ? Number(item.costPrice) : undefined,
               }));
           } catch (err) {
               console.error("Error fetching stock items:", err);
@@ -293,6 +294,7 @@
                            const updatedData = { ...dataToSave };
 
                            updatedData.minimumStock = formData.minimumStock ?? currentData.minimumStock;
+                           updatedData.costPrice = formData.costPrice ?? currentData.costPrice; // Persist costPrice
 
                             const finalUpdateData = Object.keys(updatedData).reduce((acc, key) => {
                                if (updatedData[key as keyof typeof updatedData] !== undefined) {
@@ -333,6 +335,7 @@
                          ...dataToSave,
                          currentStock: quantity,
                          userId: user.uid,
+                         costPrice: formData.costPrice, // Save costPrice for new item
                      };
 
                       const finalNewItemData = Object.entries(newItemDataWithStock).reduce((acc, [key, value]) => {
@@ -418,7 +421,7 @@
 
                  const cleanData = Object.entries(updateData).reduce((acc, [key, value]) => {
                       if (value !== undefined) {
-                          if (key === 'currentStock' || key === 'minimumStock') {
+                          if (key === 'currentStock' || key === 'minimumStock' || key === 'costPrice') {
                               acc[key as keyof typeof acc] = value === '' ? undefined : Number(value);
                           } else if (key === 'userId') {
                               if (isAdmin || value === user.uid) {
@@ -753,7 +756,7 @@
               supplier: data.supplier || undefined,
               photoUrl: data.photoUrl || undefined,
               locationCoords: data.locationCoords || undefined,
-              // costPrice: data.costPrice === undefined || data.costPrice === null ? undefined : Number(data.costPrice), // Re-add if needed
+              costPrice: data.costPrice === undefined || data.costPrice === null ? undefined : Number(data.costPrice),
           };
 
 
@@ -889,7 +892,6 @@
               const todayOut = todayMovements.filter(log => log.type === 'out').length;
               const todayRestock = todayMovements.filter(log => log.type === 'restock').length;
               
-              // Placeholder for inventory value - requires costPrice on items
               const totalInventoryValue = stockItems.reduce((sum, item) => {
                   return sum + (item.currentStock * (item.costPrice ?? 0));
               }, 0);
@@ -902,7 +904,7 @@
                   todayIn,
                   todayOut,
                   todayRestock,
-                  totalInventoryValue: stockItems.some(item => item.costPrice !== undefined) ? totalInventoryValue : undefined, // Only show if costPrice data exists
+                  totalInventoryValue: stockItems.some(item => item.costPrice !== undefined) ? totalInventoryValue : undefined,
               };
           }, [stockItems, stockMovements, adminSettings, isLoading]);
 
@@ -1241,8 +1243,7 @@
                     </Card>
                 </div>
                 <Separator className="my-6"/>
-                 {/* TODO: Placeholder for more advanced reports: Inventory Turnover, Cost Analysis, Supplier Performance */}
-                 <p className="text-sm text-muted-foreground text-center">More advanced reports (Turnover, Cost Analysis, Supplier Performance) coming soon.</p>
+                 <p className="text-sm text-muted-foreground text-center">More reports and analytics coming soon.</p>
             </section>
 
 
@@ -1382,3 +1383,4 @@
               </QueryClientProvider>
          );
      }
+
