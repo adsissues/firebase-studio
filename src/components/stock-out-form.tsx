@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from 'react';
@@ -16,7 +15,6 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-// Removed Textarea import as notes are removed
 import {
   Select,
   SelectContent,
@@ -24,9 +22,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'; // Import Card components
-import type { StockItem, StockMovementLog } from '@/types'; // Import StockMovementLog
-import { MinusCircle, Loader2, ScanBarcode } from 'lucide-react'; // Removed unused icons Hash, MessageSquare
+// Removed Card components as they are not directly used in this simplified form
+import type { StockItem } from '@/types'; 
+import { MinusCircle, Loader2, ScanBarcode } from 'lucide-react'; 
 import { useAuth } from '@/context/auth-context';
 import { scanBarcode } from '@/services/barcode-scanner';
 import { useToast } from "@/hooks/use-toast";
@@ -37,7 +35,7 @@ interface StockOutFormProps {
   isLoading?: boolean;
 }
 
-// Updated schema - removed optional notes and batch number
+// Schema for Stock Out. ItemId and Quantity are essential.
 const createFormSchema = (items: StockItem[]) => z.object({
   barcode: z.string().optional().or(z.literal('')),
   itemId: z.string().min(1, { message: 'Please select an item or scan a barcode.' }),
@@ -45,11 +43,10 @@ const createFormSchema = (items: StockItem[]) => z.object({
     .number({ invalid_type_error: 'Quantity must be a number.' })
     .int({ message: 'Quantity must be a whole number.' })
     .positive({ message: 'Quantity must be greater than zero.' }),
-  // Removed batchNumber and notes
 }).refine(
   (data) => {
     const selectedItem = items.find(item => item.id === data.itemId);
-    if (!selectedItem) return true;
+    if (!selectedItem) return true; // Let itemId validation handle this
     return data.quantity <= selectedItem.currentStock;
   },
   (data) => {
@@ -61,20 +58,19 @@ const createFormSchema = (items: StockItem[]) => z.object({
   }
 ).refine(
     (data) => {
-        if (!data.barcode || !data.itemId) return true;
+        if (!data.barcode || !data.itemId) return true; // If no barcode or item, skip this check
         const selectedItem = items.find(item => item.id === data.itemId);
         return !selectedItem || !selectedItem.barcode || selectedItem.barcode === data.barcode;
     },
     {
         message: "Barcode does not match the selected item.",
-        path: ['barcode'],
+        path: ['barcode'], // Or itemId if preferred for error display
     }
 );
 
-
-// Type for form state - reflects removed fields
-export type StockOutFormData = Omit<z.infer<ReturnType<typeof createFormSchema>>, 'batchNumber' | 'notes'>;
-// Type for data submitted - reflects removed fields
+// Type for form state, now simpler
+export type StockOutFormData = z.infer<ReturnType<typeof createFormSchema>>;
+// Type for data submitted remains focused on essential fields
 export type StockOutFormDataSubmit = Pick<StockOutFormData, 'itemId' | 'quantity'>;
 
 export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFormProps) {
@@ -94,22 +90,21 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
 
   const formSchema = React.useMemo(() => createFormSchema(userVisibleItems), [userVisibleItems]);
 
-  const form = useForm<StockOutFormData>({ // Use StockOutFormData here
+  const form = useForm<StockOutFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       barcode: '',
       itemId: '',
       quantity: 1,
-      // Removed batchNumber and notes default values
     },
-    context: { items: userVisibleItems },
-    mode: "onChange",
+    context: { items: userVisibleItems }, // For refine context
+    mode: "onChange", // Validate on change for better UX
   });
 
     const handleScanBarcode = async () => {
         setIsScanningBarcode(true);
         try {
-            await new Promise(resolve => setTimeout(resolve, 100)); // Short delay
+            await new Promise(resolve => setTimeout(resolve, 100)); 
             const result = await scanBarcode();
             const scannedBarcode = result.barcode;
             form.setValue('barcode', scannedBarcode, { shouldValidate: true });
@@ -119,20 +114,19 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
             if (matchedItem) {
                  if (matchedItem.currentStock > 0) {
                     form.setValue('itemId', matchedItem.id, { shouldValidate: true });
-                    // Removed pre-fill for batchNumber
                     toast({ title: "Item Found", description: `${matchedItem.itemName} selected.` });
                  } else {
-                     form.setValue('itemId', '', { shouldValidate: true });
+                     form.setValue('itemId', '', { shouldValidate: true }); // Clear item if out of stock
                      toast({ variant: "destructive", title: "Out of Stock", description: `${matchedItem.itemName} has no stock available.` });
                  }
             } else {
-                form.setValue('itemId', '', { shouldValidate: true });
+                form.setValue('itemId', '', { shouldValidate: true }); // Clear item if not found
                 toast({ variant: "destructive", title: "Barcode Not Found", description: "No matching item found for this barcode." });
             }
         } catch (error) {
             console.error("Barcode scan error:", error);
             toast({ variant: "destructive", title: "Scan Error", description: "Could not scan barcode." });
-             form.setValue('itemId', '', { shouldValidate: true });
+             form.setValue('itemId', '', { shouldValidate: true }); // Clear item on error
         } finally {
             setIsScanningBarcode(false);
         }
@@ -141,7 +135,6 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
 
   function handleFormSubmit(values: StockOutFormData) {
     console.log("Stock Out:", values);
-    // Submit only itemId and quantity
     onSubmit({
         itemId: values.itemId,
         quantity: values.quantity,
@@ -150,7 +143,6 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
 
    React.useEffect(() => {
      if (!isLoading && form.formState.isSubmitSuccessful) {
-        // Reset includes removed fields
         form.reset({ barcode: '', itemId: '', quantity: 1 });
      }
    }, [isLoading, form.formState.isSubmitSuccessful, form.reset]);
@@ -162,13 +154,12 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
          <fieldset disabled={isLoading || !user} className="space-y-4">
             <h2 className="text-lg font-semibold text-primary mb-4">Log Stock Out</h2>
 
-             {/* Barcode Field */}
              <FormField
                control={form.control}
                name="barcode"
                render={({ field }) => (
                  <FormItem>
-                   <FormLabel>Barcode</FormLabel>
+                   <FormLabel>Barcode (Optional)</FormLabel>
                    <div className="flex gap-2">
                       <FormControl>
                         <Input placeholder="Scan or enter barcode" {...field} className="flex-grow" />
@@ -183,7 +174,6 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
                        >
                          {isScanningBarcode ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanBarcode className="h-4 w-4" />}
                        </Button>
-                        {/* Batch Scan button removed */}
                    </div>
                    <FormDescription>
                      Scan an item's barcode to select it automatically.
@@ -193,7 +183,6 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
                )}
              />
 
-          {/* Item Selection */}
           <FormField
             control={form.control}
             name="itemId"
@@ -208,9 +197,9 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
                   </FormControl>
                   <SelectContent>
                      {!user ? (
-                         <SelectItem value="disabled" disabled>Please log in</SelectItem>
+                         <SelectItem value="disabled-login" disabled>Please log in</SelectItem>
                      ) : availableItems.length === 0 ? (
-                       <SelectItem value="disabled" disabled>
+                       <SelectItem value="disabled-no-items" disabled>
                          No items with stock available
                        </SelectItem>
                      ) : (
@@ -230,7 +219,6 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
             )}
           />
 
-          {/* Quantity Field */}
           <FormField
             control={form.control}
             name="quantity"
@@ -252,10 +240,6 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
               </FormItem>
             )}
           />
-
-            {/* Optional Batch Number Field Removed */}
-            {/* Optional Notes Field Removed */}
-
          </fieldset>
          <Button type="submit" className="w-full bg-destructive hover:bg-destructive/90" disabled={isLoading || isScanningBarcode || !user}>
             {isLoading ? (

@@ -13,6 +13,8 @@
     import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
     import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
     import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+    import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+    import { Label } from "@/components/ui/label";
     import type { StockItem, AdminSettings, StockMovementLog, LocationCoords } from '@/types'; // Import AdminSettings & StockMovementLog
     import { useState, useEffect } from 'react';
     import { useToast } from "@/hooks/use-toast";
@@ -22,7 +24,7 @@
     import { Skeleton } from '@/components/ui/skeleton';
     import { Button } from '@/components/ui/button';
     import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-    import { AlertTriangle, Loader2, Trash2, LogOut, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2 } from 'lucide-react'; // Added new icons
+    import { AlertTriangle, Loader2, Trash2, LogOut, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, DollarSign, Package, TrendingUp, TrendingDown, Clock } from 'lucide-react'; // Added new icons
     import { RequireAuth } from '@/components/auth/require-auth';
     import { useAuth } from '@/context/auth-context';
     import { signOut } from 'firebase/auth';
@@ -36,6 +38,7 @@
     import { MovementTrendChart } from '@/components/charts/movement-trend-chart';
     import { PageHeader } from '@/components/page-header'; // Import PageHeader
     import { ActionsPanel } from '@/components/actions-panel'; // Import ActionsPanel
+    import { Separator } from '@/components/ui/separator';
 
     const queryClient = new QueryClient({
       queryCache: new QueryCache({
@@ -54,14 +57,15 @@
         emailNotifications: true,
         pushNotifications: false,
         lowStockThreshold: 10,
-        workflowApprovalRequired: false, // Default workflow setting
-        defaultLeadTime: 7, // Default lead time setting
     };
 
 
     function StockManagementPageContent() {
       const { user, isAdmin, loading: authLoading } = useAuth(); // Destructure loading state
       const [searchQuery, setSearchQuery] = useState('');
+      const [filterCategory, setFilterCategory] = useState<string | undefined>(undefined);
+      const [filterLocation, setFilterLocation] = useState<string | undefined>(undefined);
+      // TODO: Implement supplier filter: const [filterSupplier, setFilterSupplier] = useState<string | undefined>(undefined);
       const { toast } = useToast();
       const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
       const [itemToEdit, setItemToEdit] = useState<StockItem | null>(null);
@@ -92,8 +96,6 @@
                         return { ...defaultAdminSettings, ...fetchedSettings };
                     } else {
                         console.log("No admin settings found, using defaults.");
-                        // Optionally create default settings document here if it doesn't exist
-                        // await setDoc(settingsDocRef, defaultAdminSettings);
                         return defaultAdminSettings;
                     }
                 } catch (error) {
@@ -125,11 +127,10 @@
               } as StockItem));
               console.log(`Fetched ${itemsList.length} items.`);
 
-              // Add explicit type annotation for the mapped item
               return itemsList.map((item: StockItem) => ({
                   ...item,
                   currentStock: Number(item.currentStock ?? 0),
-                  minimumStock: item.minimumStock !== undefined ? Number(item.minimumStock) : undefined, // Keep undefined if not set
+                  minimumStock: item.minimumStock !== undefined ? Number(item.minimumStock) : undefined,
                   itemName: item.itemName || 'Unknown Item',
                   barcode: item.barcode || undefined,
                   location: item.location || undefined,
@@ -138,10 +139,8 @@
                   supplier: item.supplier || undefined,
                   photoUrl: item.photoUrl || undefined,
                   locationCoords: item.locationCoords || undefined,
-                  userId: item.userId || user.uid, // Ensure userId is present
-                  costPrice: item.costPrice !== undefined ? Number(item.costPrice) : undefined, // Ensure optional fields are typed correctly
-                  leadTime: item.leadTime !== undefined ? Number(item.leadTime) : undefined,
-                  batchNumber: item.batchNumber || undefined,
+                  userId: item.userId || user.uid, 
+                  // costPrice: item.costPrice !== undefined ? Number(item.costPrice) : undefined, // Re-add if needed for value reports
               }));
           } catch (err) {
               console.error("Error fetching stock items:", err);
@@ -153,7 +152,7 @@
               throw err;
           }
         },
-         enabled: !!user, // Enable only when user is logged in
+         enabled: !!user, 
          staleTime: 5 * 60 * 1000,
          refetchOnWindowFocus: true,
       });
@@ -171,7 +170,7 @@
                  const logsList = logSnapshot.docs.map(doc => ({
                      id: doc.id,
                      ...doc.data(),
-                     timestamp: doc.data().timestamp as Timestamp // Ensure timestamp is correctly typed
+                     timestamp: doc.data().timestamp as Timestamp 
                  } as StockMovementLog));
                  console.log(`Fetched ${logsList.length} stock movements.`);
                  logsList.sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
@@ -182,12 +181,11 @@
                  throw err;
              }
          },
-         enabled: !!user, // Enable only when user is logged in
-         staleTime: 2 * 60 * 1000, // Cache for 2 minutes
+         enabled: !!user, 
+         staleTime: 2 * 60 * 1000, 
          refetchOnWindowFocus: true,
       });
 
-      // Helper function to log stock movements
       const logStockMovement = async (item: StockItem, quantityChange: number, newStockLevel: number, type: 'in' | 'out' | 'restock' = quantityChange > 0 ? 'in' : 'out') => {
         if (!user || !db) return;
         try {
@@ -196,15 +194,15 @@
                 itemName: item.itemName,
                 quantityChange: quantityChange,
                 newStockLevel: newStockLevel,
-                type: type, // Use provided type
+                type: type, 
                 userId: user.uid,
                 userEmail: user.email || undefined,
-                timestamp: serverTimestamp(), // Use server timestamp
-                batchNumber: item.batchNumber || undefined, // Include batch number if available
+                timestamp: serverTimestamp(),
+                // batchNumber: item.batchNumber || undefined, // Re-add if batch tracking implemented
             };
             await addDoc(collection(db, 'stockMovements'), logData);
             console.log("Stock movement logged:", logData);
-            queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid] }); // Invalidate movement logs cache
+            queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid] }); 
         } catch (error) {
             console.error("Error logging stock movement:", error);
             toast({ variant: "destructive", title: "Logging Error", description: "Could not log stock movement." });
@@ -212,7 +210,6 @@
     };
 
 
-        // Mutation for adding stock (handles both new items and adding to existing)
         const addStockMutation = useMutation({
             mutationFn: async (formData: AddStockFormData) => {
                 if (!user || !db) throw new Error("User not authenticated or DB not available");
@@ -220,7 +217,6 @@
                 const { itemName, quantity, barcode } = formData;
                 console.log("Adding stock:", formData);
 
-                // --- Duplicate Barcode Check ---
                 if (barcode) {
                     const barcodeQuery = query(collection(db, 'stockItems'), where("barcode", "==", barcode));
                     const barcodeSnapshot = await getDocs(barcodeQuery);
@@ -245,7 +241,6 @@
                          }
                     }
                  }
-                 // --- End Duplicate Barcode Check ---
 
                 const itemsCol = collection(db, 'stockItems');
                 let targetItemQuery;
@@ -268,13 +263,10 @@
                       querySnapshot = await getDocs(targetItemQuery);
                   }
 
-                // Prepare data for update/add, including new optional fields
                  const dataToSave = Object.entries(formData).reduce((acc, [key, value]) => {
                       if (value !== undefined && key !== 'quantity') {
                          if (key === 'minimumStock' && typeof value === 'string') {
                             acc[key as keyof typeof acc] = value === '' ? undefined : Number(value);
-                          } else if ((key === 'costPrice' || key === 'leadTime') && typeof value === 'string') {
-                             acc[key as keyof typeof acc] = value === '' ? undefined : Number(value);
                           } else {
                              acc[key as keyof typeof acc] = value === '' ? undefined : value;
                           }
@@ -285,7 +277,6 @@
                   dataToSave.userId = user.uid;
 
                  if (querySnapshot && !querySnapshot.empty) {
-                     // --- Item exists, update stock ---
                      const existingDoc = querySnapshot.docs[0];
                      const itemDocRef = doc(db, 'stockItems', existingDoc.id);
                      console.log("Item exists, updating stock for ID:", existingDoc.id);
@@ -301,17 +292,12 @@
                            existingItemData = { ...currentData, id: existingDoc.id };
                            const updatedData = { ...dataToSave };
 
-                           // Merge optional fields correctly (keep existing if not provided in form)
                            updatedData.minimumStock = formData.minimumStock ?? currentData.minimumStock;
-                           updatedData.costPrice = formData.costPrice ?? currentData.costPrice;
-                           updatedData.leadTime = formData.leadTime ?? currentData.leadTime;
-                           updatedData.batchNumber = formData.batchNumber ?? currentData.batchNumber;
 
                             const finalUpdateData = Object.keys(updatedData).reduce((acc, key) => {
                                if (updatedData[key as keyof typeof updatedData] !== undefined) {
                                    acc[key as keyof typeof acc] = updatedData[key as keyof typeof updatedData];
                                } else {
-                                   // If the value became undefined, delete the field
                                    acc[key as keyof typeof acc] = deleteField();
                                }
                                return acc;
@@ -324,13 +310,12 @@
                        });
 
                       if (existingItemData) {
-                           await logStockMovement(existingItemData, quantity, finalStockLevel, 'in'); // Log as 'in'
+                           await logStockMovement(existingItemData, quantity, finalStockLevel, 'in'); 
                       }
 
                       const updatedDocSnap = await getDoc(itemDocRef);
                       const resultData = { ...updatedDocSnap.data(), id: updatedDocSnap.id } as StockItem;
 
-                      // Check for low stock after update
                       const effectiveThreshold = resultData.minimumStock ?? adminSettings.lowStockThreshold;
                       if (resultData.currentStock > 0 && resultData.currentStock <= effectiveThreshold) {
                            toast({
@@ -343,7 +328,6 @@
 
                      return { ...resultData, quantityAdded: quantity };
                  } else {
-                     // --- Item does not exist, add new ---
                      console.log("Item does not exist, adding new item:", itemName);
                      const newItemDataWithStock = {
                          ...dataToSave,
@@ -364,7 +348,7 @@
 
                      const newItem = { id: docRef.id, ...finalNewItemData } as StockItem;
 
-                     await logStockMovement(newItem, quantity, newItem.currentStock, 'in'); // Log as 'in'
+                     await logStockMovement(newItem, quantity, newItem.currentStock, 'in'); 
 
                       const effectiveThreshold = newItem.minimumStock ?? adminSettings.lowStockThreshold;
                       if (newItem.currentStock > 0 && newItem.currentStock <= effectiveThreshold) {
@@ -398,7 +382,6 @@
         });
 
 
-        // Mutation for editing an existing item
         const editItemMutation = useMutation({
             mutationFn: async (itemData: StockItem) => {
                 if (!user || !db) throw new Error("User not authenticated or DB not available");
@@ -406,7 +389,6 @@
                      throw new Error("Permission denied: You can only edit your own items.");
                  }
 
-                 // --- Duplicate Barcode Check (during edit) ---
                  if (itemData.barcode && itemData.barcode.trim() !== '') {
                       const barcodeQuery = query(collection(db, 'stockItems'), where("barcode", "==", itemData.barcode));
                       const barcodeSnapshot = await getDocs(barcodeQuery);
@@ -421,7 +403,6 @@
                           throw new Error("Duplicate barcode detected.");
                       }
                   }
-                 // --- End Duplicate Barcode Check ---
 
                 console.log("Editing item in Firestore:", itemData);
                  const itemDocRef = doc(db, 'stockItems', itemData.id);
@@ -435,11 +416,10 @@
                        }
                    } catch (e) { console.error("Could not fetch original stock before edit:", e); }
 
-                 // Clean data: remove undefined fields, ensure numbers are numbers
                  const cleanData = Object.entries(updateData).reduce((acc, [key, value]) => {
                       if (value !== undefined) {
-                          if (key === 'currentStock' || key === 'minimumStock' || key === 'costPrice' || key === 'leadTime') {
-                              acc[key as keyof typeof acc] = value === '' ? undefined : Number(value); // Allow empty string to remove numeric value
+                          if (key === 'currentStock' || key === 'minimumStock') {
+                              acc[key as keyof typeof acc] = value === '' ? undefined : Number(value);
                           } else if (key === 'userId') {
                               if (isAdmin || value === user.uid) {
                                   acc[key as keyof typeof acc] = value;
@@ -448,16 +428,14 @@
                                 acc[key as keyof typeof acc] = value === '' ? undefined : value;
                           }
                       } else {
-                           // Explicitly set to undefined if value is undefined (e.g. from form state)
                            acc[key as keyof typeof acc] = undefined;
                       }
                       return acc;
                   }, {} as Partial<Omit<StockItem, 'id'>>);
 
 
-                  // Use deleteField() for fields that should be explicitly removed if now undefined
                   const finalUpdateData: Record<string, any> = {};
-                  const originalItemForCheck = await getDoc(itemDocRef).then(snap => snap.data() || {}); // Get original data for check
+                  const originalItemForCheck = await getDoc(itemDocRef).then(snap => snap.data() || {}); 
 
                   for (const key in cleanData) {
                      const typedKey = key as keyof typeof cleanData;
@@ -465,17 +443,16 @@
                      const originalValue = originalItemForCheck[typedKey];
 
                       if (newValue === undefined && originalValue !== undefined) {
-                         finalUpdateData[key] = deleteField(); // Use deleteField() to remove the field
+                         finalUpdateData[key] = deleteField(); 
                       } else if (newValue !== undefined) {
                           finalUpdateData[key] = newValue;
                       }
-                     // If newValue is undefined AND originalValue was undefined, do nothing
                   }
 
 
                  if (Object.keys(finalUpdateData).length === 0) {
                      console.log("No changes detected after cleaning data. Skipping update.");
-                     return itemData; // Return original data if no changes
+                     return itemData; 
                  }
                  console.log("Final cleaned data for update:", finalUpdateData);
 
@@ -486,7 +463,7 @@
                  if (newStock !== undefined && newStock !== originalStock) {
                      const quantityChange = newStock - originalStock;
                      const updatedItemForLog: StockItem = { ...itemData, currentStock: newStock };
-                     await logStockMovement(updatedItemForLog, quantityChange, newStock); // Type determined by change
+                     await logStockMovement(updatedItemForLog, quantityChange, newStock); 
                  }
 
                  const updatedDocSnap = await getDoc(itemDocRef);
@@ -539,7 +516,6 @@
             },
         });
 
-        // Mutation for deleting an item
         const deleteItemMutation = useMutation({
             mutationFn: async (itemToDelete: StockItem) => {
                 if (!user || !db) throw new Error("User not authenticated or DB not available");
@@ -552,13 +528,13 @@
                 console.log("Item deleted successfully:", itemToDelete.id);
 
                  if (itemToDelete.currentStock > 0) {
-                    await logStockMovement(itemToDelete, -itemToDelete.currentStock, 0, 'out'); // Log as 'out'
+                    await logStockMovement(itemToDelete, -itemToDelete.currentStock, 0, 'out'); 
                  }
                 return itemToDelete.id;
             },
             onSuccess: (itemId) => {
                  queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
-                 queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid] }); // Invalidate movements too
+                 queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid] }); 
                  setIsDeleteDialogOpen(false);
                  const deletedItemName = itemToDelete?.itemName || 'Item';
                  setItemToDelete(null);
@@ -582,8 +558,7 @@
         });
 
 
-       // Mutation for updating stock (stock out) - using StockOutFormDataSubmit
-        const stockOutMutation = useMutation({
+       const stockOutMutation = useMutation({
             mutationFn: async (data: StockOutFormDataSubmit) => {
                  if (!user || !db) throw new Error("User not authenticated or DB not available");
                   const itemToUpdate = stockItems.find(item => item.id === data.itemId);
@@ -613,7 +588,7 @@
 
                  console.log("Stock updated successfully for item:", data.itemId);
 
-                  await logStockMovement(itemToUpdate, -data.quantity, updatedStockLevel, 'out'); // Log as 'out'
+                  await logStockMovement(itemToUpdate, -data.quantity, updatedStockLevel, 'out'); 
 
                  const effectiveThreshold = itemToUpdate.minimumStock ?? adminSettings.lowStockThreshold;
                  if (updatedStockLevel > 0 && updatedStockLevel <= effectiveThreshold) {
@@ -646,18 +621,17 @@
             },
         });
 
-         // Mutation for saving admin settings
-        const saveSettingsMutation = useMutation({
+         const saveSettingsMutation = useMutation({
             mutationFn: async (newSettings: AdminSettings) => {
                 if (!isAdmin || !db) throw new Error("Permission denied or DB not available.");
                 console.log("Saving admin settings to Firestore:", newSettings);
                 const settingsDocRef = doc(db, 'settings', 'admin');
-                await setDoc(settingsDocRef, newSettings, { merge: true }); // Use merge to only update provided fields
+                await setDoc(settingsDocRef, newSettings, { merge: true }); 
                 return newSettings;
             },
             onSuccess: (savedSettings) => {
-                 queryClient.setQueryData(['adminSettings'], (old: AdminSettings | undefined) => ({...defaultAdminSettings, ...old, ...savedSettings})); // Optimistically update cache
-                 refetchSettings(); // Also refetch to ensure consistency
+                 queryClient.setQueryData(['adminSettings'], (old: AdminSettings | undefined) => ({...defaultAdminSettings, ...old, ...savedSettings})); 
+                 refetchSettings(); 
                 toast({
                     title: "Settings Saved",
                     description: "Admin settings have been updated.",
@@ -675,7 +649,6 @@
         });
 
 
-        // --- Photo Search ---
         React.useEffect(() => {
             let stream: MediaStream | null = null;
             const getCameraPermission = async () => {
@@ -767,7 +740,6 @@
       const handleEditItemSubmit = (data: EditItemFormData) => {
           if (!itemToEdit) return;
 
-          // Include optional fields from form data if they exist
           const updatedItem: StockItem = {
               id: itemToEdit.id,
               userId: itemToEdit.userId || user?.uid || 'unknown',
@@ -781,9 +753,7 @@
               supplier: data.supplier || undefined,
               photoUrl: data.photoUrl || undefined,
               locationCoords: data.locationCoords || undefined,
-              costPrice: data.costPrice === undefined || data.costPrice === null ? undefined : Number(data.costPrice),
-              leadTime: data.leadTime === undefined || data.leadTime === null ? undefined : Number(data.leadTime),
-              batchNumber: data.batchNumber || undefined,
+              // costPrice: data.costPrice === undefined || data.costPrice === null ? undefined : Number(data.costPrice), // Re-add if needed
           };
 
 
@@ -834,42 +804,47 @@
       };
 
         const filteredItems = stockItems.filter((item) => {
-            const query = searchQuery.toLowerCase();
-            if (!item || typeof item.itemName !== 'string') return false;
-            return (
-                item.itemName.toLowerCase().includes(query) ||
-                (item.barcode && item.barcode.toLowerCase().includes(query)) ||
-                (item.category && item.category.toLowerCase().includes(query)) ||
-                (item.supplier && item.supplier.toLowerCase().includes(query)) ||
-                (item.location && item.location.toLowerCase().includes(query)) ||
-                (item.description && item.description.toLowerCase().includes(query))
+            const queryLower = searchQuery.toLowerCase();
+            const categoryFilterMatch = !filterCategory || filterCategory === 'all' || (item.category && item.category.toLowerCase() === filterCategory.toLowerCase());
+            const locationFilterMatch = !filterLocation || filterLocation === 'all' || (item.location && item.location.toLowerCase() === filterLocation.toLowerCase());
+            // TODO: Add supplier filter: const supplierFilterMatch = !filterSupplier || filterSupplier === 'all' || (item.supplier && item.supplier.toLowerCase() === filterSupplier.toLowerCase());
+            
+            const textSearchMatch = (
+                item.itemName.toLowerCase().includes(queryLower) ||
+                (item.barcode && item.barcode.toLowerCase().includes(queryLower)) ||
+                (item.description && item.description.toLowerCase().includes(queryLower))
             );
+        
+            return categoryFilterMatch && locationFilterMatch && textSearchMatch; // && supplierFilterMatch
         });
+        
 
        const isMutating = stockOutMutation.isPending || addStockMutation.isPending || editItemMutation.isPending || deleteItemMutation.isPending || saveSettingsMutation.isPending || photoSearchLoading;
        const isLoading = authLoading || isLoadingItems || isLoadingSettings || isLoadingMovements;
 
 
-        // Trigger low stock alert checks when items or settings change
         useEffect(() => {
-            if (!isLoading && stockItems.length > 0) {
-                let lowStockMessages: string[] = [];
+            if (!isLoading && stockItems.length > 0 && adminSettings) { // Ensure adminSettings is loaded
+                let lowStockItemsArray: {name: string, current: number, min: number | undefined}[] = [];
                 stockItems.forEach(item => {
                     const effectiveThreshold = item.minimumStock !== undefined ? item.minimumStock : adminSettings.lowStockThreshold;
                     if (item.currentStock > 0 && item.currentStock <= effectiveThreshold) {
-                         lowStockMessages.push(`${item.itemName} (${item.currentStock})`);
+                         lowStockItemsArray.push({name: item.itemName, current: item.currentStock, min: effectiveThreshold});
                     }
                 });
 
-                if (lowStockMessages.length > 0) {
+                if (lowStockItemsArray.length > 0) {
+                    const lowStockMessages = lowStockItemsArray.map(i => `${i.name} (${i.current}/${i.min ?? adminSettings.lowStockThreshold})`);
                     toast({
                         variant: "destructive",
-                        title: `Low Stock Alert (${lowStockMessages.length} item${lowStockMessages.length > 1 ? 's' : ''})`,
+                        title: `Low Stock Alert (${lowStockItemsArray.length} item${lowStockItemsArray.length > 1 ? 's' : ''})`,
                         description: `Restock needed for: ${lowStockMessages.join(', ')}.`,
                         duration: 10000,
                     });
                     if (adminSettings.emailNotifications) {
-                        console.log("TODO: Send email notification for low stock:", lowStockMessages);
+                        console.log("SIMULATED EMAIL ALERT: Low stock items detected:", lowStockItemsArray);
+                        // In a real app, you would trigger an API call here to send an email
+                        // e.g., await sendLowStockEmail(lowStockItemsArray);
                     }
                      if (adminSettings.pushNotifications) {
                          console.log("TODO: Send push notification for low stock:", lowStockMessages);
@@ -894,11 +869,11 @@
              if (isLoading) return null;
 
               const totalItems = stockItems.length;
-              const lowStockItems = stockItems.filter(item => {
+              const lowStockItemsCount = stockItems.filter(item => {
                    const threshold = item.minimumStock ?? adminSettings.lowStockThreshold;
                    return item.currentStock > 0 && item.currentStock <= threshold;
               }).length;
-              const outOfStockItems = stockItems.filter(item => item.currentStock === 0).length;
+              const outOfStockItemsCount = stockItems.filter(item => item.currentStock === 0).length;
 
               const todayStart = new Date();
               todayStart.setHours(0, 0, 0, 0);
@@ -913,19 +888,38 @@
               const todayIn = todayMovements.filter(log => log.type === 'in').length;
               const todayOut = todayMovements.filter(log => log.type === 'out').length;
               const todayRestock = todayMovements.filter(log => log.type === 'restock').length;
+              
+              // Placeholder for inventory value - requires costPrice on items
+              const totalInventoryValue = stockItems.reduce((sum, item) => {
+                  return sum + (item.currentStock * (item.costPrice ?? 0));
+              }, 0);
+
 
               return {
                   totalItems,
-                  lowStockItems,
-                  outOfStockItems,
+                  lowStockItems: lowStockItemsCount,
+                  outOfStockItems: outOfStockItemsCount,
                   todayIn,
                   todayOut,
                   todayRestock,
+                  totalInventoryValue: stockItems.some(item => item.costPrice !== undefined) ? totalInventoryValue : undefined, // Only show if costPrice data exists
               };
           }, [stockItems, stockMovements, adminSettings, isLoading]);
 
 
-         // Prepare data for charts
+         // Prepare data for charts & reports
+         const uniqueCategories = React.useMemo(() => {
+            if (isLoadingItems) return [];
+            const categories = new Set(stockItems.map(item => item.category).filter(Boolean) as string[]);
+            return Array.from(categories);
+        }, [stockItems, isLoadingItems]);
+
+        const uniqueLocations = React.useMemo(() => {
+            if (isLoadingItems) return [];
+            const locations = new Set(stockItems.map(item => item.location).filter(Boolean) as string[]);
+            return Array.from(locations);
+        }, [stockItems, isLoadingItems]);
+        
          const categoryChartData = React.useMemo(() => {
               if (isLoading) return [];
               const counts: { [key: string]: number } = {};
@@ -952,7 +946,7 @@
 
           const movementTrendData = React.useMemo(() => {
               if (isLoadingMovements) return [];
-              const weeklyMovements: { [week: string]: { in: number; out: number; restock: number } } = {}; // Added restock
+              const weeklyMovements: { [week: string]: { in: number; out: number; restock: number } } = {}; 
                const now = new Date();
                const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
@@ -972,14 +966,42 @@
                        } else if (log.type === 'out') {
                            weeklyMovements[weekKey].out += Math.abs(log.quantityChange);
                        } else if (log.type === 'restock') {
-                            weeklyMovements[weekKey].restock += log.quantityChange; // Assuming restock is positive
+                            weeklyMovements[weekKey].restock += log.quantityChange; 
                        }
                    });
 
                return Object.entries(weeklyMovements)
-                   .map(([week, data]) => ({ name: week, StockIn: data.in, StockOut: data.out, Restock: data.restock })) // Added Restock
+                   .map(([week, data]) => ({ name: week, StockIn: data.in, StockOut: data.out, Restock: data.restock })) 
                    .sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime());
           }, [stockMovements, isLoadingMovements]);
+
+          // Data for Basic Reports
+            const topMovingItems = React.useMemo(() => {
+                if (isLoadingMovements || isLoadingItems) return [];
+                const movementCounts: { [itemId: string]: { name: string, count: number, totalMoved: number } } = {};
+                stockMovements.forEach(log => {
+                    if (!movementCounts[log.itemId]) {
+                        const item = stockItems.find(i => i.id === log.itemId);
+                        movementCounts[log.itemId] = { name: item?.itemName || 'Unknown Item', count: 0, totalMoved: 0 };
+                    }
+                    movementCounts[log.itemId].count++;
+                    movementCounts[log.itemId].totalMoved += Math.abs(log.quantityChange);
+                });
+                return Object.values(movementCounts)
+                    .sort((a, b) => b.count - a.count) // Sort by number of movements
+                    .slice(0, 5); // Top 5
+            }, [stockMovements, stockItems, isLoadingMovements, isLoadingItems]);
+
+            const itemsNotMoving = React.useMemo(() => {
+                if (isLoadingMovements || isLoadingItems) return [];
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                const movedItemIds = new Set(stockMovements
+                    .filter(log => log.timestamp.toDate() >= thirtyDaysAgo)
+                    .map(log => log.itemId)
+                );
+                return stockItems.filter(item => !movedItemIds.has(item.id) && item.currentStock > 0).slice(0, 5); // Top 5 not moving with stock
+            }, [stockItems, stockMovements, isLoadingMovements, isLoadingItems]);
 
 
       return (
@@ -993,10 +1015,8 @@
              lastLogin={user?.metadata?.lastSignInTime ? new Date(user.metadata.lastSignInTime).toLocaleString() : undefined}
             />
 
-            {/* KPIs */}
             <DashboardKPIs data={kpiData} isLoading={isLoading} />
 
-           {/* Charts */}
            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
                <Card className="shadow-md md:col-span-1">
                   <CardHeader><CardTitle className="text-lg">Items by Category</CardTitle></CardHeader>
@@ -1019,20 +1039,56 @@
            </div>
 
 
-           {/* Main Content Area */}
            <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left/Center Column: Stock Table & Forms */}
               <div className="lg:col-span-2 space-y-6">
                  <Card className="shadow-md">
                      <CardHeader>
                          <CardTitle className="text-2xl">Stock Levels {isAdmin && '(Admin View)'}</CardTitle>
+                         <CardDescription>Manage and view current inventory.</CardDescription>
                      </CardHeader>
                      <CardContent className="space-y-4">
-                         <ItemSearch
-                             searchQuery={searchQuery}
-                             onSearchChange={handleSearchChange}
-                             placeholder="Search items by name, barcode, category, etc..."
-                          />
+                        <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                            <div className="flex-grow">
+                                 <ItemSearch
+                                     searchQuery={searchQuery}
+                                     onSearchChange={handleSearchChange}
+                                     placeholder="Search by name, barcode, description..."
+                                  />
+                            </div>
+                            <div className="flex gap-2">
+                                 <div className="min-w-[150px]">
+                                     <Label htmlFor="filter-category" className="sr-only">Filter by Category</Label>
+                                     <Select value={filterCategory} onValueChange={(value) => setFilterCategory(value === 'all' ? undefined : value)}>
+                                         <SelectTrigger id="filter-category" className="h-10">
+                                             <SelectValue placeholder="Filter by Category" />
+                                         </SelectTrigger>
+                                         <SelectContent>
+                                             <SelectItem value="all">All Categories</SelectItem>
+                                             {uniqueCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                                         </SelectContent>
+                                     </Select>
+                                 </div>
+                                 <div className="min-w-[150px]">
+                                     <Label htmlFor="filter-location" className="sr-only">Filter by Location</Label>
+                                     <Select value={filterLocation} onValueChange={(value) => setFilterLocation(value === 'all' ? undefined : value)}>
+                                         <SelectTrigger id="filter-location" className="h-10">
+                                             <SelectValue placeholder="Filter by Location" />
+                                         </SelectTrigger>
+                                         <SelectContent>
+                                             <SelectItem value="all">All Locations</SelectItem>
+                                             {uniqueLocations.map(loc => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}
+                                         </SelectContent>
+                                     </Select>
+                                 </div>
+                                 {/* TODO: Add Supplier Filter 
+                                 <Select onValueChange={setFilterSupplier}>...</Select>
+                                 */}
+                             </div>
+                         </div>
+                         {/* TODO: Implement saved searches functionality */}
+                         {/* <Button variant="outline" size="sm">Save Current Search (Coming Soon)</Button> */}
+
+
                          {isLoadingItems && (
                           <div className="space-y-2 pt-4">
                              <Skeleton className="h-8 w-full" />
@@ -1063,7 +1119,6 @@
                       </CardContent>
                    </Card>
 
-                    {/* Add/Out Forms */}
                     <Card className="shadow-md">
                          <Tabs defaultValue="add-stock" className="w-full">
                             <CardHeader className="p-4 border-b">
@@ -1094,39 +1149,109 @@
                </div>
 
 
-              {/* Right Column: Actions, Feed */}
               <div className="lg:col-span-1 space-y-6 flex flex-col">
                  <ActionsPanel
                     onPhotoSearchClick={() => setIsPhotoSearchOpen(true)}
                     onAddStockClick={() => { /* Consider opening Add Stock Tab directly */ }}
                     onStockOutClick={() => { /* Consider opening Stock Out Tab directly */ }}
                     isLoading={isMutating || hasCameraPermission === false || isLoading}
-                    frequentlyUsedItems={[]} // TODO: Populate frequently used items
+                    frequentlyUsedItems={stockItems.filter(item => item.currentStock < (item.minimumStock ?? adminSettings.lowStockThreshold) && item.currentStock > 0).slice(0,5)} // Example: show low stock items as frequent
                     onQuickAction={(action, item) => {
-                        // Simple quick actions - consider enhancing logic (e.g., restock template)
-                        if (action === 'in') handleAddStockSubmit({ itemName: item.itemName, quantity: 1, barcode: item.barcode });
+                        if (action === 'in' || action === 'restock') handleAddStockSubmit({ itemName: item.itemName, quantity: 1, barcode: item.barcode });
                         else if (action === 'out') handleStockOutSubmit({ itemId: item.id, quantity: 1 });
                     }}
                   />
 
-                   {/* Activity Feed */}
                    <ActivityFeed
                       movements={stockMovements}
                       isLoading={isLoadingMovements}
                     />
+                
+                {/* Placeholder for Upcoming Deliveries */}
+                <Card className="shadow-md">
+                    <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5 text-primary"/>Upcoming Deliveries</CardTitle>
+                        <CardDescription>Track expected incoming stock.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-sm text-muted-foreground">Feature coming soon. (e.g., PO-123: 50x Widgets due 2024-05-15)</p>
+                        {/* TODO: List upcoming deliveries */}
+                    </CardContent>
+                </Card>
 
                </div>
           </main>
 
+            {/* Basic Reports Section */}
+            <section className="mt-12">
+                <h2 className="text-2xl font-semibold mb-4 text-primary">Reports</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2"><DollarSign className="h-5 w-5 text-green-500" />Monthly Inventory Value</CardTitle>
+                            <CardDescription>Estimated value of current stock.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {isLoadingItems ? <Skeleton className="h-8 w-32" /> : (
+                                kpiData?.totalInventoryValue !== undefined ?
+                                <p className="text-2xl font-bold">${kpiData.totalInventoryValue.toFixed(2)}</p> :
+                                <p className="text-sm text-muted-foreground">N/A (Cost price per item not available)</p>
+                            )}
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2"><TrendingUp className="h-5 w-5 text-blue-500" />Top Moving Items</CardTitle>
+                            <CardDescription>Most frequently transacted items (last 30 days).</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {isLoadingMovements || isLoadingItems ? <Skeleton className="h-20 w-full" /> :
+                                topMovingItems.length > 0 ? (
+                                    <ul className="space-y-1 text-sm">
+                                        {topMovingItems.map(item => (
+                                            <li key={item.name} className="flex justify-between">
+                                                <span>{item.name}</span>
+                                                <Badge variant="secondary">{item.count} moves / {item.totalMoved} units</Badge>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : <p className="text-sm text-muted-foreground">No movement data.</p>
+                            }
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2"><TrendingDown className="h-5 w-5 text-orange-500" />Items Not Moving</CardTitle>
+                            <CardDescription>Items with no movement in the last 30 days.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                             {isLoadingItems || isLoadingMovements ? <Skeleton className="h-20 w-full" /> :
+                                itemsNotMoving.length > 0 ? (
+                                    <ul className="space-y-1 text-sm">
+                                        {itemsNotMoving.map(item => (
+                                            <li key={item.id} className="flex justify-between">
+                                                <span>{item.itemName}</span>
+                                                <Badge variant="outline">Qty: {item.currentStock}</Badge>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : <p className="text-sm text-muted-foreground">All items have recent activity or are out of stock.</p>
+                            }
+                        </CardContent>
+                    </Card>
+                </div>
+                <Separator className="my-6"/>
+                 {/* TODO: Placeholder for more advanced reports: Inventory Turnover, Cost Analysis, Supplier Performance */}
+                 <p className="text-sm text-muted-foreground text-center">More advanced reports (Turnover, Cost Analysis, Supplier Performance) coming soon.</p>
+            </section>
 
-          {/* View Item Dialog */}
+
            <ViewItemDialog
              isOpen={isViewDialogOpen}
              onClose={() => setIsViewDialogOpen(false)}
              item={itemToView}
            />
 
-          {/* Edit Item Dialog */}
            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
                <DialogContent className="sm:max-w-lg">
                    <DialogHeader>
@@ -1180,7 +1305,6 @@
                    />
                )}
 
-               {/* Photo Search Dialog */}
                <Dialog open={isPhotoSearchOpen} onOpenChange={setIsPhotoSearchOpen}>
                   <DialogContent className="sm:max-w-md">
                       <DialogHeader>
@@ -1258,6 +1382,3 @@
               </QueryClientProvider>
          );
      }
-
-
-

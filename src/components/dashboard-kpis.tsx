@@ -1,10 +1,9 @@
-
 "use client";
 
 import * as React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Package, AlertTriangle, XCircle, ArrowDown, ArrowUp, RefreshCcw } from 'lucide-react'; // Import icons
+import { Package, AlertTriangle, XCircle, ArrowDown, ArrowUp, RefreshCcw, DollarSign } from 'lucide-react'; // Import icons
 
 export interface KPIData {
   totalItems: number;
@@ -12,7 +11,8 @@ export interface KPIData {
   outOfStockItems: number;
   todayIn: number;
   todayOut: number;
-  todayRestock: number; // Assuming restock is tracked separately if needed
+  todayRestock: number;
+  totalInventoryValue?: number; // Optional: Total value of inventory
 }
 
 interface DashboardKPIsProps {
@@ -26,9 +26,10 @@ interface KPIItemProps {
     icon: React.ElementType;
     iconColor?: string;
     isLoading?: boolean;
+    prefix?: string; // Optional prefix like '$'
 }
 
-const KPIItem: React.FC<KPIItemProps> = ({ title, value, icon: Icon, iconColor = "text-primary", isLoading }) => (
+const KPIItem: React.FC<KPIItemProps> = ({ title, value, icon: Icon, iconColor = "text-primary", isLoading, prefix = '' }) => (
     <Card className="shadow-sm hover:shadow-md transition-shadow">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
@@ -38,7 +39,7 @@ const KPIItem: React.FC<KPIItemProps> = ({ title, value, icon: Icon, iconColor =
             {isLoading ? (
                 <Skeleton className="h-6 w-1/2" />
             ) : (
-                <div className="text-2xl font-bold">{value}</div>
+                <div className="text-2xl font-bold">{prefix}{value}</div>
             )}
         </CardContent>
     </Card>
@@ -47,7 +48,7 @@ const KPIItem: React.FC<KPIItemProps> = ({ title, value, icon: Icon, iconColor =
 
 export function DashboardKPIs({ data, isLoading = false }: DashboardKPIsProps) {
   return (
-    <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6 mb-6">
+    <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 mb-6"> {/* Adjusted grid for more KPIs */}
         <KPIItem
             title="Total Items"
             value={data?.totalItems ?? 0}
@@ -83,15 +84,22 @@ export function DashboardKPIs({ data, isLoading = false }: DashboardKPIsProps) {
             isLoading={isLoading}
         />
         <KPIItem
-            title="Today's Restock" // Assuming you track restocks separately
-            value={data?.todayRestock ?? 0} // Use the restock value if available
-            icon={RefreshCcw} // Example icon for restock
-            iconColor="text-blue-500" // Example color
+            title="Today's Restock"
+            value={data?.todayRestock ?? 0}
+            icon={RefreshCcw}
+            iconColor="text-blue-500"
             isLoading={isLoading}
         />
+        {data?.totalInventoryValue !== undefined && ( // Conditionally render inventory value
+             <KPIItem
+                title="Inv. Value"
+                value={data.totalInventoryValue.toFixed(2)}
+                icon={DollarSign}
+                iconColor="text-green-600"
+                isLoading={isLoading}
+                prefix="$"
+            />
+        )}
     </div>
   );
 }
-    
-
-    

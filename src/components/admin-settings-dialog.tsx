@@ -1,4 +1,3 @@
-
 'use client';
 
     import * as React from 'react';
@@ -15,8 +14,8 @@
     import { Label } from '@/components/ui/label';
     import { Switch } from '@/components/ui/switch';
     import { Input } from '@/components/ui/input';
-    import { Bell, Mail, Save, XCircle, AlertTriangle, Loader2 } from 'lucide-react'; // Removed unused icons
-    import type { AdminSettings } from '@/types'; // Import updated type
+    import { Bell, Mail, Save, XCircle, AlertTriangle, Loader2 } from 'lucide-react'; 
+    import type { AdminSettings } from '@/types'; 
 
     interface AdminSettingsDialogProps {
       isOpen: boolean;
@@ -26,13 +25,11 @@
       isLoading?: boolean;
     }
 
-    // Use the default values defined in the main page, passed via currentSettings
     const defaultSettings: AdminSettings = {
       emailNotifications: true,
       pushNotifications: false,
       lowStockThreshold: 10,
-      workflowApprovalRequired: false, // Kept for potential future use in type, but UI removed
-      defaultLeadTime: 7, // Kept for potential future use in type, but UI removed
+      // workflowApprovalRequired and defaultLeadTime are not actively used in UI anymore
     };
 
     export function AdminSettingsDialog({
@@ -46,21 +43,14 @@
       const [pushEnabled, setPushEnabled] = React.useState(currentSettings.pushNotifications);
       const [threshold, setThreshold] = React.useState(currentSettings.lowStockThreshold);
       const [thresholdError, setThresholdError] = React.useState<string | null>(null);
-      // State for removed settings placeholders - removed
-      // const [workflowApproval, setWorkflowApproval] = React.useState(currentSettings.workflowApprovalRequired ?? false);
-      // const [defaultLeadTime, setDefaultLeadTime] = React.useState(currentSettings.defaultLeadTime ?? 7);
-      // const [leadTimeError, setLeadTimeError] = React.useState<string | null>(null);
-
+      // Removed state for workflowApproval and defaultLeadTime
 
       React.useEffect(() => {
         setEmailEnabled(currentSettings.emailNotifications);
         setPushEnabled(currentSettings.pushNotifications);
         setThreshold(currentSettings.lowStockThreshold);
-        // Removed state updates for removed settings
-        // setWorkflowApproval(currentSettings.workflowApprovalRequired ?? false);
-        // setDefaultLeadTime(currentSettings.defaultLeadTime ?? 7);
+        // Removed state updates for deprecated settings
         setThresholdError(null);
-        // setLeadTimeError(null);
       }, [isOpen, currentSettings]);
 
       const handleSave = () => {
@@ -74,29 +64,20 @@
              setThresholdError(null);
           }
 
-           // Lead time validation removed
-           // if (defaultLeadTime < 0) {
-           //   setLeadTimeError("Default lead time cannot be negative.");
-           //   hasError = true;
-           // } else {
-           //    setLeadTimeError(null);
-           // }
-
           if (hasError) return;
 
-          // Save only existing settings
           onSave({
             emailNotifications: emailEnabled,
             pushNotifications: pushEnabled,
             lowStockThreshold: threshold,
-            // Removed workflowApproval and defaultLeadTime from save data
+            // Deprecated fields are not saved from UI
           });
       };
 
       const handleThresholdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
           const value = parseInt(e.target.value, 10);
           if (isNaN(value)) {
-              setThreshold(0);
+              setThreshold(0); // Or currentSettings.lowStockThreshold
           } else {
               setThreshold(value);
           }
@@ -105,7 +86,6 @@
            }
       };
 
-      // handleLeadTimeChange removed
 
       return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -113,15 +93,13 @@
             <DialogHeader>
               <DialogTitle>Admin Settings</DialogTitle>
               <DialogDescription>
-                Configure global settings for notifications.
+                Configure global settings for notifications and stock alerts.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-6 py-4 max-h-[65vh] overflow-y-auto pr-2">
-               {/* Notifications Section */}
                <div className="space-y-4 border p-4 rounded-md">
-                   <h3 className="font-semibold text-lg mb-2 flex items-center gap-2"><Bell className="h-5 w-5"/>Notifications</h3>
-                   {/* Low Stock Threshold */}
+                   <h3 className="font-semibold text-lg mb-2 flex items-center gap-2"><Bell className="h-5 w-5"/>Notifications & Alerts</h3>
                    <div className="space-y-1">
                      <Label htmlFor="low-stock-threshold" className="text-sm font-medium">
                        Low Stock Threshold
@@ -145,7 +123,6 @@
                           Global alert level (item-specific minimums override this).
                       </p>
                    </div>
-                    {/* Email Notifications */}
                     <div className="flex items-center justify-between space-x-2">
                       <Label htmlFor="email-notifications" className="flex items-center gap-2">
                         <Mail className="h-4 w-4"/> Email Low Stock Alerts
@@ -158,7 +135,6 @@
                         disabled={isLoading}
                       />
                     </div>
-                    {/* Push Notifications (Placeholder) */}
                     <div className="flex items-center justify-between space-x-2 opacity-50">
                       <Label htmlFor="push-notifications" className="flex items-center gap-2">
                         <Bell className="h-4 w-4"/> Push Notifications (Coming Soon)
@@ -167,15 +143,13 @@
                         id="push-notifications"
                         checked={pushEnabled}
                         onCheckedChange={setPushEnabled}
-                        disabled={true} // Placeholder
+                        disabled={true} 
                         aria-label="Toggle push notifications (disabled)"
                       />
                      </div>
                 </div>
 
-                 {/* Workflow Section Placeholder Removed */}
-                 {/* Forecasting/Analytics Section Placeholder Removed */}
-                 {/* Integrations Section Placeholder Removed */}
+                 {/* Sections for Workflow and Forecasting/Analytics removed as per request */}
 
             </div>
 
@@ -195,3 +169,4 @@
       );
     }
 
+    
