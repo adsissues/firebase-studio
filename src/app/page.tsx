@@ -24,7 +24,7 @@
     import { Skeleton } from '@/components/ui/skeleton';
     import { Button } from '@/components/ui/button';
     import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-    import { AlertTriangle, Loader2, Trash2, LogOut, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, DollarSign, Package, TrendingUp, TrendingDown, Clock } from 'lucide-react'; // Added new icons
+    import { AlertTriangle, Loader2, Trash2, LogOut, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, DollarSign, Package, TrendingUp, TrendingDown, Clock, ShoppingCart } from 'lucide-react'; // Added new icons & ShoppingCart
     import { RequireAuth } from '@/components/auth/require-auth';
     import { useAuth } from '@/context/auth-context';
     import { signOut } from 'firebase/auth';
@@ -33,7 +33,7 @@
     import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
     import { searchItemByPhoto, type SearchItemByPhotoInput } from '@/ai/flows/search-item-by-photo-flow';
     import { DashboardKPIs, type KPIData } from '@/components/dashboard-kpis'; // Import KPIs
-    import { CategoryChart } from '@/components/charts/category-chart'; // Import charts
+    import { CategoryBarChart } from '@/components/charts/category-bar-chart'; // Import CategoryBarChart
     import { LocationChart } from '@/components/charts/location-chart';
     import { MovementTrendChart } from '@/components/charts/movement-trend-chart';
     import { PageHeader } from '@/components/page-header'; // Import PageHeader
@@ -66,7 +66,7 @@
       const [searchQuery, setSearchQuery] = useState('');
       const [filterCategory, setFilterCategory] = useState<string | undefined>(undefined);
       const [filterLocation, setFilterLocation] = useState<string | undefined>(undefined);
-      // TODO: Implement supplier filter: const [filterSupplier, setFilterSupplier] = useState<string | undefined>(undefined);
+      const [filterSupplier, setFilterSupplier] = useState<string | undefined>(undefined);
       const { toast } = useToast();
       const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
       const [itemToEdit, setItemToEdit] = useState<StockItem | null>(null);
@@ -199,7 +199,6 @@
                 userId: user.uid,
                 userEmail: user.email || undefined,
                 timestamp: serverTimestamp(),
-                // batchNumber: item.batchNumber || undefined, // Re-add if batch tracking implemented
             };
             await addDoc(collection(db, 'stockMovements'), logData);
             console.log("Stock movement logged:", logData);
@@ -294,7 +293,7 @@
                            const updatedData = { ...dataToSave };
 
                            updatedData.minimumStock = formData.minimumStock ?? currentData.minimumStock;
-                           updatedData.costPrice = formData.costPrice ?? currentData.costPrice; // Persist costPrice
+                           updatedData.costPrice = formData.costPrice ?? currentData.costPrice; 
 
                             const finalUpdateData = Object.keys(updatedData).reduce((acc, key) => {
                                if (updatedData[key as keyof typeof updatedData] !== undefined) {
@@ -312,7 +311,7 @@
                        });
 
                       if (existingItemData) {
-                           await logStockMovement(existingItemData, quantity, finalStockLevel, 'in'); 
+                           await logStockMovement(existingItemData, quantity, finalStockLevel, 'restock'); 
                       }
 
                       const updatedDocSnap = await getDoc(itemDocRef);
@@ -335,7 +334,7 @@
                          ...dataToSave,
                          currentStock: quantity,
                          userId: user.uid,
-                         costPrice: formData.costPrice, // Save costPrice for new item
+                         costPrice: formData.costPrice, 
                      };
 
                       const finalNewItemData = Object.entries(newItemDataWithStock).reduce((acc, [key, value]) => {
@@ -370,16 +369,16 @@
                  queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
                  toast({
                      variant: "default",
-                     title: "Stock Added",
-                     description: `${result.quantityAdded} units of ${result.itemName} added successfully.`,
+                     title: "Stock Added/Restocked",
+                     description: `${result.quantityAdded} units of ${result.itemName} processed successfully.`,
                  });
              },
              onError: (error: any) => {
-                 console.error("Error adding stock:", error);
+                 console.error("Error adding/restocking stock:", error);
                  toast({
                     variant: "destructive",
-                    title: "Error Adding Stock",
-                    description: error.message === "Duplicate barcode detected." ? error.message : error.message || "Could not add stock. Please try again.",
+                    title: "Error Processing Stock",
+                    description: error.message === "Duplicate barcode detected." ? error.message : error.message || "Could not process stock. Please try again.",
                  });
              },
         });
@@ -431,7 +430,8 @@
                                 acc[key as keyof typeof acc] = value === '' ? undefined : value;
                           }
                       } else {
-                           acc[key as keyof typeof acc] = undefined;
+                           // Keep field if it was explicitly set to undefined (e.g. to remove minimumStock)
+                           acc[key as keyof typeof acc] = undefined; 
                       }
                       return acc;
                   }, {} as Partial<Omit<StockItem, 'id'>>);
@@ -810,7 +810,7 @@
             const queryLower = searchQuery.toLowerCase();
             const categoryFilterMatch = !filterCategory || filterCategory === 'all' || (item.category && item.category.toLowerCase() === filterCategory.toLowerCase());
             const locationFilterMatch = !filterLocation || filterLocation === 'all' || (item.location && item.location.toLowerCase() === filterLocation.toLowerCase());
-            // TODO: Add supplier filter: const supplierFilterMatch = !filterSupplier || filterSupplier === 'all' || (item.supplier && item.supplier.toLowerCase() === filterSupplier.toLowerCase());
+            const supplierFilterMatch = !filterSupplier || filterSupplier === 'all' || (item.supplier && item.supplier.toLowerCase() === filterSupplier.toLowerCase());
             
             const textSearchMatch = (
                 item.itemName.toLowerCase().includes(queryLower) ||
@@ -818,7 +818,7 @@
                 (item.description && item.description.toLowerCase().includes(queryLower))
             );
         
-            return categoryFilterMatch && locationFilterMatch && textSearchMatch; // && supplierFilterMatch
+            return categoryFilterMatch && locationFilterMatch && supplierFilterMatch && textSearchMatch; 
         });
         
 
@@ -827,7 +827,7 @@
 
 
         useEffect(() => {
-            if (!isLoading && stockItems.length > 0 && adminSettings) { // Ensure adminSettings is loaded
+            if (!isLoading && stockItems.length > 0 && adminSettings) { 
                 let lowStockItemsArray: {name: string, current: number, min: number | undefined}[] = [];
                 stockItems.forEach(item => {
                     const effectiveThreshold = item.minimumStock !== undefined ? item.minimumStock : adminSettings.lowStockThreshold;
@@ -846,8 +846,7 @@
                     });
                     if (adminSettings.emailNotifications) {
                         console.log("SIMULATED EMAIL ALERT: Low stock items detected:", lowStockItemsArray);
-                        // In a real app, you would trigger an API call here to send an email
-                        // e.g., await sendLowStockEmail(lowStockItemsArray);
+                        // Example: sendEmailAlert('low_stock', { items: lowStockMessages, userEmail: user?.email });
                     }
                      if (adminSettings.pushNotifications) {
                          console.log("TODO: Send push notification for low stock:", lowStockMessages);
@@ -921,13 +920,19 @@
             const locations = new Set(stockItems.map(item => item.location).filter(Boolean) as string[]);
             return Array.from(locations);
         }, [stockItems, isLoadingItems]);
+
+        const uniqueSuppliers = React.useMemo(() => {
+            if(isLoadingItems) return [];
+            const suppliers = new Set(stockItems.map(item => item.supplier).filter(Boolean) as string[]);
+            return Array.from(suppliers);
+        }, [stockItems, isLoadingItems]);
         
          const categoryChartData = React.useMemo(() => {
               if (isLoading) return [];
               const counts: { [key: string]: number } = {};
               stockItems.forEach(item => {
                   const category = item.category || 'Uncategorized';
-                  counts[category] = (counts[category] || 0) + 1;
+                  counts[category] = (counts[category] || 0) + 1; // Count items, not stock quantity for this chart
               });
               return Object.entries(counts).map(([name, value]) => ({ name, value }));
           }, [stockItems, isLoading]);
@@ -957,7 +962,7 @@
                    .forEach(log => {
                        const date = log.timestamp.toDate();
                        const weekStart = new Date(date);
-                       weekStart.setDate(date.getDate() - date.getDay());
+                       weekStart.setDate(date.getDate() - date.getDay()); // Get Monday of that week
                        const weekKey = `${weekStart.getFullYear()}-${(weekStart.getMonth() + 1).toString().padStart(2, '0')}-${weekStart.getDate().toString().padStart(2, '0')}`;
 
                        if (!weeklyMovements[weekKey]) {
@@ -1023,7 +1028,7 @@
                <Card className="shadow-md md:col-span-1">
                   <CardHeader><CardTitle className="text-lg">Items by Category</CardTitle></CardHeader>
                   <CardContent>
-                      {isLoading ? <Skeleton className="h-48 w-full" /> : <CategoryChart data={categoryChartData} />}
+                      {isLoading ? <Skeleton className="h-48 w-full" /> : <CategoryBarChart data={categoryChartData} />}
                   </CardContent>
                </Card>
                 <Card className="shadow-md md:col-span-1">
@@ -1057,8 +1062,8 @@
                                      placeholder="Search by name, barcode, description..."
                                   />
                             </div>
-                            <div className="flex gap-2">
-                                 <div className="min-w-[150px]">
+                            <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                                 <div className="min-w-[150px] flex-grow sm:flex-grow-0">
                                      <Label htmlFor="filter-category" className="sr-only">Filter by Category</Label>
                                      <Select value={filterCategory} onValueChange={(value) => setFilterCategory(value === 'all' ? undefined : value)}>
                                          <SelectTrigger id="filter-category" className="h-10">
@@ -1070,7 +1075,7 @@
                                          </SelectContent>
                                      </Select>
                                  </div>
-                                 <div className="min-w-[150px]">
+                                 <div className="min-w-[150px] flex-grow sm:flex-grow-0">
                                      <Label htmlFor="filter-location" className="sr-only">Filter by Location</Label>
                                      <Select value={filterLocation} onValueChange={(value) => setFilterLocation(value === 'all' ? undefined : value)}>
                                          <SelectTrigger id="filter-location" className="h-10">
@@ -1082,13 +1087,20 @@
                                          </SelectContent>
                                      </Select>
                                  </div>
-                                 {/* TODO: Add Supplier Filter 
-                                 <Select onValueChange={setFilterSupplier}>...</Select>
-                                 */}
+                                 <div className="min-w-[150px] flex-grow sm:flex-grow-0">
+                                     <Label htmlFor="filter-supplier" className="sr-only">Filter by Supplier</Label>
+                                     <Select value={filterSupplier} onValueChange={(value) => setFilterSupplier(value === 'all' ? undefined : value)}>
+                                         <SelectTrigger id="filter-supplier" className="h-10">
+                                             <SelectValue placeholder="Filter by Supplier" />
+                                         </SelectTrigger>
+                                         <SelectContent>
+                                             <SelectItem value="all">All Suppliers</SelectItem>
+                                             {uniqueSuppliers.map(sup => <SelectItem key={sup} value={sup}>{sup}</SelectItem>)}
+                                         </SelectContent>
+                                     </Select>
+                                 </div>
                              </div>
                          </div>
-                         {/* TODO: Implement saved searches functionality */}
-                         {/* <Button variant="outline" size="sm">Save Current Search (Coming Soon)</Button> */}
 
 
                          {isLoadingItems && (
@@ -1114,6 +1126,10 @@
                                  onView={handleViewClick}
                                  onEdit={handleEditClick}
                                  onDelete={handleDeleteClick}
+                                 onReorder={(item) => {
+                                      console.log("Reorder clicked for", item.itemName);
+                                      toast({title: "Reorder Action", description: `Initiate reorder for ${item.itemName}. (Placeholder)`})
+                                  }}
                                  isAdmin={isAdmin}
                                  globalLowStockThreshold={adminSettings.lowStockThreshold}
                               />
@@ -1154,12 +1170,11 @@
               <div className="lg:col-span-1 space-y-6 flex flex-col">
                  <ActionsPanel
                     onPhotoSearchClick={() => setIsPhotoSearchOpen(true)}
-                    onAddStockClick={() => { /* Consider opening Add Stock Tab directly */ }}
-                    onStockOutClick={() => { /* Consider opening Stock Out Tab directly */ }}
                     isLoading={isMutating || hasCameraPermission === false || isLoading}
                     frequentlyUsedItems={stockItems.filter(item => item.currentStock < (item.minimumStock ?? adminSettings.lowStockThreshold) && item.currentStock > 0).slice(0,5)} // Example: show low stock items as frequent
                     onQuickAction={(action, item) => {
-                        if (action === 'in' || action === 'restock') handleAddStockSubmit({ itemName: item.itemName, quantity: 1, barcode: item.barcode });
+                        if (action === 'in') handleAddStockSubmit({ itemName: item.itemName, quantity: 1, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location });
+                        else if (action === 'restock') handleAddStockSubmit({ itemName: item.itemName, quantity: 10, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location }); // Example: Restock 10 units
                         else if (action === 'out') handleStockOutSubmit({ itemId: item.id, quantity: 1 });
                     }}
                   />
@@ -1169,7 +1184,6 @@
                       isLoading={isLoadingMovements}
                     />
                 
-                {/* Placeholder for Upcoming Deliveries */}
                 <Card className="shadow-md">
                     <CardHeader>
                         <CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5 text-primary"/>Upcoming Deliveries</CardTitle>
@@ -1177,14 +1191,29 @@
                     </CardHeader>
                     <CardContent>
                         <p className="text-sm text-muted-foreground">Feature coming soon. (e.g., PO-123: 50x Widgets due 2024-05-15)</p>
-                        {/* TODO: List upcoming deliveries */}
                     </CardContent>
                 </Card>
+
+                 <Card className="shadow-md">
+                      <CardHeader>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                              <Bot className="h-5 w-5 text-primary" />
+                              AI Assistant (Coming Soon)
+                          </CardTitle>
+                           <CardDescription>Interact with your inventory using natural language.</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                           <p className="text-sm text-muted-foreground">
+                                Use AI to manage stock, get alerts, or find supplier info.
+                                This feature is under development and will be available soon.
+                            </p>
+                            {/* Placeholder for chat interface */}
+                      </CardContent>
+                 </Card>
 
                </div>
           </main>
 
-            {/* Basic Reports Section */}
             <section className="mt-12">
                 <h2 className="text-2xl font-semibold mb-4 text-primary">Reports</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
