@@ -33,6 +33,7 @@ import { collection, getDocs, doc, updateDoc, DocumentData } from 'firebase/fire
 import type { AppUser } from '@/types';
 import { Loader2, Save, XCircle, Users, ShieldCheck, User } from 'lucide-react';
 import { Skeleton } from './ui/skeleton';
+import { Badge } from "@/components/ui/badge"; // Added import for Badge
 
 interface UserManagementDialogProps {
   isOpen: boolean;
