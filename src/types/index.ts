@@ -12,41 +12,50 @@ export interface StockItem {
   itemName: string;
   barcode?: string;
   currentStock: number;
-  minimumStock?: number; 
-  location?: string; 
-  description?: string; 
-  category?: string; 
-  supplier?: string; 
-  photoUrl?: string; 
-  locationCoords?: LocationCoords; 
-  userId: string; 
+  minimumStock?: number;
+  overstockThreshold?: number; // New: For overstock alerts (e.g., quantity)
+  location?: string;
+  description?: string;
+  category?: string;
+  supplier?: string; // Existing, can be primary supplier name
+  photoUrl?: string;
+  locationCoords?: LocationCoords;
+  userId: string;
   costPrice?: number; // Optional: For inventory value calculation
+  lastMovementDate?: Timestamp; // New: To track inactivity
+
+  // Embedded Supplier Details
+  supplierName?: string;
+  supplierContactPerson?: string;
+  supplierPhone?: string;
+  supplierEmail?: string;
+  supplierWebsite?: string;
+  supplierAddress?: string;
 }
 
 export interface AppUser extends FirebaseUser {
-  role?: 'admin' | 'user'; 
+  role?: 'admin' | 'user';
 }
 
 export interface AdminSettings {
   emailNotifications: boolean;
-  pushNotifications: boolean; 
-  lowStockThreshold: number; 
-  // workflowApprovalRequired and defaultLeadTime are effectively removed from active use
-  // but kept in type for potential future re-instatement or data migration.
-  workflowApprovalRequired?: boolean; 
-  defaultLeadTime?: number; 
+  pushNotifications: boolean;
+  lowStockThreshold: number;
+  overstockThresholdPercentage?: number; // New: e.g., alert if stock > 200% of (minimumStock or a baseline)
+  inactivityAlertDays?: number; // New: e.g., alert if no movement for X days
 }
 
 export interface StockMovementLog {
-    id: string; 
+    id: string;
     itemId: string;
-    itemName: string; 
-    quantityChange: number; 
-    newStockLevel: number; 
-    type: 'in' | 'out' | 'restock'; 
-    timestamp: Timestamp; 
-    userId: string; 
-    userEmail?: string; 
-    batchNumber?: string; 
-    notes?: string; 
+    itemName: string;
+    quantityChange: number;
+    newStockLevel: number;
+    type: 'in' | 'out' | 'restock';
+    timestamp: Timestamp;
+    userId: string;
+    userEmail?: string;
+    batchNumber?: string;
+    notes?: string;
 }
+

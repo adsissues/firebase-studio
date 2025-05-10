@@ -16,9 +16,9 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { StockItem } from '@/types';
-import { Barcode, MapPin, Tag, Building, Info, Package, AlertTriangle, Circle, MapPinned, XCircle, ImageIcon, UserCircle, TrendingDown } from 'lucide-react'; // Removed unused icons DollarSign, Clock, Hash
+import { Barcode, MapPin, Tag, Building, Info, Package, AlertTriangle, Circle, MapPinned, XCircle, ImageIcon, UserCircle as UserIconLucide, TrendingDown, DollarSign, Phone, Mail as MailIcon, Globe } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
-import { cn } from "@/lib/utils"; // Import cn utility
+import { cn } from "@/lib/utils";
 
 interface ViewItemDialogProps {
   isOpen: boolean;
@@ -33,9 +33,8 @@ export function ViewItemDialog({ isOpen, onClose, item }: ViewItemDialogProps) {
     return null;
   }
 
-  // Function returns a Badge component now
   const getStatusBadgeComponent = () => {
-      const threshold = item.minimumStock ?? 10; // Assuming default threshold if not set
+      const threshold = item.minimumStock ?? 10;
       if (item.currentStock === 0) return (
          <Badge variant="destructive" className="flex items-center gap-1 text-xs whitespace-nowrap ml-2">
             <AlertTriangle className="mr-1 h-3 w-3" /> Out of Stock
@@ -46,28 +45,34 @@ export function ViewItemDialog({ isOpen, onClose, item }: ViewItemDialogProps) {
              <TrendingDown className="mr-1 h-3 w-3" /> Low Stock
           </Badge>
       );
+      // Overstock Check (example logic, adjust as needed)
+      const overstockMinBase = item.minimumStock ?? threshold; // Use item's min or global low as base
+      const overstockAlertThreshold = item.overstockThreshold ?? (overstockMinBase * 2); // Example: 2x the min stock
+      if (item.currentStock > overstockAlertThreshold) return (
+        <Badge variant="default" className="flex items-center gap-1 text-xs whitespace-nowrap ml-2 bg-yellow-500 text-black">
+             <AlertTriangle className="mr-1 h-3 w-3" /> Overstock
+          </Badge>
+      );
+
       return (
-         <Badge variant="secondary" className="flex items-center gap-1 text-xs whitespace-nowrap ml-2">
-            <Circle className="mr-1 h-3 w-3" /> Okay
+         <Badge variant="success" className="flex items-center gap-1 text-xs whitespace-nowrap ml-2">
+            <Circle className="mr-1 h-3 w-3 fill-current" /> Okay
          </Badge>
       );
   };
 
   const renderDetailRow = (label: string, value: string | number | undefined | null, icon?: React.ElementType, formatAsCurrency?: boolean) => {
-    if (value === undefined || value === null || value === '') return null;
+    if (value === undefined || value === null || String(value).trim() === '') return null;
     const Icon = icon;
-    let displayValue = String(value); // Ensure displayValue is a string
-    // Currency and Lead Time formatting removed as fields are removed
-    // if (formatAsCurrency && typeof value === 'number') {
-    //     displayValue = `$${value.toFixed(2)}`; // Simple currency formatting
-    // } else if (label === "Lead Time (Days)" && typeof value === 'number') {
-    //      displayValue = `${value} days`;
-    // }
+    let displayValue = String(value);
+     if (formatAsCurrency && typeof value === 'number') {
+         displayValue = `$${value.toFixed(2)}`;
+     }
 
     return (
-       <div className="grid grid-cols-3 gap-2 py-2 border-b last:border-b-0">
-         <Label className="text-sm text-muted-foreground col-span-1 flex items-center gap-1.5">
-           {Icon && <Icon className="h-4 w-4" />} {label}
+       <div className="grid grid-cols-3 gap-2 py-2 border-b last:border-b-0 items-start">
+         <Label className="text-sm text-muted-foreground col-span-1 flex items-center gap-1.5 pt-0.5">
+           {Icon && <Icon className="h-4 w-4 flex-shrink-0" />} {label}
          </Label>
          <p className="text-sm col-span-2 break-words">{displayValue}</p>
        </div>
@@ -76,11 +81,11 @@ export function ViewItemDialog({ isOpen, onClose, item }: ViewItemDialogProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center">
              Item Details: {item.itemName}
-              {getStatusBadgeComponent()} {/* Call the function to render the badge */}
+              {getStatusBadgeComponent()}
           </DialogTitle>
           <DialogDescription>
              Detailed information about the selected stock item.
@@ -89,39 +94,41 @@ export function ViewItemDialog({ isOpen, onClose, item }: ViewItemDialogProps) {
 
         <ScrollArea className="max-h-[60vh] pr-4">
           <div className="space-y-1 py-4">
-             {/* Display Photo if available */}
              {item.photoUrl && (
                <div className="mb-4 flex justify-center">
-                 <img
-                   src={item.photoUrl}
-                   alt={item.itemName}
-                   className="max-w-full max-h-48 object-contain rounded-md border"
-                   data-ai-hint="product image"
-                 />
+                 <img src={item.photoUrl} alt={item.itemName} className="max-w-full max-h-48 object-contain rounded-md border" data-ai-hint="product image" />
                </div>
              )}
             {renderDetailRow("Current Stock", item.currentStock, Package)}
             {renderDetailRow("Minimum Stock", item.minimumStock, AlertTriangle)}
+            {renderDetailRow("Overstock Threshold", item.overstockThreshold, AlertTriangle)}
+            {renderDetailRow("Cost Price", item.costPrice, DollarSign, true)}
             {renderDetailRow("Category", item.category, Tag)}
-            {renderDetailRow("Supplier", item.supplier, Building)}
             {renderDetailRow("Barcode", item.barcode, Barcode)}
-            {/* Batch Number row removed */}
             {renderDetailRow("Storage Location", item.location, MapPin)}
             {item.locationCoords && renderDetailRow("GPS Coordinates", `Lat: ${item.locationCoords.latitude.toFixed(5)}, Lon: ${item.locationCoords.longitude.toFixed(5)}`, MapPinned)}
-            {renderDetailRow("Description", item.description, Info)}
-            {/* Cost Price row removed */}
-            {/* Lead Time row removed */}
-            {isAdmin && renderDetailRow("Owner User ID", item.userId, UserCircle)}
+            {item.description && renderDetailRow("Description", item.description, Info)}
+            {isAdmin && item.userId && renderDetailRow("Owner User ID", item.userId, UserIconLucide)}
+            {item.lastMovementDate && renderDetailRow("Last Movement", formatDistanceToNow(item.lastMovementDate.toDate(), { addSuffix: true }), Clock)}
+
+
+            {(item.supplierName || item.supplierContactPerson || item.supplierPhone || item.supplierEmail || item.supplierWebsite || item.supplierAddress) && (
+                 <div className="pt-3 mt-3 border-t">
+                    <h4 className="text-md font-semibold mb-2 text-primary flex items-center gap-1.5"><Building className="h-5 w-5"/>Supplier Information</h4>
+                    {renderDetailRow("Company Name", item.supplierName)}
+                    {renderDetailRow("Contact Person", item.supplierContactPerson, UserIconLucide)}
+                    {renderDetailRow("Phone", item.supplierPhone, Phone)}
+                    {renderDetailRow("Email", item.supplierEmail, MailIcon)}
+                    {renderDetailRow("Website", item.supplierWebsite, Globe)}
+                    {renderDetailRow("Address", item.supplierAddress, MapPin)}
+                 </div>
+            )}
           </div>
         </ScrollArea>
 
         <DialogFooter>
-          {/* Use DialogClose for the close button */}
           <DialogClose asChild>
-            <Button variant="outline">
-               <XCircle className="mr-2 h-4 w-4" />
-              Close
-            </Button>
+            <Button variant="outline"><XCircle className="mr-2 h-4 w-4" /> Close</Button>
           </DialogClose>
         </DialogFooter>
       </DialogContent>

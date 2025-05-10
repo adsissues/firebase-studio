@@ -4,27 +4,27 @@
     import * as React from 'react';
     import { ItemSearch } from '@/components/item-search';
     import { StockDashboard } from '@/components/stock-dashboard';
-    import { ActivityFeed } from '@/components/activity-feed'; // Changed from StockMovementDashboard
+    import { ActivityFeed } from '@/components/activity-feed';
     import { StockOutForm, type StockOutFormDataSubmit } from '@/components/stock-out-form';
     import { AddStockForm, type AddStockFormData } from '@/components/add-stock-form';
     import { EditItemForm, type EditItemFormData } from '@/components/edit-item-form';
-    import { ViewItemDialog } from '@/components/view-item-dialog'; // Import ViewItemDialog
-    import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card'; // Added CardDescription, CardFooter
+    import { ViewItemDialog } from '@/components/view-item-dialog';
+    import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
     import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
     import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
     import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
     import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
     import { Label } from "@/components/ui/label";
-    import type { StockItem, AdminSettings, StockMovementLog, LocationCoords } from '@/types'; // Import AdminSettings & StockMovementLog
+    import type { StockItem, AdminSettings, StockMovementLog, LocationCoords } from '@/types';
     import { useState, useEffect } from 'react';
     import { useToast } from "@/hooks/use-toast";
     import { QueryClient, QueryClientProvider, useQuery, useMutation, QueryCache } from '@tanstack/react-query';
     import { db, auth } from '@/lib/firebase/firebase';
-    import { collection, getDocs, addDoc, updateDoc, doc, increment, deleteDoc, writeBatch, query, where, runTransaction, setDoc, getDoc, serverTimestamp, Timestamp, deleteField } from 'firebase/firestore'; // Import Timestamp, deleteField
+    import { collection, getDocs, addDoc, updateDoc, doc, increment, deleteDoc, writeBatch, query, where, runTransaction, setDoc, getDoc, serverTimestamp, Timestamp, deleteField } from 'firebase/firestore';
     import { Skeleton } from '@/components/ui/skeleton';
     import { Button } from '@/components/ui/button';
     import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-    import { AlertTriangle, Loader2, Trash2, LogOut, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, DollarSign, Package, TrendingUp, TrendingDown, Clock, ShoppingCart } from 'lucide-react'; // Added new icons & ShoppingCart
+    import { AlertTriangle, Loader2, Trash2, LogOut, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, DollarSign, Package, TrendingUp, TrendingDown, Clock, ShoppingCart, Building, Phone, Mail as MailIcon, UserCircle as UserIcon, Globe } from 'lucide-react';
     import { RequireAuth } from '@/components/auth/require-auth';
     import { useAuth } from '@/context/auth-context';
     import { signOut } from 'firebase/auth';
@@ -32,14 +32,15 @@
     import { ThemeToggle } from "@/components/theme-toggle";
     import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
     import { searchItemByPhoto, type SearchItemByPhotoInput } from '@/ai/flows/search-item-by-photo-flow';
-    import { DashboardKPIs, type KPIData } from '@/components/dashboard-kpis'; // Import KPIs
-    import { CategoryBarChart } from '@/components/charts/category-bar-chart'; // Import CategoryBarChart
+    import { DashboardKPIs, type KPIData } from '@/components/dashboard-kpis';
+    import { CategoryBarChart } from '@/components/charts/category-bar-chart';
     import { LocationChart } from '@/components/charts/location-chart';
     import { MovementTrendChart } from '@/components/charts/movement-trend-chart';
-    import { PageHeader } from '@/components/page-header'; // Import PageHeader
-    import { ActionsPanel } from '@/components/actions-panel'; // Import ActionsPanel
+    import { PageHeader } from '@/components/page-header';
+    import { ActionsPanel } from '@/components/actions-panel';
     import { Separator } from '@/components/ui/separator';
-    import { Badge } from "@/components/ui/badge"; // Import Badge component
+    import { Badge } from "@/components/ui/badge";
+    import { formatDistanceToNow } from 'date-fns';
 
     const queryClient = new QueryClient({
       queryCache: new QueryCache({
@@ -53,16 +54,17 @@
       }),
     });
 
-    // Default settings if none are found in Firestore
     const defaultAdminSettings: AdminSettings = {
         emailNotifications: true,
         pushNotifications: false,
         lowStockThreshold: 10,
+        overstockThresholdPercentage: 200, // Default: alert if stock is > 200% of minimum (or global if min not set)
+        inactivityAlertDays: 30, // Default: alert if no movement for 30 days
     };
 
 
     function StockManagementPageContent() {
-      const { user, isAdmin, loading: authLoading } = useAuth(); // Destructure loading state
+      const { user, isAdmin, loading: authLoading } = useAuth();
       const [searchQuery, setSearchQuery] = useState('');
       const [filterCategory, setFilterCategory] = useState<string | undefined>(undefined);
       const [filterLocation, setFilterLocation] = useState<string | undefined>(undefined);
@@ -70,8 +72,8 @@
       const { toast } = useToast();
       const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
       const [itemToEdit, setItemToEdit] = useState<StockItem | null>(null);
-      const [isViewDialogOpen, setIsViewDialogOpen] = useState(false); // State for View dialog
-      const [itemToView, setItemToView] = useState<StockItem | null>(null); // State for item to view
+      const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+      const [itemToView, setItemToView] = useState<StockItem | null>(null);
       const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
       const [itemToDelete, setItemToDelete] = useState<StockItem | null>(null);
       const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
@@ -81,67 +83,66 @@
       const videoRef = React.useRef<HTMLVideoElement>(null);
       const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
-        // Fetch Admin Settings (only if user is admin)
         const { data: adminSettings = defaultAdminSettings, isLoading: isLoadingSettings, refetch: refetchSettings } = useQuery<AdminSettings>({
             queryKey: ['adminSettings'],
             queryFn: async () => {
-                if (!isAdmin || !db) return defaultAdminSettings; // Only fetch if admin and db exists
-                console.log("Fetching admin settings from Firestore...");
-                const settingsDocRef = doc(db, 'settings', 'admin'); // Assuming a single 'admin' settings doc
+                if (!isAdmin || !db) return defaultAdminSettings;
+                const settingsDocRef = doc(db, 'settings', 'admin');
                 try {
                     const docSnap = await getDoc(settingsDocRef);
                     if (docSnap.exists()) {
                         const fetchedSettings = docSnap.data() as AdminSettings;
-                        console.log("Admin settings found:", fetchedSettings);
-                        // Merge fetched settings with defaults to ensure all keys exist
                         return { ...defaultAdminSettings, ...fetchedSettings };
-                    } else {
-                        console.log("No admin settings found, using defaults.");
-                        return defaultAdminSettings;
                     }
+                    return defaultAdminSettings;
                 } catch (error) {
                      console.error("Error fetching admin settings:", error);
                      toast({ variant: "destructive", title: "Error Loading Settings", description: "Could not load admin settings." });
-                     return defaultAdminSettings; // Return default on error
+                     return defaultAdminSettings;
                 }
             },
-            enabled: isAdmin && !!user, // Only enable if user is admin and logged in
-            staleTime: 15 * 60 * 1000, // Cache settings for 15 minutes
-            refetchOnWindowFocus: false, // Less critical to refetch settings on focus
+            enabled: isAdmin && !!user,
+            staleTime: 15 * 60 * 1000,
+            refetchOnWindowFocus: false,
         });
 
 
-      // Fetch stock items
       const { data: stockItems = [], isLoading: isLoadingItems, error: fetchError, refetch: refetchItems } = useQuery<StockItem[]>({
         queryKey: ['stockItems', user?.uid],
         queryFn: async () => {
            if (!user) return [];
-           console.log("Fetching stock items from Firestore for user:", user.uid);
+           const itemsCol = collection(db, 'stockItems');
+           const q = isAdmin ? query(itemsCol) : query(itemsCol, where("userId", "==", user.uid));
            try {
-               const itemsCol = collection(db, 'stockItems');
-               const q = isAdmin ? query(itemsCol) : query(itemsCol, where("userId", "==", user.uid)); // Admin sees all items
                const itemSnapshot = await getDocs(q);
-
                const itemsList = itemSnapshot.docs.map(doc => ({
                   id: doc.id,
                   ...doc.data(),
               } as StockItem));
-              console.log(`Fetched ${itemsList.length} items.`);
 
               return itemsList.map((item: StockItem) => ({
                   ...item,
                   currentStock: Number(item.currentStock ?? 0),
                   minimumStock: item.minimumStock !== undefined ? Number(item.minimumStock) : undefined,
+                  overstockThreshold: item.overstockThreshold !== undefined ? Number(item.overstockThreshold) : undefined,
                   itemName: item.itemName || 'Unknown Item',
                   barcode: item.barcode || undefined,
                   location: item.location || undefined,
                   description: item.description || undefined,
                   category: item.category || undefined,
-                  supplier: item.supplier || undefined,
+                  supplier: item.supplier || undefined, // Keeps legacy supplier name if present
                   photoUrl: item.photoUrl || undefined,
                   locationCoords: item.locationCoords || undefined,
-                  userId: item.userId || user.uid, 
+                  userId: item.userId || user.uid,
                   costPrice: item.costPrice !== undefined ? Number(item.costPrice) : undefined,
+                  lastMovementDate: item.lastMovementDate, // Keep as Timestamp or undefined
+                  // Supplier details
+                  supplierName: item.supplierName || undefined,
+                  supplierContactPerson: item.supplierContactPerson || undefined,
+                  supplierPhone: item.supplierPhone || undefined,
+                  supplierEmail: item.supplierEmail || undefined,
+                  supplierWebsite: item.supplierWebsite || undefined,
+                  supplierAddress: item.supplierAddress || undefined,
               }));
           } catch (err) {
               console.error("Error fetching stock items:", err);
@@ -153,17 +154,15 @@
               throw err;
           }
         },
-         enabled: !!user, 
+         enabled: !!user,
          staleTime: 5 * 60 * 1000,
          refetchOnWindowFocus: true,
       });
 
-      // Fetch stock movement logs
       const { data: stockMovements = [], isLoading: isLoadingMovements, refetch: refetchMovements } = useQuery<StockMovementLog[]>({
          queryKey: ['stockMovements', user?.uid],
          queryFn: async () => {
              if (!user) return [];
-             console.log("Fetching stock movements for user:", user.uid);
              const logsCol = collection(db, 'stockMovements');
              const q = isAdmin ? query(logsCol) : query(logsCol, where("userId", "==", user.uid));
              try {
@@ -171,9 +170,8 @@
                  const logsList = logSnapshot.docs.map(doc => ({
                      id: doc.id,
                      ...doc.data(),
-                     timestamp: doc.data().timestamp as Timestamp 
+                     timestamp: doc.data().timestamp as Timestamp
                  } as StockMovementLog));
-                 console.log(`Fetched ${logsList.length} stock movements.`);
                  logsList.sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
                  return logsList;
              } catch (err) {
@@ -182,31 +180,28 @@
                  throw err;
              }
          },
-         enabled: !!user, 
-         staleTime: 2 * 60 * 1000, 
+         enabled: !!user,
+         staleTime: 2 * 60 * 1000,
          refetchOnWindowFocus: true,
       });
 
-      const logStockMovement = async (item: StockItem, quantityChange: number, newStockLevel: number, type: 'in' | 'out' | 'restock' = quantityChange > 0 ? 'in' : 'out') => {
+      const logStockMovementAndUpdateItem = async (itemRef: any, itemData: StockItem, quantityChange: number, newStockLevel: number, type: 'in' | 'out' | 'restock', transaction?: any) => {
         if (!user || !db) return;
-        try {
-            const logData: Omit<StockMovementLog, 'id' | 'timestamp'> & { timestamp: any } = {
-                itemId: item.id,
-                itemName: item.itemName,
-                quantityChange: quantityChange,
-                newStockLevel: newStockLevel,
-                type: type, 
-                userId: user.uid,
-                userEmail: user.email || undefined,
-                timestamp: serverTimestamp(),
-            };
-            await addDoc(collection(db, 'stockMovements'), logData);
-            console.log("Stock movement logged:", logData);
-            queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid] }); 
-        } catch (error) {
-            console.error("Error logging stock movement:", error);
-            toast({ variant: "destructive", title: "Logging Error", description: "Could not log stock movement." });
-        }
+        const updateFn = transaction ? transaction.update : updateDoc;
+        await updateFn(itemRef, { lastMovementDate: serverTimestamp() });
+
+        const logData: Omit<StockMovementLog, 'id' | 'timestamp'> & { timestamp: any } = {
+            itemId: itemData.id,
+            itemName: itemData.itemName,
+            quantityChange: quantityChange,
+            newStockLevel: newStockLevel,
+            type: type,
+            userId: user.uid,
+            userEmail: user.email || undefined,
+            timestamp: serverTimestamp(),
+        };
+        await addDoc(collection(db, 'stockMovements'), logData);
+        queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid] });
     };
 
 
@@ -215,7 +210,6 @@
                 if (!user || !db) throw new Error("User not authenticated or DB not available");
 
                 const { itemName, quantity, barcode } = formData;
-                console.log("Adding stock:", formData);
 
                 if (barcode) {
                     const barcodeQuery = query(collection(db, 'stockItems'), where("barcode", "==", barcode));
@@ -265,35 +259,42 @@
 
                  const dataToSave = Object.entries(formData).reduce((acc, [key, value]) => {
                       if (value !== undefined && key !== 'quantity') {
-                         if (key === 'minimumStock' && typeof value === 'string') {
+                         if ((key === 'minimumStock' || key === 'overstockThreshold' || key === 'costPrice') && typeof value === 'string') {
                             acc[key as keyof typeof acc] = value === '' ? undefined : Number(value);
                           } else {
                              acc[key as keyof typeof acc] = value === '' ? undefined : value;
                           }
                       }
                       return acc;
-                  }, {} as Partial<Omit<StockItem, 'id' | 'userId' | 'currentStock'>> & { userId?: string });
+                  }, {} as Partial<Omit<StockItem, 'id' | 'userId' | 'currentStock' | 'lastMovementDate'>> & { userId?: string });
 
                   dataToSave.userId = user.uid;
+
 
                  if (querySnapshot && !querySnapshot.empty) {
                      const existingDoc = querySnapshot.docs[0];
                      const itemDocRef = doc(db, 'stockItems', existingDoc.id);
-                     console.log("Item exists, updating stock for ID:", existingDoc.id);
                      let finalStockLevel = 0;
                      let existingItemData: StockItem | null = null;
 
                       await runTransaction(db, async (transaction) => {
                            const sfDoc = await transaction.get(itemDocRef);
-                           if (!sfDoc.exists()) {
-                               throw "Document does not exist!";
-                           }
+                           if (!sfDoc.exists()) throw "Document does not exist!";
                            const currentData = sfDoc.data() as Omit<StockItem, 'id'>;
                            existingItemData = { ...currentData, id: existingDoc.id };
                            const updatedData = { ...dataToSave };
 
                            updatedData.minimumStock = formData.minimumStock ?? currentData.minimumStock;
-                           updatedData.costPrice = formData.costPrice ?? currentData.costPrice; 
+                           updatedData.overstockThreshold = formData.overstockThreshold ?? currentData.overstockThreshold;
+                           updatedData.costPrice = formData.costPrice ?? currentData.costPrice;
+                           // Preserve existing supplier details if not provided in form
+                            updatedData.supplierName = formData.supplierName ?? currentData.supplierName;
+                            updatedData.supplierContactPerson = formData.supplierContactPerson ?? currentData.supplierContactPerson;
+                            updatedData.supplierPhone = formData.supplierPhone ?? currentData.supplierPhone;
+                            updatedData.supplierEmail = formData.supplierEmail ?? currentData.supplierEmail;
+                            updatedData.supplierWebsite = formData.supplierWebsite ?? currentData.supplierWebsite;
+                            updatedData.supplierAddress = formData.supplierAddress ?? currentData.supplierAddress;
+
 
                             const finalUpdateData = Object.keys(updatedData).reduce((acc, key) => {
                                if (updatedData[key as keyof typeof updatedData] !== undefined) {
@@ -307,61 +308,37 @@
 
                            const newStock = (currentData.currentStock || 0) + quantity;
                            finalStockLevel = newStock;
-                           transaction.update(itemDocRef, { ...finalUpdateData, currentStock: newStock });
+                           transaction.update(itemDocRef, { ...finalUpdateData, currentStock: newStock, lastMovementDate: serverTimestamp() });
                        });
 
                       if (existingItemData) {
-                           await logStockMovement(existingItemData, quantity, finalStockLevel, 'restock'); 
+                           await logStockMovementAndUpdateItem(doc(db, 'stockItems', existingDoc.id), existingItemData, quantity, finalStockLevel, 'restock');
                       }
-
                       const updatedDocSnap = await getDoc(itemDocRef);
-                      const resultData = { ...updatedDocSnap.data(), id: updatedDocSnap.id } as StockItem;
-
-                      const effectiveThreshold = resultData.minimumStock ?? adminSettings.lowStockThreshold;
-                      if (resultData.currentStock > 0 && resultData.currentStock <= effectiveThreshold) {
-                           toast({
-                               variant: "default",
-                               title: "Low Stock Warning",
-                               description: `${resultData.itemName} stock is low (${resultData.currentStock} <= ${effectiveThreshold}). Consider restocking.`,
-                               duration: 7000,
-                            });
-                       }
-
-                     return { ...resultData, quantityAdded: quantity };
+                      return { ...updatedDocSnap.data(), id: updatedDocSnap.id, quantityAdded: quantity } as StockItem & {quantityAdded: number};
                  } else {
-                     console.log("Item does not exist, adding new item:", itemName);
-                     const newItemDataWithStock = {
+                     const newItemDataWithStock: Partial<StockItem> & {currentStock: number, userId: string, lastMovementDate: any} = {
                          ...dataToSave,
                          currentStock: quantity,
                          userId: user.uid,
-                         costPrice: formData.costPrice, 
+                         costPrice: formData.costPrice,
+                         lastMovementDate: serverTimestamp(),
+                         // Include supplier details for new item
+                         supplierName: formData.supplierName,
+                         supplierContactPerson: formData.supplierContactPerson,
+                         supplierPhone: formData.supplierPhone,
+                         supplierEmail: formData.supplierEmail,
+                         supplierWebsite: formData.supplierWebsite,
+                         supplierAddress: formData.supplierAddress,
                      };
-
-                      const finalNewItemData = Object.entries(newItemDataWithStock).reduce((acc, [key, value]) => {
-                          if (value !== undefined) {
-                             acc[key as keyof typeof acc] = value;
-                          }
+                     const finalNewItemData = Object.entries(newItemDataWithStock).reduce((acc, [key, value]) => {
+                          if (value !== undefined) acc[key as keyof typeof acc] = value;
                           return acc;
                       }, {} as Partial<StockItem>);
 
-
                      const docRef = await addDoc(itemsCol, finalNewItemData);
-                     console.log("New item added with ID:", docRef.id);
-
                      const newItem = { id: docRef.id, ...finalNewItemData } as StockItem;
-
-                     await logStockMovement(newItem, quantity, newItem.currentStock, 'in'); 
-
-                      const effectiveThreshold = newItem.minimumStock ?? adminSettings.lowStockThreshold;
-                      if (newItem.currentStock > 0 && newItem.currentStock <= effectiveThreshold) {
-                           toast({
-                               variant: "default",
-                               title: "Low Stock Warning",
-                               description: `${newItem.itemName} stock is low (${newItem.currentStock} <= ${effectiveThreshold}). Consider restocking.`,
-                               duration: 7000,
-                           });
-                       }
-
+                     await logStockMovementAndUpdateItem(docRef, newItem, quantity, newItem.currentStock, 'in');
                      return { ...newItem, quantityAdded: quantity };
                  }
              },
@@ -406,83 +383,59 @@
                       }
                   }
 
-                console.log("Editing item in Firestore:", itemData);
                  const itemDocRef = doc(db, 'stockItems', itemData.id);
-                 const { id, ...updateData } = itemData;
+                 const { id, ...updateDataFromForm } = itemData; // updateDataFromForm contains ALL fields from form, including undefined ones for removal
 
-                  let originalStock = 0;
-                  try {
-                       const currentDoc = await getDoc(itemDocRef);
-                       if (currentDoc.exists()) {
-                           originalStock = currentDoc.data().currentStock ?? 0;
-                       }
-                   } catch (e) { console.error("Could not fetch original stock before edit:", e); }
+                 let originalStock = 0;
+                 const currentDocSnap = await getDoc(itemDocRef);
+                  if (currentDocSnap.exists()) {
+                      originalStock = currentDocSnap.data().currentStock ?? 0;
+                  }
 
-                 const cleanData = Object.entries(updateData).reduce((acc, [key, value]) => {
-                      if (value !== undefined) {
-                          if (key === 'currentStock' || key === 'minimumStock' || key === 'costPrice') {
-                              acc[key as keyof typeof acc] = value === '' ? undefined : Number(value);
-                          } else if (key === 'userId') {
-                              if (isAdmin || value === user.uid) {
-                                  acc[key as keyof typeof acc] = value;
-                              }
-                          } else {
-                                acc[key as keyof typeof acc] = value === '' ? undefined : value;
-                          }
-                      } else {
-                           // Keep field if it was explicitly set to undefined (e.g. to remove minimumStock)
-                           acc[key as keyof typeof acc] = undefined; 
-                      }
-                      return acc;
-                  }, {} as Partial<Omit<StockItem, 'id'>>);
-
-
+                  // Prepare final update object: only include changed fields or fields explicitly set to be deleted
                   const finalUpdateData: Record<string, any> = {};
-                  const originalItemForCheck = await getDoc(itemDocRef).then(snap => snap.data() || {}); 
+                  const originalItemData = currentDocSnap.data() || {};
 
-                  for (const key in cleanData) {
-                     const typedKey = key as keyof typeof cleanData;
-                     const newValue = cleanData[typedKey];
-                     const originalValue = originalItemForCheck[typedKey];
+                  // Iterate over keys in updateDataFromForm (which includes all form fields)
+                  // This includes supplier fields as well
+                  for (const key in updateDataFromForm) {
+                      const typedKey = key as keyof StockItem;
+                      let formValue = updateDataFromForm[typedKey];
+                      const originalValue = originalItemData[typedKey];
 
-                      if (newValue === undefined && originalValue !== undefined) {
-                         finalUpdateData[key] = deleteField(); 
-                      } else if (newValue !== undefined) {
-                          finalUpdateData[key] = newValue;
+                      // Coerce numeric fields properly, ensuring empty strings become undefined for deletion
+                      if (key === 'currentStock' || key === 'minimumStock' || key === 'overstockThreshold' || key === 'costPrice') {
+                          formValue = (formValue === '' || formValue === null || formValue === undefined) ? undefined : Number(formValue);
+                      }
+
+
+                      if (formValue === undefined && originalValue !== undefined) {
+                          finalUpdateData[key] = deleteField(); // Field to be removed
+                      } else if (formValue !== undefined && formValue !== originalValue) {
+                          finalUpdateData[key] = formValue; // Field to be updated/added
                       }
                   }
 
 
                  if (Object.keys(finalUpdateData).length === 0) {
-                     console.log("No changes detected after cleaning data. Skipping update.");
-                     return itemData; 
+                     console.log("No changes detected. Skipping update.");
+                     return itemData;
                  }
-                 console.log("Final cleaned data for update:", finalUpdateData);
+                 finalUpdateData.lastMovementDate = serverTimestamp(); // Always update movement date on edit if stock changes
 
                 await updateDoc(itemDocRef, finalUpdateData);
-                console.log("Item updated successfully:", itemData.id);
 
                 const newStock = finalUpdateData.currentStock;
                  if (newStock !== undefined && newStock !== originalStock) {
                      const quantityChange = newStock - originalStock;
-                     const updatedItemForLog: StockItem = { ...itemData, currentStock: newStock };
-                     await logStockMovement(updatedItemForLog, quantityChange, newStock); 
+                     const updatedItemForLog: StockItem = { ...itemData, currentStock: newStock }; // Use form data for log as it's the new state
+                     await logStockMovementAndUpdateItem(itemDocRef, updatedItemForLog, quantityChange, newStock, newStock > originalStock ? 'restock' : 'out');
+                 } else if (Object.keys(finalUpdateData).length > 0) { // If other fields changed but not stock
+                    await updateDoc(itemDocRef, { lastMovementDate: serverTimestamp() }); // Still update lastMovementDate
                  }
 
-                 const updatedDocSnap = await getDoc(itemDocRef);
-                 const updatedItemResult = { id: updatedDocSnap.id, ...updatedDocSnap.data() } as StockItem;
-
-                 const effectiveThreshold = updatedItemResult.minimumStock ?? adminSettings.lowStockThreshold;
-                 if (updatedItemResult.currentStock > 0 && updatedItemResult.currentStock <= effectiveThreshold) {
-                      toast({
-                           variant: "default",
-                           title: "Low Stock Warning",
-                           description: `${updatedItemResult.itemName} stock is now low (${updatedItemResult.currentStock} <= ${effectiveThreshold}). Consider restocking.`,
-                           duration: 7000,
-                       });
-                  }
-
-                return updatedItemResult;
+                 const updatedDocSnapAfter = await getDoc(itemDocRef);
+                 return { id: updatedDocSnapAfter.id, ...updatedDocSnapAfter.data() } as StockItem;
             },
             onSuccess: (updatedItem) => {
                  queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
@@ -503,11 +456,7 @@
                          description: "There was an issue with the data format provided. Check numeric fields. (Details: " + error.message + ")",
                      });
                  } else if (error.message === "Duplicate barcode detected.") {
-                      toast({
-                          variant: "destructive",
-                          title: "Duplicate Barcode",
-                          description: error.message,
-                      });
+                      toast({ variant: "destructive", title: "Duplicate Barcode", description: error.message });
                  }
                  else {
                     toast({
@@ -525,36 +474,25 @@
                  if (itemToDelete.userId !== user.uid && !isAdmin) {
                      throw new Error("Permission denied: You can only delete your own items.");
                  }
-                console.log("Deleting item from Firestore:", itemToDelete.id);
                 const itemDocRef = doc(db, 'stockItems', itemToDelete.id);
                 await deleteDoc(itemDocRef);
-                console.log("Item deleted successfully:", itemToDelete.id);
 
-                 if (itemToDelete.currentStock > 0) {
-                    await logStockMovement(itemToDelete, -itemToDelete.currentStock, 0, 'out'); 
+                 if (itemToDelete.currentStock > 0) { // Log stock out if item had stock
+                    await logStockMovementAndUpdateItem(itemDocRef, itemToDelete, -itemToDelete.currentStock, 0, 'out');
                  }
                 return itemToDelete.id;
             },
             onSuccess: (itemId) => {
                  queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
-                 queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid] }); 
+                 queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid] });
                  setIsDeleteDialogOpen(false);
                  const deletedItemName = itemToDelete?.itemName || 'Item';
                  setItemToDelete(null);
-                 toast({
-                     variant: "default",
-                     title: "Item Deleted",
-                     description: `${deletedItemName} has been removed from stock.`,
-                 });
+                 toast({ variant: "default", title: "Item Deleted", description: `${deletedItemName} has been removed.` });
             },
             onError: (error: any, itemBeingDeleted) => {
-                 console.error("Error deleting item:", error);
                  const deletedItemName = itemBeingDeleted?.itemName || 'Item';
-                 toast({
-                     variant: "destructive",
-                     title: "Error Deleting Item",
-                     description: error.message || `Could not delete ${deletedItemName}.`,
-                 });
+                 toast({ variant: "destructive", title: "Error Deleting Item", description: error.message || `Could not delete ${deletedItemName}.`});
                   setIsDeleteDialogOpen(false);
                   setItemToDelete(null);
             },
@@ -565,89 +503,49 @@
             mutationFn: async (data: StockOutFormDataSubmit) => {
                  if (!user || !db) throw new Error("User not authenticated or DB not available");
                   const itemToUpdate = stockItems.find(item => item.id === data.itemId);
-                 if (!itemToUpdate) {
-                     throw new Error("Item not found.");
-                 }
+                 if (!itemToUpdate) throw new Error("Item not found.");
                  if (itemToUpdate.userId !== user.uid && !isAdmin) {
                      throw new Error("Permission denied: Cannot modify stock for items you don't own.");
                  }
-                 console.log("Processing stock out for item:", data.itemId, "Quantity:", data.quantity);
                  const itemDocRef = doc(db, 'stockItems', data.itemId);
-
                  let updatedStockLevel = 0;
+
                  await runTransaction(db, async (transaction) => {
                     const sfDoc = await transaction.get(itemDocRef);
-                    if (!sfDoc.exists()) {
-                        throw "Document does not exist!";
-                    }
+                    if (!sfDoc.exists()) throw "Document does not exist!";
                     const currentStock = sfDoc.data().currentStock || 0;
                     updatedStockLevel = currentStock - data.quantity;
-                     if (updatedStockLevel < 0) {
-                        throw new Error("Stock out quantity exceeds available stock.");
-                    }
-                    transaction.update(itemDocRef, { currentStock: increment(-data.quantity) });
+                     if (updatedStockLevel < 0) throw new Error("Stock out quantity exceeds available stock.");
+                    transaction.update(itemDocRef, { currentStock: increment(-data.quantity), lastMovementDate: serverTimestamp() });
                  });
-
-
-                 console.log("Stock updated successfully for item:", data.itemId);
-
-                  await logStockMovement(itemToUpdate, -data.quantity, updatedStockLevel, 'out'); 
-
-                 const effectiveThreshold = itemToUpdate.minimumStock ?? adminSettings.lowStockThreshold;
-                 if (updatedStockLevel > 0 && updatedStockLevel <= effectiveThreshold) {
-                      toast({
-                           variant: "default",
-                           title: "Low Stock Warning",
-                           description: `${itemToUpdate.itemName} stock is now low (${updatedStockLevel} <= ${effectiveThreshold}). Consider restocking.`,
-                           duration: 7000,
-                       });
-                  }
-
+                 await logStockMovementAndUpdateItem(itemDocRef, itemToUpdate, -data.quantity, updatedStockLevel, 'out');
                  return { ...data, itemName: itemToUpdate.itemName };
              },
             onSuccess: (data) => {
                 queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
-                toast({
-                    variant: "default",
-                    title: "Stock Updated",
-                    description: `${data.quantity} units of ${data.itemName || 'item'} removed.`,
-                });
+                toast({ variant: "default", title: "Stock Updated", description: `${data.quantity} units of ${data.itemName || 'item'} removed.`});
             },
             onError: (error: any, data) => {
-                console.error("Error updating stock:", error);
                 const failedItem = stockItems.find(item => item.id === data.itemId);
-                toast({
-                    variant: "destructive",
-                    title: "Error Updating Stock",
-                    description: error.message || `Could not remove stock for ${failedItem?.itemName || 'item'}.`,
-                });
+                toast({ variant: "destructive", title: "Error Updating Stock", description: error.message || `Could not remove stock for ${failedItem?.itemName || 'item'}.`});
             },
         });
 
          const saveSettingsMutation = useMutation({
             mutationFn: async (newSettings: AdminSettings) => {
                 if (!isAdmin || !db) throw new Error("Permission denied or DB not available.");
-                console.log("Saving admin settings to Firestore:", newSettings);
                 const settingsDocRef = doc(db, 'settings', 'admin');
-                await setDoc(settingsDocRef, newSettings, { merge: true }); 
+                await setDoc(settingsDocRef, newSettings, { merge: true });
                 return newSettings;
             },
             onSuccess: (savedSettings) => {
-                 queryClient.setQueryData(['adminSettings'], (old: AdminSettings | undefined) => ({...defaultAdminSettings, ...old, ...savedSettings})); 
-                 refetchSettings(); 
-                toast({
-                    title: "Settings Saved",
-                    description: "Admin settings have been updated.",
-                });
+                 queryClient.setQueryData(['adminSettings'], (old: AdminSettings | undefined) => ({...defaultAdminSettings, ...old, ...savedSettings}));
+                 refetchSettings();
+                toast({ title: "Settings Saved", description: "Admin settings have been updated." });
                 setIsSettingsDialogOpen(false);
             },
             onError: (error: any) => {
-                console.error("Error saving admin settings:", error);
-                toast({
-                    variant: "destructive",
-                    title: "Error Saving Settings",
-                    description: error.message || "Could not save settings.",
-                });
+                toast({ variant: "destructive", title: "Error Saving Settings", description: error.message || "Could not save settings."});
             },
         });
 
@@ -660,279 +558,197 @@
                         (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
                         videoRef.current.srcObject = null;
                     }
-                    setHasCameraPermission(null);
-                    return;
+                    setHasCameraPermission(null); return;
                 }
-
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ video: true });
                     setHasCameraPermission(true);
                     if (videoRef.current) videoRef.current.srcObject = stream;
                 } catch (error) {
-                    console.error('Error accessing camera for photo search:', error);
-                    setHasCameraPermission(false);
-                    setIsPhotoSearchOpen(false);
-                    toast({ variant: 'destructive', title: 'Camera Access Denied', description: 'Please enable camera permissions for photo search.' });
+                    setHasCameraPermission(false); setIsPhotoSearchOpen(false);
+                    toast({ variant: 'destructive', title: 'Camera Access Denied', description: 'Please enable camera permissions.' });
                 }
             };
             getCameraPermission();
-            return () => {
-                 if (videoRef.current?.srcObject) {
-                    (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
-                    videoRef.current.srcObject = null;
-                }
-             };
+            return () => { if (videoRef.current?.srcObject) (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop()); };
         }, [isPhotoSearchOpen, toast]);
 
         const handlePhotoSearchCapture = async () => {
              if (!hasCameraPermission || !videoRef.current || !canvasRef.current || photoSearchLoading) {
-                 toast({ variant: "destructive", title: "Camera Not Ready or Busy" });
-                 return;
+                 toast({ variant: "destructive", title: "Camera Not Ready or Busy" }); return;
              }
-              const video = videoRef.current;
-              const canvas = canvasRef.current;
-              canvas.width = video.videoWidth;
-              canvas.height = video.videoHeight;
+              const video = videoRef.current; const canvas = canvasRef.current;
+              canvas.width = video.videoWidth; canvas.height = video.videoHeight;
               const context = canvas.getContext('2d');
               if (context) {
                  context.drawImage(video, 0, 0, canvas.width, canvas.height);
                  const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-
                  if (dataUrl && dataUrl !== 'data:,') {
                       setPhotoSearchLoading(true);
                      try {
                          const input: SearchItemByPhotoInput = { photoDataUri: dataUrl };
-                         console.log("Sending image data URI for search...");
                          const result = await searchItemByPhoto(input);
-                         console.log("Photo search result:", result);
-
                          if (result.itemName) {
                             setSearchQuery(result.itemName);
                             toast({ title: "Item Found by Photo", description: `Searching for "${result.itemName}".` });
                             setIsPhotoSearchOpen(false);
                          } else {
-                            toast({ variant: "destructive", title: "Item Not Found", description: "Could not identify an item from the photo." });
+                            toast({ variant: "destructive", title: "Item Not Found", description: "Could not identify item from photo." });
                          }
                      } catch (error: any) {
-                         console.error("Error searching item by photo:", error);
                          toast({ variant: "destructive", title: "Photo Search Error", description: error.message || "Failed to search by photo." });
-                     } finally {
-                         setPhotoSearchLoading(false);
-                     }
-                 } else {
-                     toast({ variant: "destructive", title: "Capture Error", description: "Could not capture image data." });
-                 }
-             } else {
-                 toast({ variant: "destructive", title: "Canvas Error", description: "Could not get canvas context." });
-             }
+                     } finally { setPhotoSearchLoading(false); }
+                 } else { toast({ variant: "destructive", title: "Capture Error", description: "Could not capture image data." }); }
+             } else { toast({ variant: "destructive", title: "Canvas Error", description: "Could not get canvas context." }); }
          };
 
 
-      const handleSearchChange = (query: string) => {
-        setSearchQuery(query);
-      };
-
-      const handleStockOutSubmit = (data: StockOutFormDataSubmit) => {
-         stockOutMutation.mutate(data);
-       };
-
-      const handleAddStockSubmit = (data: AddStockFormData) => {
-           addStockMutation.mutate(data);
-      };
+      const handleSearchChange = (query: string) => setSearchQuery(query);
+      const handleStockOutSubmit = (data: StockOutFormDataSubmit) => stockOutMutation.mutate(data);
+      const handleAddStockSubmit = (data: AddStockFormData) => addStockMutation.mutate(data);
 
       const handleEditItemSubmit = (data: EditItemFormData) => {
-          if (!itemToEdit) return;
-
+          if (!itemToEdit || !user) return;
           const updatedItem: StockItem = {
               id: itemToEdit.id,
-              userId: itemToEdit.userId || user?.uid || 'unknown',
+              userId: itemToEdit.userId || user.uid, // Ensure userId is set
               itemName: data.itemName,
               currentStock: data.currentStock ?? 0,
               minimumStock: data.minimumStock === undefined || data.minimumStock === null ? undefined : Number(data.minimumStock),
+              overstockThreshold: data.overstockThreshold === undefined || data.overstockThreshold === null ? undefined : Number(data.overstockThreshold),
               barcode: data.barcode || undefined,
               location: data.location || undefined,
               description: data.description || undefined,
               category: data.category || undefined,
-              supplier: data.supplier || undefined,
+              supplier: data.supplier || undefined, // Legacy supplier field
               photoUrl: data.photoUrl || undefined,
               locationCoords: data.locationCoords || undefined,
               costPrice: data.costPrice === undefined || data.costPrice === null ? undefined : Number(data.costPrice),
+              lastMovementDate: itemToEdit.lastMovementDate, // Preserve existing, will be updated by mutation if stock changes
+              // Supplier details
+              supplierName: data.supplierName || undefined,
+              supplierContactPerson: data.supplierContactPerson || undefined,
+              supplierPhone: data.supplierPhone || undefined,
+              supplierEmail: data.supplierEmail || undefined,
+              supplierWebsite: data.supplierWebsite || undefined,
+              supplierAddress: data.supplierAddress || undefined,
           };
-
-
-          if (!updatedItem.userId || updatedItem.userId === 'unknown') {
-              console.error("Missing or invalid userId in item data for edit:", updatedItem);
-              toast({ variant: "destructive", title: "Error", description: "Cannot update item without a valid user association." });
+          if (!updatedItem.userId) {
+              toast({ variant: "destructive", title: "Error", description: "User ID missing. Cannot update item." });
               return;
           }
-
           editItemMutation.mutate(updatedItem);
       };
 
-       const handleEditClick = (item: StockItem) => {
-         setItemToEdit(item);
-         setIsEditDialogOpen(true);
-       };
-
-       const handleViewClick = (item: StockItem) => {
-         setItemToView(item);
-         setIsViewDialogOpen(true);
-       };
-
-
-       const handleDeleteClick = (item: StockItem) => {
-         setItemToDelete(item);
-         setIsDeleteDialogOpen(true);
-       };
-
-       const confirmDeleteItem = () => {
-         if (itemToDelete) {
-           deleteItemMutation.mutate(itemToDelete);
-         }
-       };
+       const handleEditClick = (item: StockItem) => { setItemToEdit(item); setIsEditDialogOpen(true); };
+       const handleViewClick = (item: StockItem) => { setItemToView(item); setIsViewDialogOpen(true); };
+       const handleDeleteClick = (item: StockItem) => { setItemToDelete(item); setIsDeleteDialogOpen(true); };
+       const confirmDeleteItem = () => { if (itemToDelete) deleteItemMutation.mutate(itemToDelete);};
 
        const handleSignOut = async () => {
-        if (!auth) {
-            toast({ variant: "destructive", title: "Sign Out Error", description: "Authentication service not available." });
-            return;
-        }
-        try {
-          await signOut(auth);
-          queryClient.clear();
-          toast({ title: "Signed Out", description: "You have been successfully signed out." });
-        } catch (error) {
-          console.error("Error signing out:", error);
-          toast({ variant: "destructive", title: "Sign Out Error", description: "Could not sign you out." });
-        }
+        if (!auth) { toast({ variant: "destructive", title: "Sign Out Error", description: "Auth service not available." }); return; }
+        try { await signOut(auth); queryClient.clear(); toast({ title: "Signed Out" });
+        } catch (error) { toast({ variant: "destructive", title: "Sign Out Error" }); }
       };
 
         const filteredItems = stockItems.filter((item) => {
             const queryLower = searchQuery.toLowerCase();
             const categoryFilterMatch = !filterCategory || filterCategory === 'all' || (item.category && item.category.toLowerCase() === filterCategory.toLowerCase());
             const locationFilterMatch = !filterLocation || filterLocation === 'all' || (item.location && item.location.toLowerCase() === filterLocation.toLowerCase());
-            const supplierFilterMatch = !filterSupplier || filterSupplier === 'all' || (item.supplier && item.supplier.toLowerCase() === filterSupplier.toLowerCase());
-            
+            const supplierFilterMatch = !filterSupplier || filterSupplier === 'all' || ((item.supplier && item.supplier.toLowerCase() === filterSupplier.toLowerCase()) || (item.supplierName && item.supplierName.toLowerCase() === filterSupplier.toLowerCase()));
             const textSearchMatch = (
                 item.itemName.toLowerCase().includes(queryLower) ||
                 (item.barcode && item.barcode.toLowerCase().includes(queryLower)) ||
                 (item.description && item.description.toLowerCase().includes(queryLower))
             );
-        
-            return categoryFilterMatch && locationFilterMatch && supplierFilterMatch && textSearchMatch; 
+            return categoryFilterMatch && locationFilterMatch && supplierFilterMatch && textSearchMatch;
         });
-        
 
        const isMutating = stockOutMutation.isPending || addStockMutation.isPending || editItemMutation.isPending || deleteItemMutation.isPending || saveSettingsMutation.isPending || photoSearchLoading;
        const isLoading = authLoading || isLoadingItems || isLoadingSettings || isLoadingMovements;
 
 
         useEffect(() => {
-            if (!isLoading && stockItems.length > 0 && adminSettings) { 
-                let lowStockItemsArray: {name: string, current: number, min: number | undefined}[] = [];
-                stockItems.forEach(item => {
-                    const effectiveThreshold = item.minimumStock !== undefined ? item.minimumStock : adminSettings.lowStockThreshold;
-                    if (item.currentStock > 0 && item.currentStock <= effectiveThreshold) {
-                         lowStockItemsArray.push({name: item.itemName, current: item.currentStock, min: effectiveThreshold});
-                    }
-                });
+            if (isLoading || !adminSettings || !stockItems.length || !isAdmin) return;
 
-                if (lowStockItemsArray.length > 0) {
-                    const lowStockMessages = lowStockItemsArray.map(i => `${i.name} (${i.current}/${i.min ?? adminSettings.lowStockThreshold})`);
-                    toast({
-                        variant: "destructive",
-                        title: `Low Stock Alert (${lowStockItemsArray.length} item${lowStockItemsArray.length > 1 ? 's' : ''})`,
-                        description: `Restock needed for: ${lowStockMessages.join(', ')}.`,
-                        duration: 10000,
-                    });
-                    if (adminSettings.emailNotifications) {
-                        console.log("SIMULATED EMAIL ALERT: Low stock items detected:", lowStockItemsArray);
-                        // Example: sendEmailAlert('low_stock', { items: lowStockMessages, userEmail: user?.email });
+            let alerts: {title: string, description: string, variant?: "default" | "destructive"}[] = [];
+
+            stockItems.forEach(item => {
+                // Low Stock Alert
+                const effectiveMinThreshold = item.minimumStock ?? adminSettings.lowStockThreshold;
+                if (item.currentStock > 0 && item.currentStock <= effectiveMinThreshold) {
+                    let lowStockMessage = `${item.itemName} stock is low (${item.currentStock}/${effectiveMinThreshold}).`;
+                    if(item.supplierName || item.supplierEmail || item.supplierPhone){
+                        lowStockMessage += ` Contact ${item.supplierName || 'supplier'} at ${item.supplierEmail || item.supplierPhone || 'N/A'}.`;
                     }
-                     if (adminSettings.pushNotifications) {
-                         console.log("TODO: Send push notification for low stock:", lowStockMessages);
-                     }
+                    alerts.push({title: "Low Stock Alert", description: lowStockMessage, variant: "destructive"});
+                }
+
+                // Overstock Alert
+                const minStockForOverstock = item.minimumStock ?? adminSettings.lowStockThreshold; // Use min or global low as base for overstock
+                const overstockQtyThreshold = item.overstockThreshold ?? (minStockForOverstock * ( (adminSettings.overstockThresholdPercentage ?? 200) / 100));
+                if (item.currentStock > overstockQtyThreshold) {
+                     alerts.push({title: "Overstock Alert", description: `${item.itemName} is overstocked (${item.currentStock} > ${overstockQtyThreshold.toFixed(0)}). Consider reducing stock.`, variant: "default"});
+                }
+
+                // Inactivity Alert
+                if (adminSettings.inactivityAlertDays && item.lastMovementDate) {
+                    const lastMovement = item.lastMovementDate.toDate();
+                    const daysSinceMovement = (new Date().getTime() - lastMovement.getTime()) / (1000 * 3600 * 24);
+                    if (daysSinceMovement > adminSettings.inactivityAlertDays) {
+                         alerts.push({title: "Inactivity Alert", description: `${item.itemName} has not moved in ${Math.floor(daysSinceMovement)} days (since ${lastMovement.toLocaleDateString()}).`, variant: "default"});
+                    }
+                }
+            });
+
+            if (alerts.length > 0) {
+                alerts.forEach(alertDetail => {
+                     toast({
+                         variant: alertDetail.variant || "default",
+                         title: alertDetail.title,
+                         description: alertDetail.description,
+                         duration: 10000,
+                     });
+                 });
+
+                if (adminSettings.emailNotifications) {
+                     console.log("SIMULATED EMAIL ALERTS:", alerts.map(a => `${a.title}: ${a.description}`).join('\n'));
                 }
             }
-        }, [stockItems, adminSettings, isLoading, toast]);
+        }, [stockItems, adminSettings, isLoading, toast, isAdmin]);
 
 
-        const handleSaveSettings = (settings: AdminSettings) => {
-            saveSettingsMutation.mutate(settings);
-        };
+        const handleSaveSettings = (settings: AdminSettings) => saveSettingsMutation.mutate(settings);
+        const handleRetryFetch = () => { if (fetchError) refetchItems(); refetchMovements(); };
 
-
-        const handleRetryFetch = () => {
-             if (fetchError) refetchItems();
-             refetchMovements();
-         };
-
-         // Calculate KPIs
          const kpiData: KPIData | null = React.useMemo(() => {
              if (isLoading) return null;
-
               const totalItems = stockItems.length;
               const lowStockItemsCount = stockItems.filter(item => {
                    const threshold = item.minimumStock ?? adminSettings.lowStockThreshold;
                    return item.currentStock > 0 && item.currentStock <= threshold;
               }).length;
               const outOfStockItemsCount = stockItems.filter(item => item.currentStock === 0).length;
-
-              const todayStart = new Date();
-              todayStart.setHours(0, 0, 0, 0);
-              const todayEnd = new Date();
-              todayEnd.setHours(23, 59, 59, 999);
-
-              const todayMovements = stockMovements.filter(log => {
-                   const logDate = log.timestamp.toDate();
-                   return logDate >= todayStart && logDate <= todayEnd;
-              });
-
+              const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+              const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+              const todayMovements = stockMovements.filter(log => log.timestamp.toDate() >= todayStart && log.timestamp.toDate() <= todayEnd);
               const todayIn = todayMovements.filter(log => log.type === 'in').length;
               const todayOut = todayMovements.filter(log => log.type === 'out').length;
               const todayRestock = todayMovements.filter(log => log.type === 'restock').length;
-              
-              const totalInventoryValue = stockItems.reduce((sum, item) => {
-                  return sum + (item.currentStock * (item.costPrice ?? 0));
-              }, 0);
-
-
-              return {
-                  totalItems,
-                  lowStockItems: lowStockItemsCount,
-                  outOfStockItems: outOfStockItemsCount,
-                  todayIn,
-                  todayOut,
-                  todayRestock,
-                  totalInventoryValue: stockItems.some(item => item.costPrice !== undefined) ? totalInventoryValue : undefined,
-              };
+              const totalInventoryValue = stockItems.reduce((sum, item) => sum + (item.currentStock * (item.costPrice ?? 0)), 0);
+              return { totalItems, lowStockItems: lowStockItemsCount, outOfStockItems: outOfStockItemsCount, todayIn, todayOut, todayRestock, totalInventoryValue: stockItems.some(item => item.costPrice !== undefined) ? totalInventoryValue : undefined };
           }, [stockItems, stockMovements, adminSettings, isLoading]);
 
+         const uniqueCategories = React.useMemo(() => Array.from(new Set(stockItems.map(item => item.category).filter(Boolean) as string[])), [stockItems]);
+         const uniqueLocations = React.useMemo(() => Array.from(new Set(stockItems.map(item => item.location).filter(Boolean) as string[])), [stockItems]);
+         const uniqueSuppliers = React.useMemo(() => Array.from(new Set(stockItems.map(item => item.supplierName || item.supplier).filter(Boolean) as string[])), [stockItems]); // Consider both supplierName and legacy supplier
 
-         // Prepare data for charts & reports
-         const uniqueCategories = React.useMemo(() => {
-            if (isLoadingItems) return [];
-            const categories = new Set(stockItems.map(item => item.category).filter(Boolean) as string[]);
-            return Array.from(categories);
-        }, [stockItems, isLoadingItems]);
-
-        const uniqueLocations = React.useMemo(() => {
-            if (isLoadingItems) return [];
-            const locations = new Set(stockItems.map(item => item.location).filter(Boolean) as string[]);
-            return Array.from(locations);
-        }, [stockItems, isLoadingItems]);
-
-        const uniqueSuppliers = React.useMemo(() => {
-            if(isLoadingItems) return [];
-            const suppliers = new Set(stockItems.map(item => item.supplier).filter(Boolean) as string[]);
-            return Array.from(suppliers);
-        }, [stockItems, isLoadingItems]);
-        
          const categoryChartData = React.useMemo(() => {
               if (isLoading) return [];
               const counts: { [key: string]: number } = {};
               stockItems.forEach(item => {
                   const category = item.category || 'Uncategorized';
-                  counts[category] = (counts[category] || 0) + 1; // Count items, not stock quantity for this chart
+                  counts[category] = (counts[category] || 0) + 1;
               });
               return Object.entries(counts).map(([name, value]) => ({ name, value }));
           }, [stockItems, isLoading]);
@@ -942,9 +758,7 @@
               const counts: { [key: string]: number } = {};
               stockItems.forEach(item => {
                    let locationLabel = item.location?.trim();
-                   if (!locationLabel && item.locationCoords) {
-                       locationLabel = `GPS (${item.locationCoords.latitude.toFixed(2)}, ${item.locationCoords.longitude.toFixed(2)})`;
-                   }
+                   if (!locationLabel && item.locationCoords) locationLabel = `GPS (${item.locationCoords.latitude.toFixed(2)}, ${item.locationCoords.longitude.toFixed(2)})`;
                    locationLabel = locationLabel || 'Unknown Location';
                    counts[locationLabel] = (counts[locationLabel] || 0) + item.currentStock;
               });
@@ -953,37 +767,22 @@
 
           const movementTrendData = React.useMemo(() => {
               if (isLoadingMovements) return [];
-              const weeklyMovements: { [week: string]: { in: number; out: number; restock: number } } = {}; 
-               const now = new Date();
-               const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-               stockMovements
-                   .filter(log => log.timestamp.toDate() >= oneWeekAgo)
-                   .forEach(log => {
-                       const date = log.timestamp.toDate();
-                       const weekStart = new Date(date);
-                       weekStart.setDate(date.getDate() - date.getDay()); // Get Monday of that week
+              const weeklyMovements: { [week: string]: { in: number; out: number; restock: number } } = {};
+               const now = new Date(); const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+               stockMovements.filter(log => log.timestamp.toDate() >= oneWeekAgo).forEach(log => {
+                       const date = log.timestamp.toDate(); const weekStart = new Date(date);
+                       weekStart.setDate(date.getDate() - date.getDay());
                        const weekKey = `${weekStart.getFullYear()}-${(weekStart.getMonth() + 1).toString().padStart(2, '0')}-${weekStart.getDate().toString().padStart(2, '0')}`;
-
-                       if (!weeklyMovements[weekKey]) {
-                           weeklyMovements[weekKey] = { in: 0, out: 0, restock: 0 };
-                       }
-                       if (log.type === 'in') {
-                           weeklyMovements[weekKey].in += log.quantityChange;
-                       } else if (log.type === 'out') {
-                           weeklyMovements[weekKey].out += Math.abs(log.quantityChange);
-                       } else if (log.type === 'restock') {
-                            weeklyMovements[weekKey].restock += log.quantityChange; 
-                       }
+                       if (!weeklyMovements[weekKey]) weeklyMovements[weekKey] = { in: 0, out: 0, restock: 0 };
+                       if (log.type === 'in') weeklyMovements[weekKey].in += log.quantityChange;
+                       else if (log.type === 'out') weeklyMovements[weekKey].out += Math.abs(log.quantityChange);
+                       else if (log.type === 'restock') weeklyMovements[weekKey].restock += log.quantityChange;
                    });
-
-               return Object.entries(weeklyMovements)
-                   .map(([week, data]) => ({ name: week, StockIn: data.in, StockOut: data.out, Restock: data.restock })) 
+               return Object.entries(weeklyMovements).map(([week, data]) => ({ name: week, StockIn: data.in, StockOut: data.out, Restock: data.restock }))
                    .sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime());
           }, [stockMovements, isLoadingMovements]);
 
-          // Data for Basic Reports
-            const topMovingItems = React.useMemo(() => {
+            const topMovingItems = React.useMemo(() => { // Top 10 fast-moving
                 if (isLoadingMovements || isLoadingItems) return [];
                 const movementCounts: { [itemId: string]: { name: string, count: number, totalMoved: number } } = {};
                 stockMovements.forEach(log => {
@@ -994,422 +793,98 @@
                     movementCounts[log.itemId].count++;
                     movementCounts[log.itemId].totalMoved += Math.abs(log.quantityChange);
                 });
-                return Object.values(movementCounts)
-                    .sort((a, b) => b.count - a.count) // Sort by number of movements
-                    .slice(0, 5); // Top 5
+                return Object.values(movementCounts).sort((a, b) => b.totalMoved - a.count).slice(0, 10); // Sort by total units moved
             }, [stockMovements, stockItems, isLoadingMovements, isLoadingItems]);
 
             const itemsNotMoving = React.useMemo(() => {
                 if (isLoadingMovements || isLoadingItems) return [];
-                const thirtyDaysAgo = new Date();
-                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-                const movedItemIds = new Set(stockMovements
-                    .filter(log => log.timestamp.toDate() >= thirtyDaysAgo)
-                    .map(log => log.itemId)
-                );
-                return stockItems.filter(item => !movedItemIds.has(item.id) && item.currentStock > 0).slice(0, 5); // Top 5 not moving with stock
-            }, [stockItems, stockMovements, isLoadingMovements, isLoadingItems]);
+                const daysThreshold = adminSettings.inactivityAlertDays || 30;
+                const thresholdDate = new Date();
+                thresholdDate.setDate(thresholdDate.getDate() - daysThreshold);
+                const movedItemIds = new Set(stockMovements.filter(log => log.timestamp.toDate() >= thresholdDate).map(log => log.itemId));
+                return stockItems.filter(item => !movedItemIds.has(item.id) && item.currentStock > 0).slice(0, 5);
+            }, [stockItems, stockMovements, isLoadingMovements, isLoadingItems, adminSettings.inactivityAlertDays]);
 
 
       return (
         <div className="container mx-auto p-4 md:p-6 lg:p-8">
-           <PageHeader
-             user={user}
-             isAdmin={isAdmin}
-             isLoading={isLoading}
-             onSettingsClick={() => setIsSettingsDialogOpen(true)}
-             onSignOutClick={handleSignOut}
-             lastLogin={user?.metadata?.lastSignInTime ? new Date(user.metadata.lastSignInTime).toLocaleString() : undefined}
-            />
-
+           <PageHeader user={user} isAdmin={isAdmin} isLoading={isLoading} onSettingsClick={() => setIsSettingsDialogOpen(true)} onSignOutClick={handleSignOut} lastLogin={user?.metadata?.lastSignInTime ? new Date(user.metadata.lastSignInTime).toLocaleString() : undefined} />
             <DashboardKPIs data={kpiData} isLoading={isLoading} />
-
            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
-               <Card className="shadow-md md:col-span-1">
-                  <CardHeader><CardTitle className="text-lg">Items by Category</CardTitle></CardHeader>
-                  <CardContent>
-                      {isLoading ? <Skeleton className="h-48 w-full" /> : <CategoryBarChart data={categoryChartData} />}
-                  </CardContent>
-               </Card>
-                <Card className="shadow-md md:col-span-1">
-                   <CardHeader><CardTitle className="text-lg">Stock by Location</CardTitle></CardHeader>
-                   <CardContent>
-                       {isLoading ? <Skeleton className="h-48 w-full" /> : <LocationChart data={locationChartData} />}
-                   </CardContent>
-                </Card>
-               <Card className="shadow-md md:col-span-1">
-                  <CardHeader><CardTitle className="text-lg">Weekly Movement Trend</CardTitle></CardHeader>
-                  <CardContent>
-                     {isLoadingMovements ? <Skeleton className="h-48 w-full" /> : <MovementTrendChart data={movementTrendData} />}
-                  </CardContent>
-               </Card>
+               <Card className="shadow-md md:col-span-1"><CardHeader><CardTitle className="text-lg">Items by Category</CardTitle></CardHeader><CardContent>{isLoading ? <Skeleton className="h-48 w-full" /> : <CategoryBarChart data={categoryChartData} />}</CardContent></Card>
+               <Card className="shadow-md md:col-span-1"><CardHeader><CardTitle className="text-lg">Stock by Location</CardTitle></CardHeader><CardContent>{isLoading ? <Skeleton className="h-48 w-full" /> : <LocationChart data={locationChartData} />}</CardContent></Card>
+               <Card className="shadow-md md:col-span-1"><CardHeader><CardTitle className="text-lg">Weekly Movement Trend</CardTitle></CardHeader><CardContent>{isLoadingMovements ? <Skeleton className="h-48 w-full" /> : <MovementTrendChart data={movementTrendData} />}</CardContent></Card>
            </div>
-
-
            <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
                  <Card className="shadow-md">
-                     <CardHeader>
-                         <CardTitle className="text-2xl">Stock Levels {isAdmin && '(Admin View)'}</CardTitle>
-                         <CardDescription>Manage and view current inventory.</CardDescription>
-                     </CardHeader>
+                     <CardHeader><CardTitle className="text-2xl">Stock Levels {isAdmin && '(Admin View)'}</CardTitle><CardDescription>Manage and view current inventory.</CardDescription></CardHeader>
                      <CardContent className="space-y-4">
                         <div className="flex flex-col sm:flex-row gap-4 mb-4">
-                            <div className="flex-grow">
-                                 <ItemSearch
-                                     searchQuery={searchQuery}
-                                     onSearchChange={handleSearchChange}
-                                     placeholder="Search by name, barcode, description..."
-                                  />
-                            </div>
+                            <div className="flex-grow"><ItemSearch searchQuery={searchQuery} onSearchChange={handleSearchChange} placeholder="Search by name, barcode, description..." /></div>
                             <div className="flex gap-2 flex-wrap sm:flex-nowrap">
                                  <div className="min-w-[150px] flex-grow sm:flex-grow-0">
                                      <Label htmlFor="filter-category" className="sr-only">Filter by Category</Label>
-                                     <Select value={filterCategory} onValueChange={(value) => setFilterCategory(value === 'all' ? undefined : value)}>
-                                         <SelectTrigger id="filter-category" className="h-10">
-                                             <SelectValue placeholder="Filter by Category" />
-                                         </SelectTrigger>
-                                         <SelectContent>
-                                             <SelectItem value="all">All Categories</SelectItem>
-                                             {uniqueCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
-                                         </SelectContent>
-                                     </Select>
+                                     <Select value={filterCategory} onValueChange={(value) => setFilterCategory(value === 'all' ? undefined : value)}><SelectTrigger id="filter-category" className="h-10"><SelectValue placeholder="Filter by Category" /></SelectTrigger><SelectContent><SelectItem value="all">All Categories</SelectItem>{uniqueCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent></Select>
                                  </div>
                                  <div className="min-w-[150px] flex-grow sm:flex-grow-0">
                                      <Label htmlFor="filter-location" className="sr-only">Filter by Location</Label>
-                                     <Select value={filterLocation} onValueChange={(value) => setFilterLocation(value === 'all' ? undefined : value)}>
-                                         <SelectTrigger id="filter-location" className="h-10">
-                                             <SelectValue placeholder="Filter by Location" />
-                                         </SelectTrigger>
-                                         <SelectContent>
-                                             <SelectItem value="all">All Locations</SelectItem>
-                                             {uniqueLocations.map(loc => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}
-                                         </SelectContent>
-                                     </Select>
+                                     <Select value={filterLocation} onValueChange={(value) => setFilterLocation(value === 'all' ? undefined : value)}><SelectTrigger id="filter-location" className="h-10"><SelectValue placeholder="Filter by Location" /></SelectTrigger><SelectContent><SelectItem value="all">All Locations</SelectItem>{uniqueLocations.map(loc => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}</SelectContent></Select>
                                  </div>
                                  <div className="min-w-[150px] flex-grow sm:flex-grow-0">
                                      <Label htmlFor="filter-supplier" className="sr-only">Filter by Supplier</Label>
-                                     <Select value={filterSupplier} onValueChange={(value) => setFilterSupplier(value === 'all' ? undefined : value)}>
-                                         <SelectTrigger id="filter-supplier" className="h-10">
-                                             <SelectValue placeholder="Filter by Supplier" />
-                                         </SelectTrigger>
-                                         <SelectContent>
-                                             <SelectItem value="all">All Suppliers</SelectItem>
-                                             {uniqueSuppliers.map(sup => <SelectItem key={sup} value={sup}>{sup}</SelectItem>)}
-                                         </SelectContent>
-                                     </Select>
+                                     <Select value={filterSupplier} onValueChange={(value) => setFilterSupplier(value === 'all' ? undefined : value)}><SelectTrigger id="filter-supplier" className="h-10"><SelectValue placeholder="Filter by Supplier" /></SelectTrigger><SelectContent><SelectItem value="all">All Suppliers</SelectItem>{uniqueSuppliers.map(sup => <SelectItem key={sup} value={sup}>{sup}</SelectItem>)}</SelectContent></Select>
                                  </div>
                              </div>
                          </div>
-
-
-                         {isLoadingItems && (
-                          <div className="space-y-2 pt-4">
-                             <Skeleton className="h-8 w-full" />
-                             <Skeleton className="h-12 w-full" />
-                             <Skeleton className="h-12 w-full" />
-                          </div>
-                         )}
-                         {fetchError && (
-                            <Alert variant="destructive" className="mt-4">
-                                 <AlertTriangle className="h-4 w-4" />
-                                 <AlertTitle>Error Loading Stock</AlertTitle>
-                                 <AlertDescription>
-                                     Could not load stock items. {(fetchError as Error).message}
-                                     <Button onClick={handleRetryFetch} variant="link" className="ml-2 p-0 h-auto text-destructive-foreground underline">Retry</Button>
-                                 </AlertDescription>
-                             </Alert>
-                         )}
+                         {isLoadingItems && (<div className="space-y-2 pt-4"><Skeleton className="h-8 w-full" /><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>)}
+                         {fetchError && (<Alert variant="destructive" className="mt-4"><AlertTriangle className="h-4 w-4" /><AlertTitle>Error Loading Stock</AlertTitle><AlertDescription>Could not load stock items. {(fetchError as Error).message}<Button onClick={handleRetryFetch} variant="link" className="ml-2 p-0 h-auto text-destructive-foreground underline">Retry</Button></AlertDescription></Alert>)}
                          {!isLoadingItems && !fetchError && (
-                             <StockDashboard
-                                 items={filteredItems}
-                                 onView={handleViewClick}
-                                 onEdit={handleEditClick}
-                                 onDelete={handleDeleteClick}
-                                 onReorder={(item) => {
-                                      console.log("Reorder clicked for", item.itemName);
-                                      toast({title: "Reorder Action", description: `Initiate reorder for ${item.itemName}. (Placeholder)`})
-                                  }}
-                                 isAdmin={isAdmin}
-                                 globalLowStockThreshold={adminSettings.lowStockThreshold}
-                              />
+                             <StockDashboard items={filteredItems} onView={handleViewClick} onEdit={handleEditClick} onDelete={handleDeleteClick} onReorder={(item) => {
+                                  const supplierContact = item.supplierEmail || item.supplierPhone || item.supplierName || "N/A";
+                                  toast({title: "Reorder Action", description: `Item: ${item.itemName}. Contact: ${supplierContact}. (Placeholder for reorder flow)`, duration: 10000 });
+                                }} isAdmin={isAdmin} globalLowStockThreshold={adminSettings.lowStockThreshold} />
                           )}
                       </CardContent>
                    </Card>
-
                     <Card className="shadow-md">
                          <Tabs defaultValue="add-stock" className="w-full">
-                            <CardHeader className="p-4 border-b">
-                                 <TabsList className="grid w-full grid-cols-2">
-                                     <TabsTrigger value="add-stock">Add/Restock</TabsTrigger>
-                                     <TabsTrigger value="stock-out">Stock Out</TabsTrigger>
-                                 </TabsList>
-                            </CardHeader>
-                           <TabsContent value="add-stock">
-                              <CardContent className="p-4">
-                                 <AddStockForm
-                                      onSubmit={handleAddStockSubmit}
-                                      isLoading={addStockMutation.isPending}
-                                    />
-                              </CardContent>
-                            </TabsContent>
-                           <TabsContent value="stock-out">
-                              <CardContent className="p-4">
-                                 <StockOutForm
-                                      items={stockItems}
-                                      onSubmit={handleStockOutSubmit}
-                                      isLoading={stockOutMutation.isPending}
-                                    />
-                              </CardContent>
-                            </TabsContent>
+                            <CardHeader className="p-4 border-b"><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="add-stock">Add/Restock</TabsTrigger><TabsTrigger value="stock-out">Stock Out</TabsTrigger></TabsList></CardHeader>
+                           <TabsContent value="add-stock"><CardContent className="p-4"><AddStockForm onSubmit={handleAddStockSubmit} isLoading={addStockMutation.isPending} /></CardContent></TabsContent>
+                           <TabsContent value="stock-out"><CardContent className="p-4"><StockOutForm items={stockItems.filter(item => isAdmin || item.userId === user?.uid)} onSubmit={handleStockOutSubmit} isLoading={stockOutMutation.isPending} /></CardContent></TabsContent>
                          </Tabs>
                     </Card>
                </div>
-
-
               <div className="lg:col-span-1 space-y-6 flex flex-col">
-                 <ActionsPanel
-                    onPhotoSearchClick={() => setIsPhotoSearchOpen(true)}
-                    isLoading={isMutating || hasCameraPermission === false || isLoading}
-                    frequentlyUsedItems={stockItems.filter(item => item.currentStock < (item.minimumStock ?? adminSettings.lowStockThreshold) && item.currentStock > 0).slice(0,5)} // Example: show low stock items as frequent
-                    onQuickAction={(action, item) => {
-                        if (action === 'in') handleAddStockSubmit({ itemName: item.itemName, quantity: 1, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location });
-                        else if (action === 'restock') handleAddStockSubmit({ itemName: item.itemName, quantity: 10, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location }); // Example: Restock 10 units
+                 <ActionsPanel onPhotoSearchClick={() => setIsPhotoSearchOpen(true)} isLoading={isMutating || hasCameraPermission === false || isLoading} frequentlyUsedItems={stockItems.filter(item => item.currentStock < (item.minimumStock ?? adminSettings.lowStockThreshold) && item.currentStock > 0).slice(0,5)} onQuickAction={(action, item) => {
+                        if (action === 'in') handleAddStockSubmit({ itemName: item.itemName, quantity: 1, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location, supplierName: item.supplierName });
+                        else if (action === 'restock') handleAddStockSubmit({ itemName: item.itemName, quantity: 10, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location, supplierName: item.supplierName });
                         else if (action === 'out') handleStockOutSubmit({ itemId: item.id, quantity: 1 });
-                    }}
-                  />
-
-                   <ActivityFeed
-                      movements={stockMovements}
-                      isLoading={isLoadingMovements}
-                    />
-                
-                <Card className="shadow-md">
-                    <CardHeader>
-                        <CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5 text-primary"/>Upcoming Deliveries</CardTitle>
-                        <CardDescription>Track expected incoming stock.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-sm text-muted-foreground">Feature coming soon. (e.g., PO-123: 50x Widgets due 2024-05-15)</p>
-                    </CardContent>
-                </Card>
-
-                 <Card className="shadow-md">
-                      <CardHeader>
-                          <CardTitle className="text-lg flex items-center gap-2">
-                              <Bot className="h-5 w-5 text-primary" />
-                              AI Assistant (Coming Soon)
-                          </CardTitle>
-                           <CardDescription>Interact with your inventory using natural language.</CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                           <p className="text-sm text-muted-foreground">
-                                Use AI to manage stock, get alerts, or find supplier info.
-                                This feature is under development and will be available soon.
-                            </p>
-                            {/* Placeholder for chat interface */}
-                      </CardContent>
-                 </Card>
-
+                    }} />
+                   <ActivityFeed movements={stockMovements} isLoading={isLoadingMovements} />
+                <Card className="shadow-md"><CardHeader><CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5 text-primary"/>Upcoming Deliveries</CardTitle><CardDescription>Track expected incoming stock.</CardDescription></CardHeader><CardContent><p className="text-sm text-muted-foreground">Feature coming soon.</p></CardContent></Card>
+                {/* Placeholder for Alerts Panel - Could be a new component */}
+                <Card className="shadow-md"><CardHeader><CardTitle className="text-lg flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive"/>System Alerts</CardTitle><CardDescription>Notifications for stock status.</CardDescription></CardHeader><CardContent><p className="text-sm text-muted-foreground">Critical alerts (low stock, overstock, inactivity) will also appear as pop-ups. More detailed alert management coming soon.</p></CardContent></Card>
                </div>
           </main>
-
             <section className="mt-12">
                 <h2 className="text-2xl font-semibold mb-4 text-primary">Reports</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2"><DollarSign className="h-5 w-5 text-green-500" />Monthly Inventory Value</CardTitle>
-                            <CardDescription>Estimated value of current stock.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {isLoadingItems ? <Skeleton className="h-8 w-32" /> : (
-                                kpiData?.totalInventoryValue !== undefined ?
-                                <p className="text-2xl font-bold">${kpiData.totalInventoryValue.toFixed(2)}</p> :
-                                <p className="text-sm text-muted-foreground">N/A (Cost price per item not available)</p>
-                            )}
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2"><TrendingUp className="h-5 w-5 text-blue-500" />Top Moving Items</CardTitle>
-                            <CardDescription>Most frequently transacted items (last 30 days).</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {isLoadingMovements || isLoadingItems ? <Skeleton className="h-20 w-full" /> :
-                                topMovingItems.length > 0 ? (
-                                    <ul className="space-y-1 text-sm">
-                                        {topMovingItems.map(item => (
-                                            <li key={item.name} className="flex justify-between">
-                                                <span>{item.name}</span>
-                                                <Badge variant="secondary">{item.count} moves / {item.totalMoved} units</Badge>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : <p className="text-sm text-muted-foreground">No movement data.</p>
-                            }
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg flex items-center gap-2"><TrendingDown className="h-5 w-5 text-orange-500" />Items Not Moving</CardTitle>
-                            <CardDescription>Items with no movement in the last 30 days.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                             {isLoadingItems || isLoadingMovements ? <Skeleton className="h-20 w-full" /> :
-                                itemsNotMoving.length > 0 ? (
-                                    <ul className="space-y-1 text-sm">
-                                        {itemsNotMoving.map(item => (
-                                            <li key={item.id} className="flex justify-between">
-                                                <span>{item.itemName}</span>
-                                                <Badge variant="outline">Qty: {item.currentStock}</Badge>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : <p className="text-sm text-muted-foreground">All items have recent activity or are out of stock.</p>
-                            }
-                        </CardContent>
-                    </Card>
+                    <Card><CardHeader><CardTitle className="text-lg flex items-center gap-2"><DollarSign className="h-5 w-5 text-green-500" />Monthly Inventory Value</CardTitle><CardDescription>Estimated value of current stock.</CardDescription></CardHeader><CardContent>{isLoadingItems ? <Skeleton className="h-8 w-32" /> : (kpiData?.totalInventoryValue !== undefined ? <p className="text-2xl font-bold">${kpiData.totalInventoryValue.toFixed(2)}</p> : <p className="text-sm text-muted-foreground">N/A (Cost price per item not available)</p> )}</CardContent></Card>
+                    <Card><CardHeader><CardTitle className="text-lg flex items-center gap-2"><TrendingUp className="h-5 w-5 text-blue-500" />Top 10 Moving Items</CardTitle><CardDescription>Most frequently transacted items (by units).</CardDescription></CardHeader><CardContent>{isLoadingMovements || isLoadingItems ? <Skeleton className="h-20 w-full" /> : topMovingItems.length > 0 ? (<ul className="space-y-1 text-sm">{topMovingItems.map(item => (<li key={item.name} className="flex justify-between"><span>{item.name}</span><Badge variant="secondary">{item.totalMoved} units</Badge></li>))}</ul>) : <p className="text-sm text-muted-foreground">No movement data.</p>}</CardContent></Card>
+                    <Card><CardHeader><CardTitle className="text-lg flex items-center gap-2"><TrendingDown className="h-5 w-5 text-orange-500" />Items Not Moving</CardTitle><CardDescription>Items with no movement in last {adminSettings.inactivityAlertDays || 30} days.</CardDescription></CardHeader><CardContent>{isLoadingItems || isLoadingMovements ? <Skeleton className="h-20 w-full" /> : itemsNotMoving.length > 0 ? (<ul className="space-y-1 text-sm">{itemsNotMoving.map(item => (<li key={item.id} className="flex justify-between"><span>{item.itemName}</span><Badge variant="outline">Qty: {item.currentStock}</Badge></li>))}</ul>) : <p className="text-sm text-muted-foreground">All items have recent activity or are out of stock.</p>}</CardContent></Card>
                 </div>
-                <Separator className="my-6"/>
-                 <p className="text-sm text-muted-foreground text-center">More reports and analytics coming soon.</p>
+                <Separator className="my-6"/><p className="text-sm text-muted-foreground text-center">More reports and analytics coming soon.</p>
             </section>
-
-
-           <ViewItemDialog
-             isOpen={isViewDialogOpen}
-             onClose={() => setIsViewDialogOpen(false)}
-             item={itemToView}
-           />
-
-           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-               <DialogContent className="sm:max-w-lg">
-                   <DialogHeader>
-                       <DialogTitle>Edit Item: {itemToEdit?.itemName}</DialogTitle>
-                       <DialogDescription>
-                            Make changes to the item details below. Click save when done.
-                        </DialogDescription>
-                    </DialogHeader>
-                    {itemToEdit && (
-                       <EditItemForm
-                            item={itemToEdit}
-                            onSubmit={handleEditItemSubmit}
-                            isLoading={editItemMutation.isPending}
-                            onCancel={() => setIsEditDialogOpen(false)}
-                        />
-                    )}
-                </DialogContent>
-            </Dialog>
-
-
-           <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This will permanently delete {itemToDelete?.itemName}. This action cannot be undone.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)} disabled={deleteItemMutation.isPending}>
-                            Cancel
-                        </AlertDialogCancel>
-                        <AlertDialogAction onClick={confirmDeleteItem} disabled={deleteItemMutation.isPending} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-                            {deleteItemMutation.isPending ? (
-                                <> <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>
-                             ) : (
-                                <> <Trash2 className="mr-2 h-4 w-4" /> Delete Item</>
-                             )}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
-               {isAdmin && isSettingsDialogOpen && (
-                   <AdminSettingsDialog
-                      isOpen={isSettingsDialogOpen}
-                      onClose={() => setIsSettingsDialogOpen(false)}
-                      onSave={handleSaveSettings}
-                       currentSettings={adminSettings}
-                       isLoading={saveSettingsMutation.isPending}
-                   />
-               )}
-
-               <Dialog open={isPhotoSearchOpen} onOpenChange={setIsPhotoSearchOpen}>
-                  <DialogContent className="sm:max-w-md">
-                      <DialogHeader>
-                          <DialogTitle>Search Item by Photo</DialogTitle>
-                          <DialogDescription>
-                             Center the item in the camera view and capture the photo to search.
-                          </DialogDescription>
-                      </DialogHeader>
-                       <div className="space-y-4 py-4">
-                            <div className="relative aspect-video w-full bg-muted rounded-md overflow-hidden">
-                                <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
-                                <canvas ref={canvasRef} style={{ display: 'none' }} />
-
-                                 {hasCameraPermission === false && (
-                                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-destructive-foreground p-4">
-                                           <VideoOff className="h-12 w-12 mb-2" />
-                                           <p className="text-lg font-semibold">Camera Access Denied</p>
-                                           <p className="text-sm text-center">Please allow camera access in your browser settings.</p>
-                                       </div>
-                                  )}
-                                 {hasCameraPermission === null && !photoSearchLoading && (
-                                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-muted-foreground">
-                                            <Loader2 className="h-8 w-8 animate-spin mb-2" />
-                                            <p>Accessing Camera...</p>
-                                         </div>
-                                  )}
-
-                                {photoSearchLoading && (
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-primary-foreground">
-                                        <Loader2 className="h-8 w-8 animate-spin mb-2" />
-                                        <p>Analyzing Photo...</p>
-                                    </div>
-                                )}
-                            </div>
-                            <Button
-                                 type="button"
-                                 onClick={handlePhotoSearchCapture}
-                                 disabled={photoSearchLoading || hasCameraPermission !== true}
-                                 className="w-full"
-                                 size="lg"
-                             >
-                                     {photoSearchLoading ? (
-                                          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                                     ) : (
-                                         <Camera className="mr-2 h-5 w-5" />
-                                     )}
-                                     {photoSearchLoading ? 'Searching...' : 'Capture & Search'}
-                                </Button>
-                         </div>
-                         <DialogFooter>
-                             <Button variant="outline" onClick={() => setIsPhotoSearchOpen(false)} disabled={photoSearchLoading}>
-                                 <XCircle className="mr-2 h-4 w-4"/> Cancel
-                             </Button>
-                          </DialogFooter>
-                   </DialogContent>
-               </Dialog>
+           <ViewItemDialog isOpen={isViewDialogOpen} onClose={() => setIsViewDialogOpen(false)} item={itemToView} />
+           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Edit Item: {itemToEdit?.itemName}</DialogTitle><DialogDescription>Make changes to the item details below. Click save when done.</DialogDescription></DialogHeader>{itemToEdit && (<EditItemForm item={itemToEdit} onSubmit={handleEditItemSubmit} isLoading={editItemMutation.isPending} onCancel={() => setIsEditDialogOpen(false)} />)}</DialogContent></Dialog>
+           <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete {itemToDelete?.itemName}. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)} disabled={deleteItemMutation.isPending}>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmDeleteItem} disabled={deleteItemMutation.isPending} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">{deleteItemMutation.isPending ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>) : (<><Trash2 className="mr-2 h-4 w-4" /> Delete Item</>)}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+               {isAdmin && isSettingsDialogOpen && (<AdminSettingsDialog isOpen={isSettingsDialogOpen} onClose={() => setIsSettingsDialogOpen(false)} onSave={handleSaveSettings} currentSettings={adminSettings} isLoading={saveSettingsMutation.isPending} />)}
+               <Dialog open={isPhotoSearchOpen} onOpenChange={setIsPhotoSearchOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Search Item by Photo</DialogTitle><DialogDescription>Center the item in the camera view and capture to search.</DialogDescription></DialogHeader><div className="space-y-4 py-4"><div className="relative aspect-video w-full bg-muted rounded-md overflow-hidden"><video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline /><canvas ref={canvasRef} style={{ display: 'none' }} />{hasCameraPermission === false && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-destructive-foreground p-4"><VideoOff className="h-12 w-12 mb-2" /><p className="text-lg font-semibold">Camera Access Denied</p><p className="text-sm text-center">Please allow camera access in your browser settings.</p></div>)}{hasCameraPermission === null && !photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Accessing Camera...</p></div>)}{photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-primary-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Analyzing Photo...</p></div>)}</div><Button type="button" onClick={handlePhotoSearchCapture} disabled={photoSearchLoading || hasCameraPermission !== true} className="w-full" size="lg">{photoSearchLoading ? (<Loader2 className="mr-2 h-5 w-5 animate-spin" />) : (<Camera className="mr-2 h-5 w-5" />)}{photoSearchLoading ? 'Searching...' : 'Capture & Search'}</Button></div><DialogFooter><Button variant="outline" onClick={() => setIsPhotoSearchOpen(false)} disabled={photoSearchLoading}><XCircle className="mr-2 h-4 w-4"/> Cancel</Button></DialogFooter></DialogContent></Dialog>
          </div>
        );
      }
 
-
      export default function Home() {
-         return (
-             <QueryClientProvider client={queryClient}>
-                  <ThemeProvider
-                    attribute="class"
-                    defaultTheme="system"
-                    enableSystem
-                    disableTransitionOnChange
-                  >
-                      <RequireAuth>
-                          <StockManagementPageContent />
-                      </RequireAuth>
-                  </ThemeProvider>
-              </QueryClientProvider>
-         );
+         return (<QueryClientProvider client={queryClient}><ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange><RequireAuth><StockManagementPageContent /></RequireAuth></ThemeProvider></QueryClientProvider>);
      }
-

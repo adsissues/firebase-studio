@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import {
-  Form, // Ensure Form is imported
+  Form,
   FormControl,
   FormField,
   FormItem,
@@ -18,7 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Save, Loader2, Camera, MapPin, ScanBarcode, VideoOff, XCircle } from 'lucide-react'; // Removed unused icons
+import { Save, Loader2, Camera, MapPin, ScanBarcode, VideoOff, XCircle, Building, User as UserIcon, Phone, Mail as MailIcon, Globe } from 'lucide-react';
 import type { StockItem, LocationCoords } from '@/types';
 import { scanBarcode } from '@/services/barcode-scanner';
 import { captureProductPhoto } from '@/services/camera';
@@ -26,13 +26,12 @@ import { getCurrentLocation } from '@/services/location';
 import { useToast } from "@/hooks/use-toast";
 
 interface EditItemFormProps {
-  item: StockItem; // The item being edited
+  item: StockItem;
   onSubmit: (data: EditItemFormData) => void;
   isLoading?: boolean;
-  onCancel: () => void; // Function to call when cancelling
+  onCancel: () => void;
 }
 
-// Updated schema - removed optional future fields
 const formSchema = z.object({
   itemName: z.string().min(1, { message: 'Item name is required.' }).max(100),
   currentStock: z.coerce
@@ -44,26 +43,30 @@ const formSchema = z.object({
     .int({ message: 'Minimum stock must be a whole number.' })
     .nonnegative({ message: 'Minimum stock cannot be negative.' })
     .optional(),
+  overstockThreshold: z.coerce // New field
+    .number({ invalid_type_error: 'Overstock threshold must be a number.' })
+    .int({ message: 'Overstock threshold must be a whole number.' })
+    .positive({ message: 'Overstock threshold must be positive.' })
+    .optional(),
   barcode: z.string().max(50).optional().or(z.literal('')),
   location: z.string().max(100).optional().or(z.literal('')),
   description: z.string().max(500).optional().or(z.literal('')),
   category: z.string().max(50).optional().or(z.literal('')),
-  supplier: z.string().max(100).optional().or(z.literal('')),
+  supplier: z.string().max(100).optional().or(z.literal('')), // Legacy field
   photoUrl: z.string().url({ message: "Please enter a valid URL or capture a photo." }).optional().or(z.literal('')),
-  locationCoords: z.object({
-    latitude: z.number(),
-    longitude: z.number(),
-  }).optional(),
-  // Removed optional fields: costPrice, leadTime, batchNumber
+  locationCoords: z.object({ latitude: z.number(), longitude: z.number(), }).optional(),
+  costPrice: z.coerce.number().nonnegative().optional(),
+
+  // Supplier Details
+  supplierName: z.string().max(100).optional().or(z.literal('')),
+  supplierContactPerson: z.string().max(100).optional().or(z.literal('')),
+  supplierPhone: z.string().max(20).optional().or(z.literal('')),
+  supplierEmail: z.string().email({ message: "Invalid email address."}).max(100).optional().or(z.literal('')),
+  supplierWebsite: z.string().url({ message: "Please enter a valid URL."}).max(100).optional().or(z.literal('')),
+  supplierAddress: z.string().max(200).optional().or(z.literal('')),
 });
 
-// Update EditItemFormData type - reflects removed fields
-export type EditItemFormData = Omit<z.infer<typeof formSchema>, 'locationCoords' | 'photoUrl'> & {
-    photoUrl?: string;
-    locationCoords?: LocationCoords;
-    minimumStock?: number;
-    // Removed optional fields: costPrice, leadTime, batchNumber
-};
+export type EditItemFormData = z.infer<typeof formSchema>;
 
 
 export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: EditItemFormProps) {
@@ -84,14 +87,22 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
       itemName: item.itemName,
       currentStock: item.currentStock,
       minimumStock: item.minimumStock ?? undefined,
+      overstockThreshold: item.overstockThreshold ?? undefined,
       barcode: item.barcode || '',
       location: item.location || '',
       description: item.description || '',
       category: item.category || '',
-      supplier: item.supplier || '',
+      supplier: item.supplier || '', // Legacy
       photoUrl: item.photoUrl || '',
       locationCoords: item.locationCoords || undefined,
-      // Removed default values for costPrice, leadTime, batchNumber
+      costPrice: item.costPrice ?? undefined,
+      // Supplier fields
+      supplierName: item.supplierName || '',
+      supplierContactPerson: item.supplierContactPerson || '',
+      supplierPhone: item.supplierPhone || '',
+      supplierEmail: item.supplierEmail || '',
+      supplierWebsite: item.supplierWebsite || '',
+      supplierAddress: item.supplierAddress || '',
     },
   });
 
@@ -103,18 +114,14 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                    (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
                    videoRef.current.srcObject = null;
                }
-               setHasCameraPermission(null);
-               return;
+               setHasCameraPermission(null); return;
            }
-
            try {
                stream = await navigator.mediaDevices.getUserMedia({ video: true });
                setHasCameraPermission(true);
                if (videoRef.current) videoRef.current.srcObject = stream;
            } catch (error) {
-               console.error('Error accessing camera:', error);
-               setHasCameraPermission(false);
-               setShowCameraFeed(false);
+               setHasCameraPermission(false); setShowCameraFeed(false);
                toast({ variant: 'destructive', title: 'Camera Access Denied' });
            }
        };
@@ -125,42 +132,30 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
   const handleScanBarcode = async () => {
     setIsScanningBarcode(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 100)); // Reduced delay
+      await new Promise(resolve => setTimeout(resolve, 100));
       const result = await scanBarcode();
       form.setValue('barcode', result.barcode, { shouldValidate: true });
       toast({ title: "Barcode Scanned", description: `Barcode: ${result.barcode}` });
-    } catch (error) {
-      console.error("Barcode scan error:", error);
-      toast({ variant: "destructive", title: "Scan Error" });
-    } finally {
-      setIsScanningBarcode(false);
-    }
+    } catch (error) { toast({ variant: "destructive", title: "Scan Error" });
+    } finally { setIsScanningBarcode(false); }
   };
 
   const handleCapturePhoto = async () => {
     if (!hasCameraPermission || !videoRef.current || !canvasRef.current) {
-        toast({ variant: "destructive", title: "Camera Not Ready" });
-        setShowCameraFeed(true); return;
+        toast({ variant: "destructive", title: "Camera Not Ready" }); setShowCameraFeed(true); return;
     }
-     const video = videoRef.current;
-     const canvas = canvasRef.current;
-     canvas.width = video.videoWidth;
-     canvas.height = video.videoHeight;
+     const video = videoRef.current; const canvas = canvasRef.current;
+     canvas.width = video.videoWidth; canvas.height = video.videoHeight;
      const context = canvas.getContext('2d');
      if (context) {
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         try {
             const dataUrl = await captureProductPhoto(canvas);
              if (dataUrl) {
-                setCapturedPhotoUrl(dataUrl);
-                form.setValue('photoUrl', dataUrl, { shouldValidate: true });
-                toast({ title: "Photo Captured" });
-                setShowCameraFeed(false);
+                setCapturedPhotoUrl(dataUrl); form.setValue('photoUrl', dataUrl, { shouldValidate: true });
+                toast({ title: "Photo Captured" }); setShowCameraFeed(false);
              } else { throw new Error("Failed to get data URL."); }
-        } catch (error) {
-            console.error("Error capturing photo:", error);
-            toast({ variant: "destructive", title: "Capture Error" });
-        }
+        } catch (error) { toast({ variant: "destructive", title: "Capture Error" }); }
     } else { toast({ variant: "destructive", title: "Canvas Error" }); }
 };
 
@@ -168,36 +163,20 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
     setIsCapturingLocation(true);
     try {
       const location = await getCurrentLocation();
-      setCapturedLocation(location);
-      form.setValue('locationCoords', location, { shouldValidate: true });
+      setCapturedLocation(location); form.setValue('locationCoords', location, { shouldValidate: true });
       toast({ title: "Location Updated", description: `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` });
     } catch (error: any) {
-      console.error("Location fetch error:", error);
        toast({ variant: "destructive", title: "Location Error", description: error.message || "Could not fetch location." });
-       // Revert to original location on error
-       setCapturedLocation(item.locationCoords || null);
-       form.setValue('locationCoords', item.locationCoords || undefined);
-    } finally {
-      setIsCapturingLocation(false);
-    }
+       setCapturedLocation(item.locationCoords || null); form.setValue('locationCoords', item.locationCoords || undefined);
+    } finally { setIsCapturingLocation(false); }
   };
 
   function handleFormSubmit(values: z.infer<typeof formSchema>) {
-    console.log("Updating Item (Raw Form Values):", values);
      const submitData: EditItemFormData = {
-       itemName: values.itemName,
-       currentStock: values.currentStock ?? 0,
-       minimumStock: values.minimumStock,
-       barcode: values.barcode || undefined,
-       location: values.location || undefined,
-       description: values.description || undefined,
-       category: values.category || undefined,
-       supplier: values.supplier || undefined,
+       ...values, // Spread all validated form values
        photoUrl: capturedPhotoUrl || values.photoUrl || undefined,
        locationCoords: capturedLocation || values.locationCoords || undefined,
-       // Removed costPrice, leadTime, batchNumber
      };
-     console.log("Data Submitted:", submitData);
     onSubmit(submitData);
   }
 
@@ -205,170 +184,59 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 pt-4">
         <fieldset disabled={isLoading} className="space-y-4 max-h-[65vh] overflow-y-auto pr-2">
-             <FormField
-              control={form.control}
-              name="itemName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Item Name*</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., Large Red Box" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="currentStock"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Current Stock*</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="1"
-                          placeholder="0"
-                          {...field}
-                          value={field.value ?? ''}
-                          onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))}
-                          />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="minimumStock"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Min. Stock Level</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="1"
-                          placeholder="Optional"
-                          {...field}
-                          value={field.value ?? ''}
-                           onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))}
-                          />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-            </div>
-
-            {/* Barcode Section */}
-             <FormField
-               control={form.control}
-               name="barcode"
-               render={({ field }) => (
+             <h3 className="text-xl font-semibold text-primary mb-4 col-span-full">Edit Item Details</h3>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="itemName" render={({ field }) => (<FormItem><FormLabel>Item Name*</FormLabel><FormControl><Input placeholder="e.g., Large Red Box" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="barcode" render={({ field }) => (
                  <FormItem>
                    <FormLabel>Barcode</FormLabel>
                    <div className="flex gap-2">
-                      <FormControl>
-                        <Input placeholder="Scan or enter barcode" {...field} className="flex-grow" />
-                      </FormControl>
-                       <Button
-                         type="button"
-                         variant="outline"
-                         size="icon"
-                         onClick={handleScanBarcode}
-                         disabled={isScanningBarcode || isLoading}
-                         aria-label="Scan Barcode"
-                       >
-                         {isScanningBarcode ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanBarcode className="h-4 w-4" />}
-                       </Button>
-                        {/* Batch Scan button removed */}
+                      <FormControl><Input placeholder="Scan or enter barcode" {...field} className="flex-grow" /></FormControl>
+                       <Button type="button" variant="outline" size="icon" onClick={handleScanBarcode} disabled={isScanningBarcode || isLoading} aria-label="Scan Barcode">{isScanningBarcode ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanBarcode className="h-4 w-4" />}</Button>
                    </div>
                    <FormMessage />
                  </FormItem>
-               )}
-             />
+               )} />
+            </div>
 
-            {/* Other Optional Fields */}
-             <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="Describe the item..." {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-               <div className="grid grid-cols-2 gap-4">
-                 <FormField
-                    control={form.control}
-                    name="category"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Category</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g., Electronics" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="supplier"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Supplier</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g., Acme Corp" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-              </div>
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField control={form.control} name="currentStock" render={({ field }) => (<FormItem><FormLabel>Current Stock*</FormLabel><FormControl><Input type="number" min="0" step="1" placeholder="0" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="minimumStock" render={({ field }) => (<FormItem><FormLabel>Min. Stock Level</FormLabel><FormControl><Input type="number" min="0" step="1" placeholder="Optional" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="overstockThreshold" render={({ field }) => (<FormItem><FormLabel>Overstock Threshold</FormLabel><FormControl><Input type="number" min="0" step="1" placeholder="Optional max" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))} /></FormControl><FormMessage /></FormItem>)} />
+            </div>
 
+            <FormField control={form.control} name="description" render={({ field }) => (<FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="Describe the item..." {...field} /></FormControl><FormMessage /></FormItem>)} />
 
-            {/* Location Section */}
-            <FormField
-              control={form.control}
-              name="location"
-              render={({ field }) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <FormField control={form.control} name="category" render={({ field }) => (<FormItem><FormLabel>Category</FormLabel><FormControl><Input placeholder="e.g., Electronics" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="costPrice" render={({ field }) => (<FormItem><FormLabel>Cost Price (per unit)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
+            </div>
+
+            <FormField control={form.control} name="location" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Storage Location</FormLabel>
                    <div className="flex gap-2 items-end">
-                       <FormControl>
-                         <Input placeholder="e.g., Shelf A3, Bin 5" {...field} className="flex-grow" />
-                       </FormControl>
-                        <Button
-                           type="button"
-                           variant="outline"
-                           size="icon"
-                           onClick={handleGetLocation}
-                           disabled={isCapturingLocation || isLoading}
-                           aria-label="Get Current Location"
-                         >
-                           {isCapturingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
-                         </Button>
+                       <FormControl><Input placeholder="e.g., Shelf A3, Bin 5" {...field} className="flex-grow" /></FormControl>
+                        <Button type="button" variant="outline" size="icon" onClick={handleGetLocation} disabled={isCapturingLocation || isLoading} aria-label="Get Current Location">{isCapturingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}</Button>
                     </div>
-                  <FormDescription>
-                     Manually enter location or {capturedLocation ? `use captured coordinates (Lat: ${capturedLocation.latitude.toFixed(4)}, Lon: ${capturedLocation.longitude.toFixed(4)}).` : 'capture current GPS coordinates.'}
-                   </FormDescription>
+                  <FormDescription>{capturedLocation ? `(Using GPS: ${capturedLocation.latitude.toFixed(4)}, ${capturedLocation.longitude.toFixed(4)})` : 'Manually enter or capture current GPS.'}</FormDescription>
                   <FormMessage />
                 </FormItem>
-              )}
-            />
+              )} />
 
-             {/* Removed Optional Fields section */}
+            <div className="pt-4 border-t mt-4 col-span-full">
+                <h4 className="text-lg font-semibold text-primary mb-3">Supplier Details</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <FormField control={form.control} name="supplierName" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><Building className="h-4 w-4 text-muted-foreground" />Company Name</FormLabel><FormControl><Input placeholder="Supplier Company Name" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                     <FormField control={form.control} name="supplierContactPerson" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><UserIcon className="h-4 w-4 text-muted-foreground" />Contact Person</FormLabel><FormControl><Input placeholder="Contact Person's Name" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                     <FormField control={form.control} name="supplierPhone" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><Phone className="h-4 w-4 text-muted-foreground" />Phone</FormLabel><FormControl><Input type="tel" placeholder="Supplier Phone Number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                     <FormField control={form.control} name="supplierEmail" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><MailIcon className="h-4 w-4 text-muted-foreground" />Email</FormLabel><FormControl><Input type="email" placeholder="Supplier Email Address" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                     <FormField control={form.control} name="supplierWebsite" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><Globe className="h-4 w-4 text-muted-foreground" />Website</FormLabel><FormControl><Input placeholder="https://supplier.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                     <FormField control={form.control} name="supplierAddress" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel className="flex items-center gap-1"><MapPin className="h-4 w-4 text-muted-foreground" />Address</FormLabel><FormControl><Textarea placeholder="Supplier Full Address" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                </div>
+            </div>
 
-            {/* Photo Section */}
-            <FormItem className="pt-4 border-t mt-4">
+            <FormItem className="pt-4 border-t mt-4 col-span-full">
                <FormLabel>Product Photo</FormLabel>
                <div className="flex flex-col gap-2">
                     {showCameraFeed && (
@@ -376,15 +244,11 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                             <video ref={videoRef} className="w-full aspect-video rounded-md bg-muted" autoPlay muted playsInline />
                             {hasCameraPermission === false && ( <Alert variant="destructive"><VideoOff className="h-4 w-4" /><AlertTitle>Camera Access Denied</AlertTitle></Alert> )}
                              {hasCameraPermission === null && ( <Alert><Loader2 className="h-4 w-4 animate-spin" /><AlertTitle>Accessing Camera</AlertTitle></Alert> )}
-                             <Button type="button" onClick={handleCapturePhoto} disabled={!hasCameraPermission || isLoading}>
-                               <Camera className="mr-2 h-4 w-4" /> Capture New Photo
-                           </Button>
+                             <Button type="button" onClick={handleCapturePhoto} disabled={!hasCameraPermission || isLoading}><Camera className="mr-2 h-4 w-4" /> Capture New Photo</Button>
                             <canvas ref={canvasRef} style={{ display: 'none' }} />
                         </div>
                     )}
-                     <Button type="button" variant="outline" onClick={() => setShowCameraFeed(prev => !prev)} disabled={isLoading}>
-                        <Camera className="mr-2 h-4 w-4" /> {showCameraFeed ? 'Hide Camera' : (capturedPhotoUrl ? 'Replace Photo' : 'Open Camera')}
-                    </Button>
+                     <Button type="button" variant="outline" onClick={() => setShowCameraFeed(prev => !prev)} disabled={isLoading}><Camera className="mr-2 h-4 w-4" /> {showCameraFeed ? 'Hide Camera' : (capturedPhotoUrl ? 'Replace Photo' : 'Open Camera')}</Button>
                     {capturedPhotoUrl && !showCameraFeed && (
                        <div className="mt-2">
                          <img src={capturedPhotoUrl} alt={item.itemName || 'Product image'} className="rounded-md border max-w-xs max-h-40 object-contain" data-ai-hint="product image" />
@@ -392,23 +256,14 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                        </div>
                     )}
                     <FormDescription>Optional: Update the photo.</FormDescription>
-                     <FormField control={form.control} name="photoUrl" render={({ field }) => <FormMessage />} /> {/* Display potential URL validation errors */}
+                     <FormField control={form.control} name="photoUrl" render={({ field }) => <FormMessage />} />
                  </div>
              </FormItem>
         </fieldset>
 
         <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
-               <XCircle className="mr-2 h-4 w-4" /> Cancel
-            </Button>
-            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isLoading || isCapturingLocation || isScanningBarcode}>
-                 {isLoading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="mr-2 h-4 w-4" />
-                  )}
-                 Save Changes
-               </Button>
+            <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}><XCircle className="mr-2 h-4 w-4" /> Cancel</Button>
+            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={isLoading || isCapturingLocation || isScanningBarcode}><Save className="mr-2 h-4 w-4" />{isLoading ? 'Saving...' : 'Save Changes'}</Button>
          </div>
       </form>
     </Form>

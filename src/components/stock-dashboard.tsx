@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -14,43 +15,66 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { StockItem } from '@/types';
-import { AlertTriangle, MapPin, Barcode, Tag, Building, Info, Image as ImageIcon, MapPinned, Pencil, Trash2, UserCircle, TrendingDown, Circle, Eye,ShoppingCart } from 'lucide-react';
+import { AlertTriangle, MapPin, Barcode, Tag, Building, Info, Image as ImageIcon, MapPinned, Pencil, Trash2, UserCircle, TrendingDown, Circle, Eye, ShoppingCart, Phone, Mail as MailIcon, Activity } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { cn } from "@/lib/utils";
+import { formatDistanceToNowStrict } from 'date-fns';
+
 
 interface StockDashboardProps {
   items: StockItem[];
   onView: (item: StockItem) => void;
   onEdit: (item: StockItem) => void;
   onDelete: (item: StockItem) => void;
+  onReorder: (item: StockItem) => void; // Added for reorder action
   isAdmin?: boolean;
   globalLowStockThreshold: number;
 }
 
-// Helper function to determine the status priority for sorting and styling
-const getItemStatusInfo = (item: StockItem, threshold: number): { priority: number; label: string; variant: 'default' | 'secondary' | 'destructive' | 'success', icon: React.ElementType, rowClass?: string } => {
-    const effectiveThreshold = item.minimumStock !== undefined ? item.minimumStock : threshold;
-    const { currentStock } = item;
+const getItemStatusInfo = (item: StockItem, globalLowStockThreshold: number, adminSettings?: { inactivityAlertDays?: number, overstockThresholdPercentage?: number }): { priority: number; label: string; variant: 'default' | 'secondary' | 'destructive' | 'success', icon: React.ElementType, rowClass?: string } => {
+    const effectiveMinThreshold = item.minimumStock ?? globalLowStockThreshold;
+    const { currentStock, lastMovementDate } = item;
+
+    // Inactivity Check (Admin View Only potentially or based on settings)
+    if (adminSettings?.inactivityAlertDays && lastMovementDate) {
+        const daysSinceMovement = (new Date().getTime() - lastMovementDate.toDate().getTime()) / (1000 * 3600 * 24);
+        if (daysSinceMovement > adminSettings.inactivityAlertDays) {
+             return { priority: 0, label: `Inactive ${Math.floor(daysSinceMovement)}d`, variant: "default", icon: Activity, rowClass: "bg-slate-500/10 dark:bg-slate-700/20 hover:bg-slate-500/20 dark:hover:bg-slate-700/30" }; // Highest priority for visibility
+        }
+    }
 
     if (currentStock === 0) {
-      return { priority: 1, label: "Out of Stock", variant: "destructive", icon: AlertTriangle, rowClass: "bg-destructive/20 hover:bg-destructive/30 opacity-80" }; // Highest priority, most critical
-    } else if (currentStock <= effectiveThreshold) {
-      return { priority: 2, label: "Low Stock", variant: "destructive", icon: TrendingDown, rowClass: "bg-destructive/10 hover:bg-destructive/20" }; // Second highest
-    } else if (currentStock <= effectiveThreshold * 1.5) { // Example: "Getting Low" if within 150% of threshold
-      return { priority: 3, label: "Getting Low", variant: "default", icon: Circle, rowClass: "bg-yellow-500/10 dark:bg-yellow-700/20 hover:bg-yellow-500/20 dark:hover:bg-yellow-700/30" }; // Middle priority
-    } else {
-      return { priority: 4, label: "Good", variant: "success", icon: Circle, rowClass: "" }; // Lowest priority (good stock)
+      return { priority: 1, label: "Out of Stock", variant: "destructive", icon: AlertTriangle, rowClass: "bg-destructive/20 hover:bg-destructive/30 opacity-80" };
     }
+
+    // Overstock Check
+    const overstockPercentage = adminSettings?.overstockThresholdPercentage ?? 200; // Default 200%
+    const overstockQtyThreshold = item.overstockThreshold ?? (effectiveMinThreshold * (overstockPercentage / 100));
+    if (currentStock > overstockQtyThreshold && overstockQtyThreshold > 0) { // Ensure overstockThreshold is meaningful
+         return { priority: 2, label: "Overstock", variant: "default", icon: TrendingDown, rowClass: "bg-yellow-500/10 dark:bg-yellow-700/20 hover:bg-yellow-500/20 dark:hover:bg-yellow-700/30" };
+    }
+
+    if (currentStock <= effectiveMinThreshold) {
+      return { priority: 3, label: "Low Stock", variant: "destructive", icon: TrendingDown, rowClass: "bg-destructive/10 hover:bg-destructive/20" };
+    }
+    // Removed "Getting Low" for simplicity, can be re-added if needed
+    // else if (currentStock <= effectiveMinThreshold * 1.5) {
+    //   return { priority: 4, label: "Getting Low", variant: "default", icon: Circle, rowClass: "bg-yellow-500/10 dark:bg-yellow-700/20 hover:bg-yellow-500/20 dark:hover:bg-yellow-700/30" };
+    // }
+    return { priority: 5, label: "Good", variant: "success", icon: Circle, rowClass: "" };
 };
 
 
-export function StockDashboard({ items, onView, onEdit, onDelete, isAdmin = false, globalLowStockThreshold }: StockDashboardProps) {
+export function StockDashboard({ items, onView, onEdit, onDelete, onReorder, isAdmin = false, globalLowStockThreshold }: StockDashboardProps) {
   const { user } = useAuth();
+  // Placeholder for admin settings - in a real app, this would come from context or props
+  const adminSettingsFromSomewhere = { inactivityAlertDays: 30, overstockThresholdPercentage: 200 };
+
 
   const getStatusBadge = (item: StockItem) => {
-    const statusInfo = getItemStatusInfo(item, globalLowStockThreshold);
+    const statusInfo = getItemStatusInfo(item, globalLowStockThreshold, adminSettingsFromSomewhere); // Pass adminSettings
     return (
-        <Badge variant={statusInfo.variant} className="flex items-center gap-1 text-xs whitespace-nowrap">
+        <Badge variant={statusInfo.variant} className={cn("flex items-center gap-1 text-xs whitespace-nowrap", statusInfo.label === "Good" ? "bg-green-600 hover:bg-green-700" : "")}>
           <statusInfo.icon className="mr-1 h-3 w-3" />
           {statusInfo.label}
         </Badge>
@@ -61,7 +85,7 @@ export function StockDashboard({ items, onView, onEdit, onDelete, isAdmin = fals
   const renderDetail = (icon: React.ElementType, value: string | number | undefined | null, label?: string, fullValue?: string) => {
       if (!value && value !== 0) return <span className="text-muted-foreground">-</span>;
       const IconComponent = icon;
-      const displayValue = typeof value === 'string' && value.length > 20 ? `${value.substring(0, 17)}...` : value;
+      const displayValue = typeof value === 'string' && value.length > 15 ? `${value.substring(0, 12)}...` : value;
       const tooltipContent = fullValue || (typeof value === 'string' ? value : String(value));
       return (
          <TooltipProvider delayDuration={100}>
@@ -72,8 +96,8 @@ export function StockDashboard({ items, onView, onEdit, onDelete, isAdmin = fals
                     <span className="truncate">{displayValue}</span>
                   </span>
                 </TooltipTrigger>
-                {(label || (typeof value === 'string' && value.length > 20)) && (
-                 <TooltipContent>{label ? `${label}: ` : ''}{tooltipContent}</TooltipContent>
+                {(label || (typeof value === 'string' && value.length > 15)) && (
+                 <TooltipContent><div className="max-w-xs break-words">{label ? `${label}: ` : ''}{tooltipContent}</div></TooltipContent>
                 )}
             </Tooltip>
          </TooltipProvider>
@@ -82,23 +106,13 @@ export function StockDashboard({ items, onView, onEdit, onDelete, isAdmin = fals
 
    const renderPhoto = (item: StockItem) => {
       if (!item.photoUrl) return <span className="text-muted-foreground">-</span>;
-      const isDataUri = item.photoUrl.startsWith('data:image');
       return (
         <TooltipProvider delayDuration={100}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="flex items-center justify-center cursor-pointer text-primary hover:underline">
-                 <ImageIcon className="h-4 w-4" />
-              </span>
+              <span className="flex items-center justify-center cursor-pointer text-primary hover:underline"><ImageIcon className="h-4 w-4" /></span>
             </TooltipTrigger>
-            <TooltipContent className="p-0 border-none">
-              <img
-                src={item.photoUrl}
-                alt={item.itemName}
-                className="max-w-xs max-h-40 object-contain rounded"
-                data-ai-hint={!isDataUri ? "product image" : undefined}
-               />
-            </TooltipContent>
+            <TooltipContent className="p-0 border-none"><img src={item.photoUrl} alt={item.itemName} className="max-w-xs max-h-40 object-contain rounded" data-ai-hint="product image" /></TooltipContent>
           </Tooltip>
         </TooltipProvider>
       );
@@ -109,24 +123,12 @@ export function StockDashboard({ items, onView, onEdit, onDelete, isAdmin = fals
      const coordsLocation = item.locationCoords ? `GPS: ${item.locationCoords.latitude.toFixed(4)}, ${item.locationCoords.longitude.toFixed(4)}` : null;
      const displayLocation = item.location ? textLocation : (coordsLocation || '-');
      const IconComponent = item.locationCoords ? MapPinned : MapPin;
-     const truncatedDisplayLocation = displayLocation.length > 20 ? `${displayLocation.substring(0, 17)}...` : displayLocation;
-
+     const truncatedDisplayLocation = displayLocation.length > 15 ? `${displayLocation.substring(0, 12)}...` : displayLocation;
      return (
         <TooltipProvider delayDuration={100}>
            <Tooltip>
-               <TooltipTrigger asChild>
-                 <span className="flex items-center gap-1 cursor-default">
-                   <IconComponent className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                   <span className="truncate">{truncatedDisplayLocation}</span>
-                 </span>
-               </TooltipTrigger>
-                <TooltipContent>
-                   <div className="max-w-xs break-words">
-                      {item.location && <div>Storage: {item.location}</div>}
-                      {coordsLocation && <div>Coordinates: {coordsLocation.replace('GPS: ', '')}</div>}
-                      {!item.location && !coordsLocation && <div>-</div>}
-                   </div>
-               </TooltipContent>
+               <TooltipTrigger asChild><span className="flex items-center gap-1 cursor-default"><IconComponent className="h-3 w-3 text-muted-foreground flex-shrink-0" /><span className="truncate">{truncatedDisplayLocation}</span></span></TooltipTrigger>
+                <TooltipContent><div className="max-w-xs break-words">{item.location && <div>Storage: {item.location}</div>}{coordsLocation && <div>Coordinates: {coordsLocation.replace('GPS: ', '')}</div>}{!item.location && !coordsLocation && <div>-</div>}</div></TooltipContent>
            </Tooltip>
         </TooltipProvider>
      );
@@ -138,123 +140,77 @@ export function StockDashboard({ items, onView, onEdit, onDelete, isAdmin = fals
     return item.userId === user.uid;
   };
 
-  const handleReorderClick = (item: StockItem) => {
-    // In a real app, this would open a pre-filled reorder form or trigger an API call
-    console.log(`TODO: Initiate reorder for item: ${item.itemName} (ID: ${item.id})`);
-    alert(`Reorder button clicked for ${item.itemName}.\nCheck console for details. This would normally open a reorder form or send a request.`);
-  };
-
-  // Sort items: Out of Stock, Low Stock, Getting Low, then Okay
   const sortedItems = React.useMemo(() => {
     return [...items].sort((a, b) => {
-      const statusA = getItemStatusInfo(a, globalLowStockThreshold);
-      const statusB = getItemStatusInfo(b, globalLowStockThreshold);
+      const statusA = getItemStatusInfo(a, globalLowStockThreshold, adminSettingsFromSomewhere);
+      const statusB = getItemStatusInfo(b, globalLowStockThreshold, adminSettingsFromSomewhere);
       return statusA.priority - statusB.priority;
     });
-  }, [items, globalLowStockThreshold]);
+  }, [items, globalLowStockThreshold, adminSettingsFromSomewhere]);
 
 
   return (
     <div className="rounded-lg border shadow-sm overflow-hidden">
       <Table>
-        <TableCaption key="caption" className="py-4">Overview of current stock levels. Low stock items are highlighted.</TableCaption>
+        <TableCaption key="caption" className="py-4">Overview of current stock levels. Critical items are highlighted.</TableCaption>
         <TableHeader key="header">
           <TableRow>
             {[
-              <TableHead key="name" className="w-[15%] min-w-[120px]">Item Name</TableHead>,
-              <TableHead key="photo" className="hidden xl:table-cell text-center w-[50px]">Photo</TableHead>,
-              <TableHead key="category" className="hidden md:table-cell w-[10%] min-w-[80px]">Category</TableHead>,
-              <TableHead key="supplier" className="hidden lg:table-cell w-[10%] min-w-[80px]">Supplier</TableHead>,
-              <TableHead key="location" className="hidden sm:table-cell w-[15%] min-w-[100px]">Location</TableHead>,
-              <TableHead key="barcode" className="hidden lg:table-cell w-[10%] min-w-[80px]">Barcode</TableHead>,
-              <TableHead key="desc" className="hidden xl:table-cell w-[15%] min-w-[100px]">Description</TableHead>,
-              isAdmin && <TableHead key="owner" className="hidden md:table-cell w-[10%] min-w-[80px]">Owner (User)</TableHead>,
-              <TableHead key="current" className="text-right w-[70px]">Current</TableHead>,
-              <TableHead key="min" className="text-right w-[50px]">Min.</TableHead>,
-              <TableHead key="status" className="text-center w-[110px]">Status</TableHead>, // Increased width for new badge
-              <TableHead key="actions" className="text-center w-[150px]">Actions</TableHead> // Adjusted width for 4 icons
+              <TableHead key="name" className="w-[12%] min-w-[100px]">Item</TableHead>,
+              <TableHead key="photo" className="hidden xl:table-cell text-center w-[40px]">Photo</TableHead>,
+              <TableHead key="category" className="hidden md:table-cell w-[8%] min-w-[70px]">Category</TableHead>,
+              <TableHead key="supplier" className="hidden md:table-cell w-[15%] min-w-[120px]">Supplier</TableHead>,
+              <TableHead key="location" className="hidden sm:table-cell w-[12%] min-w-[90px]">Location</TableHead>,
+              isAdmin && <TableHead key="owner" className="hidden lg:table-cell w-[8%] min-w-[70px]">Owner</TableHead>,
+              <TableHead key="current" className="text-right w-[50px]">Qty</TableHead>,
+              <TableHead key="min" className="text-right w-[40px]">Min</TableHead>,
+              <TableHead key="status" className="text-center w-[100px]">Status</TableHead>,
+              <TableHead key="actions" className="text-center w-[120px]">Actions</TableHead>
             ].filter(Boolean)}
           </TableRow>
         </TableHeader>
         <TableBody key="body">
           {sortedItems.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={isAdmin ? 12 : 11} className="h-24 text-center text-muted-foreground">
-                No stock items found matching your search or filters.
-              </TableCell>
-            </TableRow>
+            <TableRow><TableCell colSpan={isAdmin ? 10 : 9} className="h-24 text-center text-muted-foreground">No stock items found.</TableCell></TableRow>
           ) : (
             sortedItems.map((item) => {
-                const statusInfo = getItemStatusInfo(item, globalLowStockThreshold);
-
+                const statusInfo = getItemStatusInfo(item, globalLowStockThreshold, adminSettingsFromSomewhere);
                return (
-                 <TableRow
-                    key={item.id}
-                    className={cn(statusInfo.rowClass)}
-                  >
+                 <TableRow key={item.id} className={cn(statusInfo.rowClass)}>
                     {[
                       <TableCell key="name" className="font-medium">{item.itemName}</TableCell>,
                       <TableCell key="photo" className="hidden xl:table-cell text-center">{renderPhoto(item)}</TableCell>,
                       <TableCell key="category" className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(Tag, item.category, 'Category')}</TableCell>,
-                      <TableCell key="supplier" className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(Building, item.supplier, 'Supplier')}</TableCell>,
+                      <TableCell key="supplier" className="hidden md:table-cell text-muted-foreground text-xs">
+                          {item.supplierName ? (
+                              <TooltipProvider delayDuration={100}>
+                                  <Tooltip>
+                                      <TooltipTrigger asChild><span className="flex items-center gap-1 cursor-default"><Building className="h-3 w-3 text-muted-foreground flex-shrink-0" /><span className="truncate">{item.supplierName}</span></span></TooltipTrigger>
+                                      <TooltipContent><div className="text-xs">
+                                          {item.supplierContactPerson && <p>Contact: {item.supplierContactPerson}</p>}
+                                          {item.supplierPhone && <p className="flex items-center gap-1"><Phone className="h-3 w-3"/> {item.supplierPhone}</p>}
+                                          {item.supplierEmail && <p className="flex items-center gap-1"><MailIcon className="h-3 w-3"/> {item.supplierEmail}</p>}
+                                      </div></TooltipContent>
+                                  </Tooltip>
+                              </TooltipProvider>
+                          ) : (item.supplier ? renderDetail(Building, item.supplier, 'Supplier (Legacy)') : <span className="text-muted-foreground">-</span>)}
+                      </TableCell>,
                       <TableCell key="location" className="hidden sm:table-cell text-muted-foreground text-xs">{renderLocation(item)}</TableCell>,
-                      <TableCell key="barcode" className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(Barcode, item.barcode, 'Barcode')}</TableCell>,
-                      <TableCell key="desc" className="hidden xl:table-cell text-muted-foreground text-xs">{renderDetail(Info, item.description, 'Description')}</TableCell>,
-                      isAdmin && <TableCell key="owner" className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(UserCircle, item.userId, 'User ID', item.userId)}</TableCell>,
+                      isAdmin && <TableCell key="owner" className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(UserCircle, item.userId ? item.userId.substring(0,8)+'...' : 'N/A', 'User ID', item.userId)}</TableCell>,
                       <TableCell key="current" className="text-right font-mono">{item.currentStock}</TableCell>,
                       <TableCell key="min" className="text-right font-mono text-muted-foreground">{item.minimumStock ?? '-'}</TableCell>,
                       <TableCell key="status" className="text-center">{getStatusBadge(item)}</TableCell>,
                       <TableCell key="actions" className="text-center">
                         {canPerformAction(item) ? (
-                          <div className="flex justify-center gap-1">
-                            <TooltipProvider delayDuration={100}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:text-blue-700" onClick={() => onView(item)}>
-                                    <Eye className="h-4 w-4" />
-                                    <span className="sr-only">View {item.itemName}</span>
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>View Item Details</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider delayDuration={100}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(item)}>
-                                    <Pencil className="h-4 w-4" />
-                                    <span className="sr-only">Edit {item.itemName}</span>
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Edit Item</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                             <TooltipProvider delayDuration={100}>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-green-600 hover:text-green-700" onClick={() => handleReorderClick(item)}>
-                                        <ShoppingCart className="h-4 w-4" />
-                                        <span className="sr-only">Reorder {item.itemName}</span>
-                                    </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>Reorder Item (Placeholder)</TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider delayDuration={100}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
-                                    <Trash2 className="h-4 w-4" />
-                                    <span className="sr-only">Delete {item.itemName}</span>
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Delete Item</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                          <div className="flex justify-center gap-0.5">
+                            <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:text-blue-700" onClick={() => onView(item)}><Eye className="h-4 w-4" /><span className="sr-only">View</span></Button></TooltipTrigger><TooltipContent>View</TooltipContent></Tooltip></TooltipProvider>
+                            <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(item)}><Pencil className="h-4 w-4" /><span className="sr-only">Edit</span></Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip></TooltipProvider>
+                            {(statusInfo.priority <= 3 || item.currentStock === 0) && isAdmin && (item.supplierName || item.supplierEmail || item.supplierPhone) &&  // Show reorder if low/out of stock AND admin AND supplier info exists
+                                <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-green-600 hover:text-green-700" onClick={() => onReorder(item)}><ShoppingCart className="h-4 w-4" /><span className="sr-only">Reorder</span></Button></TooltipTrigger><TooltipContent>Reorder</TooltipContent></Tooltip></TooltipProvider>
+                            }
+                            <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(item)}><Trash2 className="h-4 w-4" /><span className="sr-only">Delete</span></Button></TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip></TooltipProvider>
                           </div>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">-</span>
-                        )}
+                        ) : (<span className="text-muted-foreground text-xs">-</span>)}
                       </TableCell>
                     ].filter(Boolean)}
                   </TableRow>
