@@ -141,25 +141,28 @@ export function UserManagementDialog({ isOpen, onClose, allStockItems }: UserMan
     if (!changes || !originalUser) return;
 
     const updatePayload: Partial<AppUser> = {};
-    let hasChanges = false;
+    let payloadHasChanges = false; // Renamed from hasChanges to avoid conflict
 
     if (changes.newRole && changes.newRole !== originalUser.role) {
         updatePayload.role = changes.newRole;
-        hasChanges = true;
+        payloadHasChanges = true;
     }
     if (changes.newAssignedLocations && 
         JSON.stringify(changes.newAssignedLocations.sort()) !== JSON.stringify((originalUser.assignedLocations || []).sort())) {
         updatePayload.assignedLocations = changes.newAssignedLocations;
-        hasChanges = true;
+        payloadHasChanges = true;
     }
 
-    if (hasChanges) {
+    if (payloadHasChanges) {
         updateUserMutation.mutate({ userId, data: updatePayload });
     } else {
         toast({title: "No Change", description: "Selected values are the same as current."});
-        const updatedChanges = {...userChanges}; // Remove if no actual change to save button state
-        delete updatedChanges[userId];
-        setUserChanges(updatedChanges);
+        // Optionally clear changes if no actual difference, to reset save button
+        setUserChanges(prev => {
+            const updated = {...prev};
+            delete updated[userId];
+            return updated;
+        });
     }
   };
   
@@ -221,13 +224,15 @@ export function UserManagementDialog({ isOpen, onClose, allStockItems }: UserMan
               </TableHeader>
               <TableBody>
                 {users.map((user) => {
-                  const currentRole = userChanges[user.uid]?.newRole || user.role || 'user';
-                  const currentAssignedLocations = userChanges[user.uid]?.newAssignedLocations || user.assignedLocations || [];
+                  const currentRoleInState = userChanges[user.uid]?.newRole || user.role || 'user';
+                  const currentAssignedLocationsInState = userChanges[user.uid]?.newAssignedLocations || user.assignedLocations || [];
                   const isSavingThisUser = updateUserMutation.isPending && updateUserMutation.variables?.userId === user.uid;
-                  const hasPendingChanges = !!userChanges[user.uid] && 
-                    ( (userChanges[user.uid]?.newRole && userChanges[user.uid]?.newRole !== user.role) ||
-                      (userChanges[user.uid]?.newAssignedLocations && JSON.stringify(userChanges[user.uid]?.newAssignedLocations?.sort()) !== JSON.stringify((user.assignedLocations || []).sort()))
-                    );
+                  
+                  const roleActuallyChanged = userChanges[user.uid]?.newRole && userChanges[user.uid]?.newRole !== user.role;
+                  const locationsActuallyChanged = userChanges[user.uid]?.newAssignedLocations && 
+                        JSON.stringify(userChanges[user.uid]?.newAssignedLocations?.sort()) !== JSON.stringify((user.assignedLocations || []).sort());
+                  const hasPendingChanges = !!(roleActuallyChanged || locationsActuallyChanged);
+
 
                   return (
                   <TableRow key={user.uid}>
@@ -240,7 +245,7 @@ export function UserManagementDialog({ isOpen, onClose, allStockItems }: UserMan
                     </TableCell>
                     <TableCell>
                       <Select
-                        value={currentRole}
+                        value={currentRoleInState}
                         onValueChange={(newRole) => handleRoleChange(user.uid, newRole as 'admin' | 'user')}
                         disabled={isSavingThisUser}
                       >
@@ -258,7 +263,7 @@ export function UserManagementDialog({ isOpen, onClose, allStockItems }: UserMan
                             <PopoverTrigger asChild>
                                 <Button variant="outline" size="sm" className="h-8 w-full justify-start text-left font-normal" disabled={isSavingThisUser}>
                                     <MapPin className="mr-2 h-4 w-4" />
-                                    {currentAssignedLocations.length > 0 ? `${currentAssignedLocations.length} selected` : "Assign Locations"}
+                                    {currentAssignedLocationsInState.length > 0 ? `${currentAssignedLocationsInState.length} selected` : "Assign Locations"}
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0" align="start">
@@ -267,7 +272,7 @@ export function UserManagementDialog({ isOpen, onClose, allStockItems }: UserMan
                                     <div key={location} className="flex items-center space-x-2 p-1.5">
                                         <Checkbox
                                             id={`${user.uid}-loc-${location}`}
-                                            checked={currentAssignedLocations.includes(location)}
+                                            checked={currentAssignedLocationsInState.includes(location)}
                                             onCheckedChange={() => handleLocationAssignmentChange(user.uid, location)}
                                         />
                                         <label htmlFor={`${user.uid}-loc-${location}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
