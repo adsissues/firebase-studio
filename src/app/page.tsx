@@ -868,8 +868,15 @@
                  {isLoadingItems && <div className="space-y-2 pt-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div>}
                  {fetchError && <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>Could not load stock items.</AlertDescription></Alert>}
                  
-                 {!isLoadingItems && !fetchError && filteredItems.length === 0 && (
-                     <Card><CardContent className="pt-6"><p className="text-center text-muted-foreground">No items match your search criteria.</p></CardContent></Card>
+                 {!isLoadingItems && !fetchError && (
+                    <>
+                        {filteredItems.length === 0 && searchQuery === '' && (
+                            <Card><CardContent className="pt-6"><p className="text-center text-muted-foreground">No stock items are currently assigned to you or available for your access. Please add stock or contact an administrator if you believe this is an error.</p></CardContent></Card>
+                        )}
+                        {filteredItems.length === 0 && searchQuery !== '' && (
+                            <Card><CardContent className="pt-6"><p className="text-center text-muted-foreground">No items match your search: "{searchQuery}".</p></CardContent></Card>
+                        )}
+                    </>
                  )}
 
                  {!isLoadingItems && !fetchError && filteredItems.length > 0 && (
