@@ -1,4 +1,3 @@
-
  'use client';
 
     import * as React from 'react';
@@ -24,13 +23,13 @@
     import { Skeleton } from '@/components/ui/skeleton';
     import { Button } from '@/components/ui/button';
     import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-    import { AlertTriangle, Loader2, Trash2, LogOut, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, DollarSign, Package, TrendingUp, TrendingDown, Clock, ShoppingCart, Building, Phone, Mail as MailIcon, UserCircle as UserIcon, Globe } from 'lucide-react';
+    import { AlertTriangle, Loader2, Trash2, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, DollarSign, Package, TrendingUp, TrendingDown, Clock, ShoppingCart, Building, Phone, Mail as MailIcon, UserCircle as UserIcon, Globe, Users } from 'lucide-react';
     import { RequireAuth } from '@/components/auth/require-auth';
     import { useAuth } from '@/context/auth-context';
     import { signOut } from 'firebase/auth';
     import { ThemeProvider } from "@/components/theme-provider";
-    import { ThemeToggle } from "@/components/theme-toggle";
     import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
+    import { UserManagementDialog } from '@/components/user-management-dialog'; // Import UserManagementDialog
     import { searchItemByPhoto, type SearchItemByPhotoInput } from '@/ai/flows/search-item-by-photo-flow';
     import { DashboardKPIs, type KPIData } from '@/components/dashboard-kpis';
     import { CategoryBarChart } from '@/components/charts/category-bar-chart';
@@ -58,8 +57,8 @@
         emailNotifications: true,
         pushNotifications: false,
         lowStockThreshold: 10,
-        overstockThresholdPercentage: 200, // Default: alert if stock is > 200% of minimum (or global if min not set)
-        inactivityAlertDays: 30, // Default: alert if no movement for 30 days
+        overstockThresholdPercentage: 200, 
+        inactivityAlertDays: 30, 
     };
 
 
@@ -77,6 +76,7 @@
       const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
       const [itemToDelete, setItemToDelete] = useState<StockItem | null>(null);
       const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
+      const [isUserManagementDialogOpen, setIsUserManagementDialogOpen] = useState(false); // State for UserManagementDialog
       const [isPhotoSearchOpen, setIsPhotoSearchOpen] = useState(false);
       const [photoSearchLoading, setPhotoSearchLoading] = useState(false);
       const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
@@ -130,13 +130,12 @@
                   location: item.location || undefined,
                   description: item.description || undefined,
                   category: item.category || undefined,
-                  supplier: item.supplier || undefined, // Keeps legacy supplier name if present
+                  supplier: item.supplier || undefined, 
                   photoUrl: item.photoUrl || undefined,
                   locationCoords: item.locationCoords || undefined,
                   userId: item.userId || user.uid,
                   costPrice: item.costPrice !== undefined ? Number(item.costPrice) : undefined,
-                  lastMovementDate: item.lastMovementDate, // Keep as Timestamp or undefined
-                  // Supplier details
+                  lastMovementDate: item.lastMovementDate, 
                   supplierName: item.supplierName || undefined,
                   supplierContactPerson: item.supplierContactPerson || undefined,
                   supplierPhone: item.supplierPhone || undefined,
@@ -287,7 +286,7 @@
                            updatedData.minimumStock = formData.minimumStock ?? currentData.minimumStock;
                            updatedData.overstockThreshold = formData.overstockThreshold ?? currentData.overstockThreshold;
                            updatedData.costPrice = formData.costPrice ?? currentData.costPrice;
-                           // Preserve existing supplier details if not provided in form
+                           
                             updatedData.supplierName = formData.supplierName ?? currentData.supplierName;
                             updatedData.supplierContactPerson = formData.supplierContactPerson ?? currentData.supplierContactPerson;
                             updatedData.supplierPhone = formData.supplierPhone ?? currentData.supplierPhone;
@@ -323,7 +322,6 @@
                          userId: user.uid,
                          costPrice: formData.costPrice,
                          lastMovementDate: serverTimestamp(),
-                         // Include supplier details for new item
                          supplierName: formData.supplierName,
                          supplierContactPerson: formData.supplierContactPerson,
                          supplierPhone: formData.supplierPhone,
@@ -384,7 +382,7 @@
                   }
 
                  const itemDocRef = doc(db, 'stockItems', itemData.id);
-                 const { id, ...updateDataFromForm } = itemData; // updateDataFromForm contains ALL fields from form, including undefined ones for removal
+                 const { id, ...updateDataFromForm } = itemData; 
 
                  let originalStock = 0;
                  const currentDocSnap = await getDoc(itemDocRef);
@@ -392,27 +390,26 @@
                       originalStock = currentDocSnap.data().currentStock ?? 0;
                   }
 
-                  // Prepare final update object: only include changed fields or fields explicitly set to be deleted
+                  
                   const finalUpdateData: Record<string, any> = {};
                   const originalItemData = currentDocSnap.data() || {};
 
-                  // Iterate over keys in updateDataFromForm (which includes all form fields)
-                  // This includes supplier fields as well
+                  
                   for (const key in updateDataFromForm) {
                       const typedKey = key as keyof StockItem;
                       let formValue = updateDataFromForm[typedKey];
                       const originalValue = originalItemData[typedKey];
 
-                      // Coerce numeric fields properly, ensuring empty strings become undefined for deletion
+                      
                       if (key === 'currentStock' || key === 'minimumStock' || key === 'overstockThreshold' || key === 'costPrice') {
                           formValue = (formValue === '' || formValue === null || formValue === undefined) ? undefined : Number(formValue);
                       }
 
 
                       if (formValue === undefined && originalValue !== undefined) {
-                          finalUpdateData[key] = deleteField(); // Field to be removed
+                          finalUpdateData[key] = deleteField(); 
                       } else if (formValue !== undefined && formValue !== originalValue) {
-                          finalUpdateData[key] = formValue; // Field to be updated/added
+                          finalUpdateData[key] = formValue; 
                       }
                   }
 
@@ -421,17 +418,17 @@
                      console.log("No changes detected. Skipping update.");
                      return itemData;
                  }
-                 finalUpdateData.lastMovementDate = serverTimestamp(); // Always update movement date on edit if stock changes
+                 finalUpdateData.lastMovementDate = serverTimestamp(); 
 
                 await updateDoc(itemDocRef, finalUpdateData);
 
                 const newStock = finalUpdateData.currentStock;
                  if (newStock !== undefined && newStock !== originalStock) {
                      const quantityChange = newStock - originalStock;
-                     const updatedItemForLog: StockItem = { ...itemData, currentStock: newStock }; // Use form data for log as it's the new state
+                     const updatedItemForLog: StockItem = { ...itemData, currentStock: newStock }; 
                      await logStockMovementAndUpdateItem(itemDocRef, updatedItemForLog, quantityChange, newStock, newStock > originalStock ? 'restock' : 'out');
-                 } else if (Object.keys(finalUpdateData).length > 0) { // If other fields changed but not stock
-                    await updateDoc(itemDocRef, { lastMovementDate: serverTimestamp() }); // Still update lastMovementDate
+                 } else if (Object.keys(finalUpdateData).length > 0) { 
+                    await updateDoc(itemDocRef, { lastMovementDate: serverTimestamp() }); 
                  }
 
                  const updatedDocSnapAfter = await getDoc(itemDocRef);
@@ -477,7 +474,7 @@
                 const itemDocRef = doc(db, 'stockItems', itemToDelete.id);
                 await deleteDoc(itemDocRef);
 
-                 if (itemToDelete.currentStock > 0) { // Log stock out if item had stock
+                 if (itemToDelete.currentStock > 0) { 
                     await logStockMovementAndUpdateItem(itemDocRef, itemToDelete, -itemToDelete.currentStock, 0, 'out');
                  }
                 return itemToDelete.id;
@@ -611,7 +608,7 @@
           if (!itemToEdit || !user) return;
           const updatedItem: StockItem = {
               id: itemToEdit.id,
-              userId: itemToEdit.userId || user.uid, // Ensure userId is set
+              userId: itemToEdit.userId || user.uid, 
               itemName: data.itemName,
               currentStock: data.currentStock ?? 0,
               minimumStock: data.minimumStock === undefined || data.minimumStock === null ? undefined : Number(data.minimumStock),
@@ -620,12 +617,12 @@
               location: data.location || undefined,
               description: data.description || undefined,
               category: data.category || undefined,
-              supplier: data.supplier || undefined, // Legacy supplier field
+              supplier: data.supplier || undefined, 
               photoUrl: data.photoUrl || undefined,
               locationCoords: data.locationCoords || undefined,
               costPrice: data.costPrice === undefined || data.costPrice === null ? undefined : Number(data.costPrice),
-              lastMovementDate: itemToEdit.lastMovementDate, // Preserve existing, will be updated by mutation if stock changes
-              // Supplier details
+              lastMovementDate: itemToEdit.lastMovementDate, 
+              
               supplierName: data.supplierName || undefined,
               supplierContactPerson: data.supplierContactPerson || undefined,
               supplierPhone: data.supplierPhone || undefined,
@@ -674,7 +671,7 @@
             let alerts: {title: string, description: string, variant?: "default" | "destructive"}[] = [];
 
             stockItems.forEach(item => {
-                // Low Stock Alert
+                
                 const effectiveMinThreshold = item.minimumStock ?? adminSettings.lowStockThreshold;
                 if (item.currentStock > 0 && item.currentStock <= effectiveMinThreshold) {
                     let lowStockMessage = `${item.itemName} stock is low (${item.currentStock}/${effectiveMinThreshold}).`;
@@ -684,14 +681,14 @@
                     alerts.push({title: "Low Stock Alert", description: lowStockMessage, variant: "destructive"});
                 }
 
-                // Overstock Alert
-                const minStockForOverstock = item.minimumStock ?? adminSettings.lowStockThreshold; // Use min or global low as base for overstock
+                
+                const minStockForOverstock = item.minimumStock ?? adminSettings.lowStockThreshold; 
                 const overstockQtyThreshold = item.overstockThreshold ?? (minStockForOverstock * ( (adminSettings.overstockThresholdPercentage ?? 200) / 100));
                 if (item.currentStock > overstockQtyThreshold) {
                      alerts.push({title: "Overstock Alert", description: `${item.itemName} is overstocked (${item.currentStock} > ${overstockQtyThreshold.toFixed(0)}). Consider reducing stock.`, variant: "default"});
                 }
 
-                // Inactivity Alert
+                
                 if (adminSettings.inactivityAlertDays && item.lastMovementDate) {
                     const lastMovement = item.lastMovementDate.toDate();
                     const daysSinceMovement = (new Date().getTime() - lastMovement.getTime()) / (1000 * 3600 * 24);
@@ -741,7 +738,7 @@
 
          const uniqueCategories = React.useMemo(() => Array.from(new Set(stockItems.map(item => item.category).filter(Boolean) as string[])), [stockItems]);
          const uniqueLocations = React.useMemo(() => Array.from(new Set(stockItems.map(item => item.location).filter(Boolean) as string[])), [stockItems]);
-         const uniqueSuppliers = React.useMemo(() => Array.from(new Set(stockItems.map(item => item.supplierName || item.supplier).filter(Boolean) as string[])), [stockItems]); // Consider both supplierName and legacy supplier
+         const uniqueSuppliers = React.useMemo(() => Array.from(new Set(stockItems.map(item => item.supplierName || item.supplier).filter(Boolean) as string[])), [stockItems]); 
 
          const categoryChartData = React.useMemo(() => {
               if (isLoading) return [];
@@ -782,7 +779,7 @@
                    .sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime());
           }, [stockMovements, isLoadingMovements]);
 
-            const topMovingItems = React.useMemo(() => { // Top 10 fast-moving
+            const topMovingItems = React.useMemo(() => { 
                 if (isLoadingMovements || isLoadingItems) return [];
                 const movementCounts: { [itemId: string]: { name: string, count: number, totalMoved: number } } = {};
                 stockMovements.forEach(log => {
@@ -793,7 +790,7 @@
                     movementCounts[log.itemId].count++;
                     movementCounts[log.itemId].totalMoved += Math.abs(log.quantityChange);
                 });
-                return Object.values(movementCounts).sort((a, b) => b.totalMoved - a.count).slice(0, 10); // Sort by total units moved
+                return Object.values(movementCounts).sort((a, b) => b.totalMoved - a.count).slice(0, 10); 
             }, [stockMovements, stockItems, isLoadingMovements, isLoadingItems]);
 
             const itemsNotMoving = React.useMemo(() => {
@@ -808,7 +805,15 @@
 
       return (
         <div className="container mx-auto p-4 md:p-6 lg:p-8">
-           <PageHeader user={user} isAdmin={isAdmin} isLoading={isLoading} onSettingsClick={() => setIsSettingsDialogOpen(true)} onSignOutClick={handleSignOut} lastLogin={user?.metadata?.lastSignInTime ? new Date(user.metadata.lastSignInTime).toLocaleString() : undefined} />
+           <PageHeader 
+             user={user} 
+             isAdmin={isAdmin} 
+             isLoading={isLoading} 
+             onSettingsClick={() => setIsSettingsDialogOpen(true)} 
+             onSignOutClick={handleSignOut} 
+             onManageUsersClick={() => setIsUserManagementDialogOpen(true)} // Pass handler for Manage Users
+             lastLogin={user?.metadata?.lastSignInTime ? new Date(user.metadata.lastSignInTime).toLocaleString() : undefined} 
+           />
             <DashboardKPIs data={kpiData} isLoading={isLoading} />
            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
                <Card className="shadow-md md:col-span-1"><CardHeader><CardTitle className="text-lg">Items by Category</CardTitle></CardHeader><CardContent>{isLoading ? <Skeleton className="h-48 w-full" /> : <CategoryBarChart data={categoryChartData} />}</CardContent></Card>
@@ -863,7 +868,7 @@
                     }} />
                    <ActivityFeed movements={stockMovements} isLoading={isLoadingMovements} />
                 <Card className="shadow-md"><CardHeader><CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5 text-primary"/>Upcoming Deliveries</CardTitle><CardDescription>Track expected incoming stock.</CardDescription></CardHeader><CardContent><p className="text-sm text-muted-foreground">Feature coming soon.</p></CardContent></Card>
-                {/* Placeholder for Alerts Panel - Could be a new component */}
+                
                 <Card className="shadow-md"><CardHeader><CardTitle className="text-lg flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive"/>System Alerts</CardTitle><CardDescription>Notifications for stock status.</CardDescription></CardHeader><CardContent><p className="text-sm text-muted-foreground">Critical alerts (low stock, overstock, inactivity) will also appear as pop-ups. More detailed alert management coming soon.</p></CardContent></Card>
                </div>
           </main>
@@ -880,6 +885,7 @@
            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Edit Item: {itemToEdit?.itemName}</DialogTitle><DialogDescription>Make changes to the item details below. Click save when done.</DialogDescription></DialogHeader>{itemToEdit && (<EditItemForm item={itemToEdit} onSubmit={handleEditItemSubmit} isLoading={editItemMutation.isPending} onCancel={() => setIsEditDialogOpen(false)} />)}</DialogContent></Dialog>
            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete {itemToDelete?.itemName}. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)} disabled={deleteItemMutation.isPending}>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmDeleteItem} disabled={deleteItemMutation.isPending} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">{deleteItemMutation.isPending ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>) : (<><Trash2 className="mr-2 h-4 w-4" /> Delete Item</>)}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
                {isAdmin && isSettingsDialogOpen && (<AdminSettingsDialog isOpen={isSettingsDialogOpen} onClose={() => setIsSettingsDialogOpen(false)} onSave={handleSaveSettings} currentSettings={adminSettings} isLoading={saveSettingsMutation.isPending} />)}
+               {isAdmin && isUserManagementDialogOpen && (<UserManagementDialog isOpen={isUserManagementDialogOpen} onClose={() => setIsUserManagementDialogOpen(false)} />)}
                <Dialog open={isPhotoSearchOpen} onOpenChange={setIsPhotoSearchOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Search Item by Photo</DialogTitle><DialogDescription>Center the item in the camera view and capture to search.</DialogDescription></DialogHeader><div className="space-y-4 py-4"><div className="relative aspect-video w-full bg-muted rounded-md overflow-hidden"><video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline /><canvas ref={canvasRef} style={{ display: 'none' }} />{hasCameraPermission === false && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-destructive-foreground p-4"><VideoOff className="h-12 w-12 mb-2" /><p className="text-lg font-semibold">Camera Access Denied</p><p className="text-sm text-center">Please allow camera access in your browser settings.</p></div>)}{hasCameraPermission === null && !photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Accessing Camera...</p></div>)}{photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-primary-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Analyzing Photo...</p></div>)}</div><Button type="button" onClick={handlePhotoSearchCapture} disabled={photoSearchLoading || hasCameraPermission !== true} className="w-full" size="lg">{photoSearchLoading ? (<Loader2 className="mr-2 h-5 w-5 animate-spin" />) : (<Camera className="mr-2 h-5 w-5" />)}{photoSearchLoading ? 'Searching...' : 'Capture & Search'}</Button></div><DialogFooter><Button variant="outline" onClick={() => setIsPhotoSearchOpen(false)} disabled={photoSearchLoading}><XCircle className="mr-2 h-4 w-4"/> Cancel</Button></DialogFooter></DialogContent></Dialog>
          </div>
        );

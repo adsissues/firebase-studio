@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from 'react';
@@ -6,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { AppUser } from '@/types';
-import { LogOut, Settings, UserCircle } from 'lucide-react';
+import { LogOut, Settings, UserCircle, Users } from 'lucide-react'; // Added Users icon
 
 interface PageHeaderProps {
     user: AppUser | null;
@@ -14,6 +13,7 @@ interface PageHeaderProps {
     isLoading?: boolean;
     onSettingsClick: () => void;
     onSignOutClick: () => void;
+    onManageUsersClick: () => void; // New prop for managing users
     lastLogin?: string;
 }
 
@@ -23,6 +23,7 @@ export function PageHeader({
     isLoading = false,
     onSettingsClick,
     onSignOutClick,
+    onManageUsersClick, // Destructure new prop
     lastLogin,
 }: PageHeaderProps) {
 
@@ -54,15 +55,28 @@ export function PageHeader({
                         {lastLogin && <div>Last login: {lastLogin}</div>}
                      </div>
                      {isAdmin && (
+                        <>
                          <Button
                              variant="outline"
                              size="icon"
                              onClick={onSettingsClick}
                              aria-label="Open Admin Settings"
                              className="h-8 w-8"
+                             title="Admin Settings"
                          >
                              <Settings className="h-4 w-4" />
                          </Button>
+                         <Button
+                             variant="outline"
+                             size="icon"
+                             onClick={onManageUsersClick} // Call manage users handler
+                             aria-label="Manage Users"
+                             className="h-8 w-8"
+                             title="Manage Users"
+                           >
+                             <Users className="h-4 w-4" />
+                         </Button>
+                        </>
                      )}
                      <ThemeToggle />
                      <Button
@@ -71,16 +85,15 @@ export function PageHeader({
                          onClick={onSignOutClick}
                          aria-label="Sign Out"
                          className="h-8 w-8"
+                         title="Sign Out"
                      >
                          <LogOut className="h-4 w-4" />
                      </Button>
                  </>
              ) : (
-                 <ThemeToggle /> // Show only theme toggle if logged out
+                 <ThemeToggle /> 
              )}
         </div>
     </header>
   );
 }
-
-    
