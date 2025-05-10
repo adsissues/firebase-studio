@@ -12,7 +12,7 @@
     import { ViewItemDialog } from '@/components/view-item-dialog';
     import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
     import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-    import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+    import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'; // Removed DialogFooter as it's imported from alert-dialog
     import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
     import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
     import { Label } from "@/components/ui/label";
@@ -45,7 +45,7 @@
     import { AlertsPanel } from '@/components/alerts-panel';
     import { LocationHeatmapPlaceholder } from '@/components/location-heatmap-placeholder';
     import { ExportReportsButton } from '@/components/export-reports-button';
-    import { getItemStatusInfo } from '@/components/stock-dashboard'; // Import from StockDashboard
+    import { getItemStatusInfo } from '@/components/stock-dashboard'; 
 
     const queryClient = new QueryClient({
       queryCache: new QueryCache({
@@ -118,11 +118,10 @@
 
 
       const { data: stockItems = [], isLoading: isLoadingItems, error: fetchError, refetch: refetchItems } = useQuery<StockItem[]>({
-        queryKey: ['stockItems', user?.uid], // Include user ID in queryKey for user-specific data
+        queryKey: ['stockItems', user?.uid], 
         queryFn: async () => {
            if (!user) return [];
            const itemsCol = collection(db, 'stockItems');
-           // Admins see all items, users see only their own (unless specific sharing logic is added)
            const q = isAdmin ? query(itemsCol) : query(itemsCol, where("userId", "==", user.uid));
            try {
                const itemSnapshot = await getDocs(q);
@@ -142,13 +141,12 @@
                   location: item.location || undefined,
                   description: item.description || undefined,
                   category: item.category || undefined,
-                  supplier: item.supplier || undefined, // Legacy supplier name
+                  supplier: item.supplier || undefined, 
                   photoUrl: item.photoUrl || undefined,
                   locationCoords: item.locationCoords || undefined,
-                  userId: item.userId || user.uid, // Ensure userId is present
+                  userId: item.userId || user.uid, 
                   costPrice: item.costPrice !== undefined ? Number(item.costPrice) : undefined,
                   lastMovementDate: item.lastMovementDate, 
-                  // Supplier details
                   supplierName: item.supplierName || undefined,
                   supplierContactPerson: item.supplierContactPerson || undefined,
                   supplierPhone: item.supplierPhone || undefined,
@@ -166,26 +164,25 @@
               throw err;
           }
         },
-         enabled: !!user, // Only run query if user is authenticated
-         staleTime: 5 * 60 * 1000, // Cache data for 5 minutes
-         refetchOnWindowFocus: true, // Refetch on window focus
+         enabled: !!user, 
+         staleTime: 5 * 60 * 1000, 
+         refetchOnWindowFocus: true, 
       });
 
       const { data: stockMovements = [], isLoading: isLoadingMovements, refetch: refetchMovements } = useQuery<StockMovementLog[]>({
-         queryKey: ['stockMovements', user?.uid], // User-specific if not admin
+         queryKey: ['stockMovements', user?.uid], 
          queryFn: async () => {
              if (!user) return [];
              const logsCol = collection(db, 'stockMovements');
-             // Admins see all logs, users see only their own actions
              const q = isAdmin ? query(logsCol) : query(logsCol, where("userId", "==", user.uid));
              try {
                 const logSnapshot = await getDocs(q);
                  const logsList = logSnapshot.docs.map(doc => ({
                      id: doc.id,
                      ...doc.data(),
-                     timestamp: doc.data().timestamp as Timestamp // Ensure timestamp is correctly typed
+                     timestamp: doc.data().timestamp as Timestamp 
                  } as StockMovementLog));
-                 logsList.sort((a, b) => b.timestamp.seconds - a.timestamp.seconds); // Sort newest first
+                 logsList.sort((a, b) => b.timestamp.seconds - a.timestamp.seconds); 
                  return logsList;
              } catch (err) {
                  console.error("Error fetching stock movements:", err);
@@ -224,15 +221,13 @@
 
                 const { itemName, quantity, barcode } = formData;
 
-                // Barcode duplication check
                 if (barcode) {
                     const barcodeQuery = query(collection(db, 'stockItems'), where("barcode", "==", barcode));
                     const barcodeSnapshot = await getDocs(barcodeQuery);
                     if (!barcodeSnapshot.empty) {
-                        // Check if the duplicate barcode belongs to a *different* item or a *different* user (if not admin)
                         let isUpdatingExistingPermitted = false;
                         const existingDoc = barcodeSnapshot.docs[0];
-                        if (formData.itemName && existingDoc.data().itemName === formData.itemName) { // Potentially updating existing item by name
+                        if (formData.itemName && existingDoc.data().itemName === formData.itemName) { 
                             if (isAdmin || existingDoc.data().userId === user.uid) {
                                 isUpdatingExistingPermitted = true;
                             }
@@ -254,19 +249,16 @@
                 const itemsCol = collection(db, 'stockItems');
                 let targetItemQuery;
 
-                // Prioritize barcode for finding existing item if provided
                 const barcodeQueryConstraint = barcode ? [where("barcode", "==", barcode)] : [];
-                const nameQueryConstraint = itemName ? [where("itemName", "==", itemName)] : []; // Use for exact match
+                const nameQueryConstraint = itemName ? [where("itemName", "==", itemName)] : []; 
                 const baseConstraints = !isAdmin ? [where("userId", "==", user.uid)] : [];
                 const queryConstraints = barcode
-                    ? [...baseConstraints, ...barcodeQueryConstraint] // If barcode exists, it should uniquely identify (or be new)
-                    : [...baseConstraints, ...nameQueryConstraint]; // If no barcode, try by name
+                    ? [...baseConstraints, ...barcodeQueryConstraint] 
+                    : [...baseConstraints, ...nameQueryConstraint]; 
 
-                 if (queryConstraints.length > (isAdmin ? 0 : 1)) { // Ensure there's at least one identifying constraint beyond userId
+                 if (queryConstraints.length > (isAdmin ? 0 : 1)) { 
                      targetItemQuery = query(itemsCol, ...queryConstraints);
                  } else {
-                      // If only userId is present (admin adding new, or user adding new without barcode/unique name)
-                      // this will lead to adding a new item if no barcode/name is provided.
                       targetItemQuery = null; 
                  }
 
@@ -275,9 +267,8 @@
                       querySnapshot = await getDocs(targetItemQuery);
                   }
 
-                  // Prepare data to save, converting numbers and handling undefined/empty strings
                  const dataToSave = Object.entries(formData).reduce((acc, [key, value]) => {
-                      if (value !== undefined && key !== 'quantity') { // Exclude quantity, handled separately
+                      if (value !== undefined && key !== 'quantity') { 
                          if ((key === 'minimumStock' || key === 'overstockThreshold' || key === 'costPrice') && typeof value === 'string') {
                             acc[key as keyof typeof acc] = value === '' ? undefined : Number(value);
                           } else {
@@ -287,10 +278,10 @@
                       return acc;
                   }, {} as Partial<Omit<StockItem, 'id' | 'userId' | 'currentStock' | 'lastMovementDate'>> & { userId?: string });
 
-                  dataToSave.userId = user.uid; // Always set the current user as owner
+                  dataToSave.userId = user.uid; 
 
 
-                 if (querySnapshot && !querySnapshot.empty) { // Item found, update it
+                 if (querySnapshot && !querySnapshot.empty) { 
                      const existingDoc = querySnapshot.docs[0];
                      const itemDocRef = doc(db, 'stockItems', existingDoc.id);
                      let finalStockLevel = 0;
@@ -300,14 +291,12 @@
                            const sfDoc = await transaction.get(itemDocRef);
                            if (!sfDoc.exists()) throw "Document does not exist!";
                            const currentData = sfDoc.data() as Omit<StockItem, 'id'>;
-                           existingItemData = { ...currentData, id: existingDoc.id }; // For logging
-                           const updatedData = { ...dataToSave }; // Merge new form data
+                           existingItemData = { ...currentData, id: existingDoc.id }; 
+                           const updatedData = { ...dataToSave }; 
 
-                           // Preserve existing values if not provided in form (e.g. minStock)
                            updatedData.minimumStock = formData.minimumStock ?? currentData.minimumStock;
                            updatedData.overstockThreshold = formData.overstockThreshold ?? currentData.overstockThreshold;
                            updatedData.costPrice = formData.costPrice ?? currentData.costPrice;
-                           // ... other fields that might not be on the add form but exist on item
                             updatedData.supplierName = formData.supplierName ?? currentData.supplierName;
                             updatedData.supplierContactPerson = formData.supplierContactPerson ?? currentData.supplierContactPerson;
                             updatedData.supplierPhone = formData.supplierPhone ?? currentData.supplierPhone;
@@ -316,12 +305,10 @@
                             updatedData.supplierAddress = formData.supplierAddress ?? currentData.supplierAddress;
 
 
-                            // Ensure fields not in formData but existing are not removed by creating finalUpdateData carefully
                            const finalUpdateData = Object.keys(updatedData).reduce((acc, key) => {
                                if (updatedData[key as keyof typeof updatedData] !== undefined) {
                                    acc[key as keyof typeof acc] = updatedData[key as keyof typeof updatedData];
                                } else {
-                                   // If value is explicitly undefined in updatedData (meaning it was empty in form), delete field
                                    acc[key as keyof typeof acc] = deleteField();
                                }
                                return acc;
@@ -333,19 +320,18 @@
                            transaction.update(itemDocRef, { ...finalUpdateData, currentStock: newStock, lastMovementDate: serverTimestamp() });
                        });
 
-                      if (existingItemData) { // Log after transaction succeeds
+                      if (existingItemData) { 
                            await logStockMovementAndUpdateItem(doc(db, 'stockItems', existingDoc.id), existingItemData, quantity, finalStockLevel, 'restock');
                       }
-                      const updatedDocSnap = await getDoc(itemDocRef); // Get the final state of the doc
+                      const updatedDocSnap = await getDoc(itemDocRef); 
                       return { ...updatedDocSnap.data(), id: updatedDocSnap.id, quantityAdded: quantity } as StockItem & {quantityAdded: number};
-                 } else { // Item not found, add as new
+                 } else { 
                      const newItemDataWithStock: Partial<StockItem> & {currentStock: number, userId: string, lastMovementDate: any} = {
                          ...dataToSave,
                          currentStock: quantity,
                          userId: user.uid,
-                         costPrice: formData.costPrice, // Explicitly add costPrice
+                         costPrice: formData.costPrice, 
                          lastMovementDate: serverTimestamp(),
-                         // Add supplier details from form directly
                          supplierName: formData.supplierName,
                          supplierContactPerson: formData.supplierContactPerson,
                          supplierPhone: formData.supplierPhone,
@@ -353,7 +339,6 @@
                          supplierWebsite: formData.supplierWebsite,
                          supplierAddress: formData.supplierAddress,
                      };
-                     // Remove any undefined fields before saving
                      const finalNewItemData = Object.entries(newItemDataWithStock).reduce((acc, [key, value]) => {
                           if (value !== undefined) acc[key as keyof typeof acc] = value;
                           return acc;
@@ -378,7 +363,6 @@
                  toast({
                     variant: "destructive",
                     title: "Error Processing Stock",
-                    // Provide more specific error message if it's a known one like duplicate barcode
                     description: error.message === "Duplicate barcode detected." ? error.message : error.message || "Could not process stock. Please try again.",
                  });
              },
@@ -388,11 +372,10 @@
         const editItemMutation = useMutation({
             mutationFn: async (itemData: StockItem) => {
                 if (!user || !db) throw new Error("User not authenticated or DB not available");
-                 if (itemData.userId !== user.uid && !isAdmin) { // Security check
+                 if (itemData.userId !== user.uid && !isAdmin) { 
                      throw new Error("Permission denied: You can only edit your own items.");
                  }
 
-                 // Barcode uniqueness check (if barcode changed or added)
                  if (itemData.barcode && itemData.barcode.trim() !== '') {
                       const barcodeQuery = query(collection(db, 'stockItems'), where("barcode", "==", itemData.barcode));
                       const barcodeSnapshot = await getDocs(barcodeQuery);
@@ -409,60 +392,53 @@
                   }
 
                  const itemDocRef = doc(db, 'stockItems', itemData.id);
-                 const { id, ...updateDataFromForm } = itemData; // Exclude id from data to update
+                 const { id, ...updateDataFromForm } = itemData; 
 
-                 // Fetch current stock level to calculate change if currentStock is part of updateDataFromForm
                  let originalStock = 0;
                  const currentDocSnap = await getDoc(itemDocRef);
                   if (currentDocSnap.exists()) {
                       originalStock = currentDocSnap.data().currentStock ?? 0;
                   }
 
-                  // Construct the final update object, handling undefined values to delete fields
                   const finalUpdateData: Record<string, any> = {};
-                  const originalItemData = currentDocSnap.data() || {}; // Get original data to compare
+                  const originalItemData = currentDocSnap.data() || {}; 
 
-                  // Iterate over all keys in the form data to decide what to update or delete
                   for (const key in updateDataFromForm) {
-                      const typedKey = key as keyof StockItem; // Type assertion
+                      const typedKey = key as keyof StockItem; 
                       let formValue = updateDataFromForm[typedKey];
                       const originalValue = originalItemData[typedKey];
 
-                      // Ensure numeric fields are numbers or undefined
                       if (key === 'currentStock' || key === 'minimumStock' || key === 'overstockThreshold' || key === 'costPrice') {
                           formValue = (formValue === '' || formValue === null || formValue === undefined) ? undefined : Number(formValue);
                       }
 
 
                       if (formValue === undefined && originalValue !== undefined) {
-                          finalUpdateData[key] = deleteField(); // Use deleteField() to remove a field
+                          finalUpdateData[key] = deleteField(); 
                       } else if (formValue !== undefined && formValue !== originalValue) {
-                          finalUpdateData[key] = formValue; // Set new value if different
+                          finalUpdateData[key] = formValue; 
                       }
                   }
 
 
                  if (Object.keys(finalUpdateData).length === 0) {
-                     // No actual changes were made
                      console.log("No changes detected. Skipping update.");
-                     return itemData; // Return original data if no changes
+                     return itemData; 
                  }
-                 finalUpdateData.lastMovementDate = serverTimestamp(); // Always update last movement date
+                 finalUpdateData.lastMovementDate = serverTimestamp(); 
 
                 await updateDoc(itemDocRef, finalUpdateData);
 
-                // Log stock movement if currentStock was changed
-                const newStock = finalUpdateData.currentStock; // This might be undefined if not changed
+                const newStock = finalUpdateData.currentStock; 
                  if (newStock !== undefined && newStock !== originalStock) {
                      const quantityChange = newStock - originalStock;
-                     // Use the submitted itemData for logging, but ensure currentStock is the new one
                      const updatedItemForLog: StockItem = { ...itemData, currentStock: newStock }; 
                      await logStockMovementAndUpdateItem(itemDocRef, updatedItemForLog, quantityChange, newStock, newStock > originalStock ? 'restock' : 'out');
-                 } else if (Object.keys(finalUpdateData).length > 0) { // If other fields changed but not stock
-                    await updateDoc(itemDocRef, { lastMovementDate: serverTimestamp() }); // Still update movement date
+                 } else if (Object.keys(finalUpdateData).length > 0) { 
+                    await updateDoc(itemDocRef, { lastMovementDate: serverTimestamp() }); 
                  }
 
-                 const updatedDocSnapAfter = await getDoc(itemDocRef); // Fetch the updated document
+                 const updatedDocSnapAfter = await getDoc(itemDocRef); 
                  return { id: updatedDocSnapAfter.id, ...updatedDocSnapAfter.data() } as StockItem;
             },
             onSuccess: (updatedItem) => {
@@ -477,14 +453,13 @@
             },
             onError: (error: any, originalItemData) => {
                 console.error("Error updating item:", error);
-                 if (error.code === 'invalid-argument') { // Firestore specific error for bad data types
+                 if (error.code === 'invalid-argument') { 
                      toast({
                          variant: "destructive",
                          title: "Invalid Data Error",
                          description: "There was an issue with the data format provided. Check numeric fields. (Details: " + error.message + ")",
                      });
                  } else if (error.message === "Duplicate barcode detected.") {
-                      // This custom error is handled by the mutationFn
                       toast({ variant: "destructive", title: "Duplicate Barcode", description: error.message });
                  }
                  else {
@@ -500,24 +475,22 @@
         const deleteItemMutation = useMutation({
             mutationFn: async (itemToDelete: StockItem) => {
                 if (!user || !db) throw new Error("User not authenticated or DB not available");
-                 if (itemToDelete.userId !== user.uid && !isAdmin) { // Security check
+                 if (itemToDelete.userId !== user.uid && !isAdmin) { 
                      throw new Error("Permission denied: You can only delete your own items.");
                  }
                 const itemDocRef = doc(db, 'stockItems', itemToDelete.id);
                 await deleteDoc(itemDocRef);
 
-                 // Log a stock out movement for the remaining quantity before deleting
-                 if (itemToDelete.currentStock > 0) { // Only log if there was stock
-                    // Note: itemRef for log will be invalid after delete, but log is for history
+                 if (itemToDelete.currentStock > 0) { 
                     await logStockMovementAndUpdateItem(itemDocRef, itemToDelete, -itemToDelete.currentStock, 0, 'out');
                  }
-                return itemToDelete.id; // Return ID for optimistic updates or UI changes
+                return itemToDelete.id; 
             },
             onSuccess: (itemId) => {
                  queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
-                 queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid] }); // Invalidate movements too
+                 queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid] }); 
                  setIsDeleteDialogOpen(false);
-                 const deletedItemName = itemToDelete?.itemName || 'Item'; // Get name before clearing itemToDelete
+                 const deletedItemName = itemToDelete?.itemName || 'Item'; 
                  setItemToDelete(null);
                  toast({ variant: "default", title: "Item Deleted", description: `${deletedItemName} has been removed.` });
             },
@@ -533,10 +506,8 @@
        const stockOutMutation = useMutation({
             mutationFn: async (data: StockOutFormDataSubmit) => {
                  if (!user || !db) throw new Error("User not authenticated or DB not available");
-                  // Find the item to ensure it exists and to get its details for logging
                   const itemToUpdate = stockItems.find(item => item.id === data.itemId);
                  if (!itemToUpdate) throw new Error("Item not found.");
-                 // Permission check
                  if (itemToUpdate.userId !== user.uid && !isAdmin) {
                      throw new Error("Permission denied: Cannot modify stock for items you don't own.");
                  }
@@ -549,12 +520,10 @@
                     const currentStock = sfDoc.data().currentStock || 0;
                     updatedStockLevel = currentStock - data.quantity;
                      if (updatedStockLevel < 0) throw new Error("Stock out quantity exceeds available stock.");
-                    // Update current stock and last movement date
                     transaction.update(itemDocRef, { currentStock: increment(-data.quantity), lastMovementDate: serverTimestamp() });
                  });
-                 // Log the movement after the transaction
                  await logStockMovementAndUpdateItem(itemDocRef, itemToUpdate, -data.quantity, updatedStockLevel, 'out');
-                 return { ...data, itemName: itemToUpdate.itemName }; // Return item name for toast
+                 return { ...data, itemName: itemToUpdate.itemName }; 
              },
             onSuccess: (data) => {
                 queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
@@ -574,9 +543,8 @@
                 return newSettings;
             },
             onSuccess: (savedSettings) => {
-                 // Update local cache for adminSettings
                  queryClient.setQueryData(['adminSettings'], (old: AdminSettings | undefined) => ({...defaultAdminSettings, ...old, ...savedSettings}));
-                 refetchSettings(); // Optionally refetch to ensure sync, though setQueryData should be efficient
+                 refetchSettings(); 
                 toast({ title: "Settings Saved", description: "Admin settings have been updated." });
                 setIsSettingsDialogOpen(false);
             },
@@ -589,8 +557,8 @@
         React.useEffect(() => {
             let stream: MediaStream | null = null;
             const getCameraPermission = async () => {
-                if (!isPhotoSearchOpen) { // Only manage stream if dialog is open
-                    if (videoRef.current?.srcObject) { // Stop stream if dialog closes
+                if (!isPhotoSearchOpen) { 
+                    if (videoRef.current?.srcObject) { 
                         (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
                         videoRef.current.srcObject = null;
                     }
@@ -601,12 +569,12 @@
                     setHasCameraPermission(true);
                     if (videoRef.current) videoRef.current.srcObject = stream;
                 } catch (error) {
-                    setHasCameraPermission(false); setIsPhotoSearchOpen(false); // Close dialog on error
+                    setHasCameraPermission(false); setIsPhotoSearchOpen(false); 
                     toast({ variant: 'destructive', title: 'Camera Access Denied', description: 'Please enable camera permissions.' });
                 }
             };
             getCameraPermission();
-            return () => { if (videoRef.current?.srcObject) (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop()); }; // Cleanup on unmount
+            return () => { if (videoRef.current?.srcObject) (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop()); }; 
         }, [isPhotoSearchOpen, toast]);
 
         const handlePhotoSearchCapture = async () => {
@@ -618,16 +586,16 @@
               const context = canvas.getContext('2d');
               if (context) {
                  context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                 const dataUrl = canvas.toDataURL('image/jpeg', 0.8); // Use JPEG for smaller size
-                 if (dataUrl && dataUrl !== 'data:,') { // Check if dataUrl is valid
+                 const dataUrl = canvas.toDataURL('image/jpeg', 0.8); 
+                 if (dataUrl && dataUrl !== 'data:,') { 
                       setPhotoSearchLoading(true);
                      try {
                          const input: SearchItemByPhotoInput = { photoDataUri: dataUrl };
                          const result = await searchItemByPhoto(input);
                          if (result.itemName) {
-                            setSearchQuery(result.itemName); // Set search query with identified item name
+                            setSearchQuery(result.itemName); 
                             toast({ title: "Item Found by Photo", description: `Searching for "${result.itemName}".` });
-                            setIsPhotoSearchOpen(false); // Close dialog on success
+                            setIsPhotoSearchOpen(false); 
                          } else {
                             toast({ variant: "destructive", title: "Item Not Found", description: "Could not identify item from photo." });
                          }
@@ -644,24 +612,23 @@
       const handleAddStockSubmit = (data: AddStockFormData) => addStockMutation.mutate(data);
 
       const handleEditItemSubmit = (data: EditItemFormData) => {
-          if (!itemToEdit || !user) return; // Ensure itemToEdit and user are available
+          if (!itemToEdit || !user) return; 
           const updatedItem: StockItem = {
               id: itemToEdit.id,
-              userId: itemToEdit.userId || user.uid, // Ensure userId is set, fall back to current user if somehow missing
+              userId: itemToEdit.userId || user.uid, 
               itemName: data.itemName,
-              currentStock: data.currentStock ?? 0, // Default to 0 if undefined
+              currentStock: data.currentStock ?? 0, 
               minimumStock: data.minimumStock === undefined || data.minimumStock === null ? undefined : Number(data.minimumStock),
               overstockThreshold: data.overstockThreshold === undefined || data.overstockThreshold === null ? undefined : Number(data.overstockThreshold),
               barcode: data.barcode || undefined,
               location: data.location || undefined,
               description: data.description || undefined,
               category: data.category || undefined,
-              supplier: data.supplier || undefined, // Legacy
+              supplier: data.supplier || undefined, 
               photoUrl: data.photoUrl || undefined,
               locationCoords: data.locationCoords || undefined,
               costPrice: data.costPrice === undefined || data.costPrice === null ? undefined : Number(data.costPrice),
-              lastMovementDate: itemToEdit.lastMovementDate, // Preserve original lastMovementDate unless stock changes
-              // Supplier details
+              lastMovementDate: itemToEdit.lastMovementDate, 
               supplierName: data.supplierName || undefined,
               supplierContactPerson: data.supplierContactPerson || undefined,
               supplierPhone: data.supplierPhone || undefined,
@@ -669,7 +636,7 @@
               supplierWebsite: data.supplierWebsite || undefined,
               supplierAddress: data.supplierAddress || undefined,
           };
-          if (!updatedItem.userId) { // Should not happen if logic above is correct
+          if (!updatedItem.userId) { 
               toast({ variant: "destructive", title: "Error", description: "User ID missing. Cannot update item." });
               return;
           }
@@ -689,7 +656,7 @@
 
         const filteredItems = React.useMemo(() => {
              return stockItems.filter((item) => {
-                const queryLower = searchQuery.toLowerCase();
+                const queryLower = searchQuery.trim().toLowerCase(); // Trim and lowercase search query
                 const categoryFilterMatch = !filterCategory || filterCategory === 'all' || (item.category && item.category.toLowerCase() === filterCategory.toLowerCase());
                 const locationFilterMatch = !filterLocation || filterLocation === 'all' || (item.location && item.location.toLowerCase() === filterLocation.toLowerCase());
                 const supplierFilterMatch = !filterSupplier || filterSupplier === 'all' || ((item.supplier && item.supplier.toLowerCase() === filterSupplier.toLowerCase()) || (item.supplierName && item.supplierName.toLowerCase() === filterSupplier.toLowerCase()));
@@ -701,9 +668,9 @@
                 }
 
                 const textSearchMatch = (
-                    item.itemName.toLowerCase().includes(queryLower) ||
-                    (item.barcode && item.barcode.toLowerCase().includes(queryLower)) ||
-                    (item.description && item.description.toLowerCase().includes(queryLower))
+                    (item.itemName || '').toLowerCase().includes(queryLower) ||
+                    (item.barcode && (item.barcode || '').toLowerCase().includes(queryLower)) ||
+                    (item.description && (item.description || '').toLowerCase().includes(queryLower))
                 );
                 return categoryFilterMatch && locationFilterMatch && supplierFilterMatch && statusFilterMatch && textSearchMatch;
             });
@@ -752,13 +719,11 @@
 
 
             if (newAlerts.length > 0 && adminSettings.emailNotifications) {
-                 // Filter for only new, critical alerts if desired for email/push
                 const criticalNewAlerts = newAlerts.filter(a => a.variant === 'destructive');
                 if (criticalNewAlerts.length > 0) {
                     console.log("SIMULATED EMAIL ALERTS:", criticalNewAlerts.map(a => `${a.title}: ${a.message}`).join('\n'));
-                    // Here you would call an actual email sending service/function
                     criticalNewAlerts.forEach(alertDetail => {
-                         toast({ // Also show as toast
+                         toast({ 
                              variant: alertDetail.variant || "default",
                              title: alertDetail.title,
                              description: alertDetail.message,
@@ -794,7 +759,7 @@
          const uniqueCategories = React.useMemo(() => Array.from(new Set(stockItems.map(item => item.category).filter(Boolean) as string[])).sort(), [stockItems]);
          const uniqueLocations = React.useMemo(() => Array.from(new Set(stockItems.map(item => item.location).filter(Boolean) as string[])).sort(), [stockItems]);
          const uniqueSuppliers = React.useMemo(() => Array.from(new Set(stockItems.map(item => item.supplierName || item.supplier).filter(Boolean) as string[])).sort(), [stockItems]); 
-         const uniqueStockStatuses = ['all', 'Good', 'LowStock', 'OutOfStock', 'Overstock', 'Inactive']; // Define available statuses
+         const uniqueStockStatuses = ['all', 'Good', 'LowStock', 'OutOfStock', 'Overstock', 'Inactive']; 
 
 
          const categoryChartData = React.useMemo(() => {
@@ -825,7 +790,7 @@
                const now = new Date(); const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
                stockMovements.filter(log => log.timestamp.toDate() >= oneWeekAgo).forEach(log => {
                        const date = log.timestamp.toDate(); const weekStart = new Date(date);
-                       weekStart.setDate(date.getDate() - date.getDay()); // Get start of the week (Sunday)
+                       weekStart.setDate(date.getDate() - date.getDay()); 
                        const weekKey = `${weekStart.getFullYear()}-${(weekStart.getMonth() + 1).toString().padStart(2, '0')}-${weekStart.getDate().toString().padStart(2, '0')}`;
                        if (!weeklyMovements[weekKey]) weeklyMovements[weekKey] = { in: 0, out: 0, restock: 0 };
                        if (log.type === 'in') weeklyMovements[weekKey].in += log.quantityChange;
@@ -833,7 +798,7 @@
                        else if (log.type === 'restock') weeklyMovements[weekKey].restock += log.quantityChange;
                    });
                return Object.entries(weeklyMovements).map(([week, data]) => ({ name: week, StockIn: data.in, StockOut: data.out, Restock: data.restock }))
-                   .sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime()); // Sort by date
+                   .sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime()); 
           }, [stockMovements, isLoadingMovements]);
 
             const topMovingItems = React.useMemo(() => { 
@@ -844,10 +809,9 @@
                         const item = stockItems.find(i => i.id === log.itemId);
                         movementCounts[log.itemId] = { name: item?.itemName || 'Unknown Item', count: 0, totalMoved: 0 };
                     }
-                    movementCounts[log.itemId].count++; // Number of transactions
-                    movementCounts[log.itemId].totalMoved += Math.abs(log.quantityChange); // Total units moved
+                    movementCounts[log.itemId].count++; 
+                    movementCounts[log.itemId].totalMoved += Math.abs(log.quantityChange); 
                 });
-                // Sort by total units moved, then by number of transactions as a tie-breaker
                 return Object.values(movementCounts).sort((a, b) => b.totalMoved - a.totalMoved || b.count - a.count).slice(0, 10); 
             }, [stockMovements, stockItems, isLoadingMovements, isLoadingItems]);
 
@@ -856,9 +820,7 @@
                 const daysThreshold = adminSettings.inactivityAlertDays || 30;
                 const thresholdDate = new Date();
                 thresholdDate.setDate(thresholdDate.getDate() - daysThreshold);
-                // Get IDs of items that *have* moved recently
                 const movedItemIds = new Set(stockMovements.filter(log => log.timestamp.toDate() >= thresholdDate).map(log => log.itemId));
-                // Filter stock items: not in movedItemIds && has stock > 0
                 return stockItems.filter(item => !movedItemIds.has(item.id) && item.currentStock > 0).slice(0, 5);
             }, [stockItems, stockMovements, isLoadingMovements, isLoadingItems, adminSettings.inactivityAlertDays]);
 
@@ -1045,7 +1007,7 @@
            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete {itemToDelete?.itemName}. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)} disabled={deleteItemMutation.isPending}>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmDeleteItem} disabled={deleteItemMutation.isPending} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">{deleteItemMutation.isPending ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>) : (<><Trash2 className="mr-2 h-4 w-4" /> Delete Item</>)}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
                {isAdmin && isSettingsDialogOpen && (<AdminSettingsDialog isOpen={isSettingsDialogOpen} onClose={() => setIsSettingsDialogOpen(false)} onSave={handleSaveSettings} currentSettings={adminSettings} isLoading={saveSettingsMutation.isPending} />)}
                {isAdmin && isUserManagementDialogOpen && (<UserManagementDialog isOpen={isUserManagementDialogOpen} onClose={() => setIsUserManagementDialogOpen(false)} />)}
-               <Dialog open={isPhotoSearchOpen} onOpenChange={setIsPhotoSearchOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Search Item by Photo</DialogTitle><DialogDescription>Center the item in the camera view and capture to search.</DialogDescription></DialogHeader><div className="space-y-4 py-4"><div className="relative aspect-video w-full bg-muted rounded-md overflow-hidden"><video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline /><canvas ref={canvasRef} style={{ display: 'none' }} />{hasCameraPermission === false && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-destructive-foreground p-4"><VideoOff className="h-12 w-12 mb-2" /><p className="text-lg font-semibold">Camera Access Denied</p><p className="text-sm text-center">Please allow camera access in your browser settings.</p></div>)}{hasCameraPermission === null && !photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Accessing Camera...</p></div>)}{photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-primary-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Analyzing Photo...</p></div>)}</div><Button type="button" onClick={handlePhotoSearchCapture} disabled={photoSearchLoading || hasCameraPermission !== true} className="w-full" size="lg">{photoSearchLoading ? (<Loader2 className="mr-2 h-5 w-5 animate-spin" />) : (<Camera className="mr-2 h-5 w-5" />)}{photoSearchLoading ? 'Searching...' : 'Capture & Search'}</Button></div><DialogFooter><Button variant="outline" onClick={() => setIsPhotoSearchOpen(false)} disabled={photoSearchLoading}><XCircle className="mr-2 h-4 w-4"/> Cancel</Button></DialogFooter></DialogContent></Dialog>
+               <Dialog open={isPhotoSearchOpen} onOpenChange={setIsPhotoSearchOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Search Item by Photo</DialogTitle><DialogDescription>Center the item in the camera view and capture to search.</DialogDescription></DialogHeader><div className="space-y-4 py-4"><div className="relative aspect-video w-full bg-muted rounded-md overflow-hidden"><video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline /><canvas ref={canvasRef} style={{ display: 'none' }} />{hasCameraPermission === false && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-destructive-foreground p-4"><VideoOff className="h-12 w-12 mb-2" /><p className="text-lg font-semibold">Camera Access Denied</p><p className="text-sm text-center">Please allow camera access in your browser settings.</p></div>)}{hasCameraPermission === null && !photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Accessing Camera...</p></div>)}{photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-primary-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Analyzing Photo...</p></div>)}</div><Button type="button" onClick={handlePhotoSearchCapture} disabled={photoSearchLoading || hasCameraPermission !== true} className="w-full" size="lg">{photoSearchLoading ? (<Loader2 className="mr-2 h-5 w-5 animate-spin" />) : (<Camera className="mr-2 h-5 w-5" />)}{photoSearchLoading ? 'Searching...' : 'Capture & Search'}</Button></div><AlertDialogFooter><Button variant="outline" onClick={() => setIsPhotoSearchOpen(false)} disabled={photoSearchLoading}><XCircle className="mr-2 h-4 w-4"/> Cancel</Button></AlertDialogFooter></DialogContent></Dialog>
          </div>
        );
      }
