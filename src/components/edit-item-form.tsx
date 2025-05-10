@@ -43,7 +43,7 @@ const formSchema = z.object({
     .int({ message: 'Minimum stock must be a whole number.' })
     .nonnegative({ message: 'Minimum stock cannot be negative.' })
     .optional(),
-  overstockThreshold: z.coerce // New field
+  overstockThreshold: z.coerce 
     .number({ invalid_type_error: 'Overstock threshold must be a number.' })
     .int({ message: 'Overstock threshold must be a whole number.' })
     .positive({ message: 'Overstock threshold must be positive.' })
@@ -173,7 +173,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
 
   function handleFormSubmit(values: z.infer<typeof formSchema>) {
      const submitData: EditItemFormData = {
-       ...values, // Spread all validated form values
+       ...values, 
        photoUrl: capturedPhotoUrl || values.photoUrl || undefined,
        locationCoords: capturedLocation || values.locationCoords || undefined,
      };
@@ -186,12 +186,12 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
         <fieldset disabled={isLoading} className="space-y-4 max-h-[65vh] overflow-y-auto pr-2">
              <h3 className="text-xl font-semibold text-primary mb-4 col-span-full">Edit Item Details</h3>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField control={form.control} name="itemName" render={({ field }) => (<FormItem><FormLabel>Item Name*</FormLabel><FormControl><Input placeholder="e.g., Large Red Box" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="itemName" render={({ field }) => (<FormItem><FormLabel>Item Name*</FormLabel><FormControl><Input placeholder="e.g., Large Red Box" {...field} className="input-uppercase" /></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="barcode" render={({ field }) => (
                  <FormItem>
                    <FormLabel>Barcode</FormLabel>
                    <div className="flex gap-2">
-                      <FormControl><Input placeholder="Scan or enter barcode" {...field} className="flex-grow" /></FormControl>
+                      <FormControl><Input placeholder="Scan or enter barcode" {...field} className="flex-grow input-uppercase" /></FormControl>
                        <Button type="button" variant="outline" size="icon" onClick={handleScanBarcode} disabled={isScanningBarcode || isLoading} aria-label="Scan Barcode">{isScanningBarcode ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanBarcode className="h-4 w-4" />}</Button>
                    </div>
                    <FormMessage />
@@ -208,7 +208,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
             <FormField control={form.control} name="description" render={({ field }) => (<FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="Describe the item..." {...field} /></FormControl><FormMessage /></FormItem>)} />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <FormField control={form.control} name="category" render={({ field }) => (<FormItem><FormLabel>Category</FormLabel><FormControl><Input placeholder="e.g., Electronics" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="category" render={({ field }) => (<FormItem><FormLabel>Category</FormLabel><FormControl><Input placeholder="e.g., Electronics" {...field} className="input-uppercase" /></FormControl><FormMessage /></FormItem>)} />
                  <FormField control={form.control} name="costPrice" render={({ field }) => (<FormItem><FormLabel>Cost Price (per unit)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
             </div>
 
@@ -216,7 +216,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                 <FormItem>
                   <FormLabel>Storage Location</FormLabel>
                    <div className="flex gap-2 items-end">
-                       <FormControl><Input placeholder="e.g., Shelf A3, Bin 5" {...field} className="flex-grow" /></FormControl>
+                       <FormControl><Input placeholder="e.g., Shelf A3, Bin 5" {...field} className="flex-grow input-uppercase" /></FormControl>
                         <Button type="button" variant="outline" size="icon" onClick={handleGetLocation} disabled={isCapturingLocation || isLoading} aria-label="Get Current Location">{isCapturingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}</Button>
                     </div>
                   <FormDescription>{capturedLocation ? `(Using GPS: ${capturedLocation.latitude.toFixed(4)}, ${capturedLocation.longitude.toFixed(4)})` : 'Manually enter or capture current GPS.'}</FormDescription>
@@ -227,12 +227,12 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
             <div className="pt-4 border-t mt-4 col-span-full">
                 <h4 className="text-lg font-semibold text-primary mb-3">Supplier Details</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <FormField control={form.control} name="supplierName" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><Building className="h-4 w-4 text-muted-foreground" />Company Name</FormLabel><FormControl><Input placeholder="Supplier Company Name" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                     <FormField control={form.control} name="supplierContactPerson" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><UserIcon className="h-4 w-4 text-muted-foreground" />Contact Person</FormLabel><FormControl><Input placeholder="Contact Person's Name" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                     <FormField control={form.control} name="supplierName" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><Building className="h-4 w-4 text-muted-foreground" />Company Name</FormLabel><FormControl><Input placeholder="Supplier Company Name" {...field} className="input-uppercase" /></FormControl><FormMessage /></FormItem>)} />
+                     <FormField control={form.control} name="supplierContactPerson" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><UserIcon className="h-4 w-4 text-muted-foreground" />Contact Person</FormLabel><FormControl><Input placeholder="Contact Person's Name" {...field} className="input-uppercase" /></FormControl><FormMessage /></FormItem>)} />
                      <FormField control={form.control} name="supplierPhone" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><Phone className="h-4 w-4 text-muted-foreground" />Phone</FormLabel><FormControl><Input type="tel" placeholder="Supplier Phone Number" {...field} /></FormControl><FormMessage /></FormItem>)} />
                      <FormField control={form.control} name="supplierEmail" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><MailIcon className="h-4 w-4 text-muted-foreground" />Email</FormLabel><FormControl><Input type="email" placeholder="Supplier Email Address" {...field} /></FormControl><FormMessage /></FormItem>)} />
                      <FormField control={form.control} name="supplierWebsite" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><Globe className="h-4 w-4 text-muted-foreground" />Website</FormLabel><FormControl><Input placeholder="https://supplier.com" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                     <FormField control={form.control} name="supplierAddress" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel className="flex items-center gap-1"><MapPin className="h-4 w-4 text-muted-foreground" />Address</FormLabel><FormControl><Textarea placeholder="Supplier Full Address" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                     <FormField control={form.control} name="supplierAddress" render={({ field }) => (<FormItem className="md:col-span-2"><FormLabel className="flex items-center gap-1"><MapPin className="h-4 w-4 text-muted-foreground" />Address</FormLabel><FormControl><Textarea placeholder="Supplier Full Address" {...field} className="input-uppercase" /></FormControl><FormMessage /></FormItem>)} />
                 </div>
             </div>
 

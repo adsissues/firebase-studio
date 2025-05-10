@@ -14,11 +14,56 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { StockItem } from '@/types';
-import { AlertTriangle, MapPin, Barcode, Tag, Building, Info, Image as ImageIcon, MapPinned, Pencil, Trash2, UserCircle, TrendingDown, Circle, Eye, ShoppingCart, Phone, Mail as MailIcon, Activity } from 'lucide-react';
+import type { StockItem, AdminSettings } from '@/types'; // Import AdminSettings
+import { AlertTriangle, MapPin, Barcode, Tag, Building, Info, Image as ImageIcon, MapPinned, Pencil, Trash2, UserCircle, TrendingDown, Circle, Eye, ShoppingCart, Phone, Mail as MailIcon, Activity, RotateCcw } from 'lucide-react'; // Added RotateCcw for Inactive
 import { useAuth } from '@/context/auth-context';
 import { cn } from "@/lib/utils";
-import { formatDistanceToNowStrict } from 'date-fns';
+
+
+// Define status info structure to include icon and rowClass
+interface StatusInfo {
+    priority: number;
+    label: string;
+    variant: 'default' | 'secondary' | 'destructive' | 'success' | 'warning' | 'info' | 'inactive'; // Add new variants
+    icon: React.ElementType;
+    rowClass?: string;
+    textColor?: string; // Optional: for specific text color on badge
+}
+
+
+export const getItemStatusInfo = (item: StockItem, globalLowStockThreshold: number, adminSettings?: Partial<AdminSettings>): StatusInfo => {
+    const effectiveMinThreshold = item.minimumStock ?? globalLowStockThreshold;
+    const { currentStock, lastMovementDate } = item;
+
+    if (adminSettings?.inactivityAlertDays && lastMovementDate) {
+        const daysSinceMovement = (new Date().getTime() - (lastMovementDate.toDate?.() ?? new Date(0)).getTime()) / (1000 * 3600 * 24);
+        if (daysSinceMovement > adminSettings.inactivityAlertDays) {
+             return { priority: 0, label: "Inactive", variant: "inactive", icon: Activity, rowClass: "bg-inactive/10 hover:bg-inactive/20", textColor: "text-inactive-foreground" };
+        }
+    }
+
+    if (currentStock === 0) {
+      return { priority: 1, label: "Out of Stock", variant: "destructive", icon: AlertTriangle, rowClass: "bg-destructive/20 hover:bg-destructive/30 opacity-80", textColor: "text-destructive-foreground" };
+    }
+    
+    const overstockPercentage = adminSettings?.overstockThresholdPercentage ?? 200;
+    const overstockQtyThreshold = item.overstockThreshold ?? (effectiveMinThreshold * (overstockPercentage / 100));
+
+    if (currentStock > overstockQtyThreshold && overstockQtyThreshold > 0) {
+         return { priority: 2, label: "Overstock", variant: "info", icon: TrendingDown, rowClass: "bg-info/10 hover:bg-info/20", textColor: "text-info-foreground" };
+    }
+
+    if (currentStock <= effectiveMinThreshold) {
+      return { priority: 3, label: "Low Stock", variant: "destructive", icon: AlertTriangle, rowClass: "bg-destructive/10 hover:bg-destructive/20", textColor: "text-destructive-foreground" };
+    }
+    
+    // Optional "Getting Low" state
+    if (currentStock <= effectiveMinThreshold * 1.5) { // Example: 1.5x the min threshold
+      return { priority: 4, label: "Getting Low", variant: "warning", icon: AlertTriangle, rowClass: "bg-warning/10 hover:bg-warning/20", textColor: "text-warning-foreground" };
+    }
+
+    return { priority: 5, label: "Good", variant: "success", icon: Circle, rowClass: "", textColor: "text-success-foreground" };
+};
 
 
 interface StockDashboardProps {
@@ -26,55 +71,20 @@ interface StockDashboardProps {
   onView: (item: StockItem) => void;
   onEdit: (item: StockItem) => void;
   onDelete: (item: StockItem) => void;
-  onReorder: (item: StockItem) => void; // Added for reorder action
+  onReorder: (item: StockItem) => void;
   isAdmin?: boolean;
   globalLowStockThreshold: number;
+  adminSettings: AdminSettings; // Pass full admin settings
 }
 
-const getItemStatusInfo = (item: StockItem, globalLowStockThreshold: number, adminSettings?: { inactivityAlertDays?: number, overstockThresholdPercentage?: number }): { priority: number; label: string; variant: 'default' | 'secondary' | 'destructive' | 'success', icon: React.ElementType, rowClass?: string } => {
-    const effectiveMinThreshold = item.minimumStock ?? globalLowStockThreshold;
-    const { currentStock, lastMovementDate } = item;
 
-    // Inactivity Check (Admin View Only potentially or based on settings)
-    if (adminSettings?.inactivityAlertDays && lastMovementDate) {
-        const daysSinceMovement = (new Date().getTime() - lastMovementDate.toDate().getTime()) / (1000 * 3600 * 24);
-        if (daysSinceMovement > adminSettings.inactivityAlertDays) {
-             return { priority: 0, label: `Inactive ${Math.floor(daysSinceMovement)}d`, variant: "default", icon: Activity, rowClass: "bg-slate-500/10 dark:bg-slate-700/20 hover:bg-slate-500/20 dark:hover:bg-slate-700/30" }; // Highest priority for visibility
-        }
-    }
-
-    if (currentStock === 0) {
-      return { priority: 1, label: "Out of Stock", variant: "destructive", icon: AlertTriangle, rowClass: "bg-destructive/20 hover:bg-destructive/30 opacity-80" };
-    }
-
-    // Overstock Check
-    const overstockPercentage = adminSettings?.overstockThresholdPercentage ?? 200; // Default 200%
-    const overstockQtyThreshold = item.overstockThreshold ?? (effectiveMinThreshold * (overstockPercentage / 100));
-    if (currentStock > overstockQtyThreshold && overstockQtyThreshold > 0) { // Ensure overstockThreshold is meaningful
-         return { priority: 2, label: "Overstock", variant: "default", icon: TrendingDown, rowClass: "bg-yellow-500/10 dark:bg-yellow-700/20 hover:bg-yellow-500/20 dark:hover:bg-yellow-700/30" };
-    }
-
-    if (currentStock <= effectiveMinThreshold) {
-      return { priority: 3, label: "Low Stock", variant: "destructive", icon: TrendingDown, rowClass: "bg-destructive/10 hover:bg-destructive/20" };
-    }
-    // Removed "Getting Low" for simplicity, can be re-added if needed
-    // else if (currentStock <= effectiveMinThreshold * 1.5) {
-    //   return { priority: 4, label: "Getting Low", variant: "default", icon: Circle, rowClass: "bg-yellow-500/10 dark:bg-yellow-700/20 hover:bg-yellow-500/20 dark:hover:bg-yellow-700/30" };
-    // }
-    return { priority: 5, label: "Good", variant: "success", icon: Circle, rowClass: "" };
-};
-
-
-export function StockDashboard({ items, onView, onEdit, onDelete, onReorder, isAdmin = false, globalLowStockThreshold }: StockDashboardProps) {
+export function StockDashboard({ items, onView, onEdit, onDelete, onReorder, isAdmin = false, globalLowStockThreshold, adminSettings }: StockDashboardProps) {
   const { user } = useAuth();
-  // Placeholder for admin settings - in a real app, this would come from context or props
-  const adminSettingsFromSomewhere = { inactivityAlertDays: 30, overstockThresholdPercentage: 200 };
-
 
   const getStatusBadge = (item: StockItem) => {
-    const statusInfo = getItemStatusInfo(item, globalLowStockThreshold, adminSettingsFromSomewhere); // Pass adminSettings
+    const statusInfo = getItemStatusInfo(item, globalLowStockThreshold, adminSettings);
     return (
-        <Badge variant={statusInfo.variant} className={cn("flex items-center gap-1 text-xs whitespace-nowrap", statusInfo.label === "Good" ? "bg-green-600 hover:bg-green-700" : "")}>
+        <Badge variant={statusInfo.variant} className={cn("flex items-center gap-1 text-xs whitespace-nowrap", statusInfo.textColor)}>
           <statusInfo.icon className="mr-1 h-3 w-3" />
           {statusInfo.label}
         </Badge>
@@ -142,11 +152,15 @@ export function StockDashboard({ items, onView, onEdit, onDelete, onReorder, isA
 
   const sortedItems = React.useMemo(() => {
     return [...items].sort((a, b) => {
-      const statusA = getItemStatusInfo(a, globalLowStockThreshold, adminSettingsFromSomewhere);
-      const statusB = getItemStatusInfo(b, globalLowStockThreshold, adminSettingsFromSomewhere);
-      return statusA.priority - statusB.priority;
+      const statusA = getItemStatusInfo(a, globalLowStockThreshold, adminSettings);
+      const statusB = getItemStatusInfo(b, globalLowStockThreshold, adminSettings);
+      if (statusA.priority !== statusB.priority) {
+        return statusA.priority - statusB.priority;
+      }
+      // Optional: secondary sort by name if priorities are equal
+      return a.itemName.localeCompare(b.itemName);
     });
-  }, [items, globalLowStockThreshold, adminSettingsFromSomewhere]);
+  }, [items, globalLowStockThreshold, adminSettings]);
 
 
   return (
@@ -155,18 +169,16 @@ export function StockDashboard({ items, onView, onEdit, onDelete, onReorder, isA
         <TableCaption key="caption" className="py-4">Overview of current stock levels. Critical items are highlighted.</TableCaption>
         <TableHeader key="header">
           <TableRow>
-            {[
-              <TableHead key="name" className="w-[12%] min-w-[100px]">Item</TableHead>,
-              <TableHead key="photo" className="hidden xl:table-cell text-center w-[40px]">Photo</TableHead>,
-              <TableHead key="category" className="hidden md:table-cell w-[8%] min-w-[70px]">Category</TableHead>,
-              <TableHead key="supplier" className="hidden md:table-cell w-[15%] min-w-[120px]">Supplier</TableHead>,
-              <TableHead key="location" className="hidden sm:table-cell w-[12%] min-w-[90px]">Location</TableHead>,
-              isAdmin && <TableHead key="owner" className="hidden lg:table-cell w-[8%] min-w-[70px]">Owner</TableHead>,
-              <TableHead key="current" className="text-right w-[50px]">Qty</TableHead>,
-              <TableHead key="min" className="text-right w-[40px]">Min</TableHead>,
-              <TableHead key="status" className="text-center w-[100px]">Status</TableHead>,
-              <TableHead key="actions" className="text-center w-[120px]">Actions</TableHead>
-            ].filter(Boolean)}
+            <TableHead key="name" className="w-[12%] min-w-[100px]">Item</TableHead>
+            <TableHead key="photo" className="hidden xl:table-cell text-center w-[40px]">Photo</TableHead>
+            <TableHead key="category" className="hidden md:table-cell w-[8%] min-w-[70px]">Category</TableHead>
+            <TableHead key="supplier" className="hidden md:table-cell w-[15%] min-w-[120px]">Supplier</TableHead>
+            <TableHead key="location" className="hidden sm:table-cell w-[12%] min-w-[90px]">Location</TableHead>
+            {isAdmin && <TableHead key="owner" className="hidden lg:table-cell w-[8%] min-w-[70px]">Owner</TableHead>}
+            <TableHead key="current" className="text-right w-[50px]">Qty</TableHead>
+            <TableHead key="min" className="text-right w-[40px]">Min</TableHead>
+            <TableHead key="status" className="text-center w-[100px]">Status</TableHead>
+            <TableHead key="actions" className="text-center w-[120px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody key="body">
@@ -174,14 +186,13 @@ export function StockDashboard({ items, onView, onEdit, onDelete, onReorder, isA
             <TableRow><TableCell colSpan={isAdmin ? 10 : 9} className="h-24 text-center text-muted-foreground">No stock items found.</TableCell></TableRow>
           ) : (
             sortedItems.map((item) => {
-                const statusInfo = getItemStatusInfo(item, globalLowStockThreshold, adminSettingsFromSomewhere);
+                const statusInfo = getItemStatusInfo(item, globalLowStockThreshold, adminSettings);
                return (
                  <TableRow key={item.id} className={cn(statusInfo.rowClass)}>
-                    {[
-                      <TableCell key="name" className="font-medium">{item.itemName}</TableCell>,
-                      <TableCell key="photo" className="hidden xl:table-cell text-center">{renderPhoto(item)}</TableCell>,
-                      <TableCell key="category" className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(Tag, item.category, 'Category')}</TableCell>,
-                      <TableCell key="supplier" className="hidden md:table-cell text-muted-foreground text-xs">
+                    <TableCell key="name" className="font-medium">{item.itemName}</TableCell>
+                    <TableCell key="photo" className="hidden xl:table-cell text-center">{renderPhoto(item)}</TableCell>
+                    <TableCell key="category" className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(Tag, item.category, 'Category')}</TableCell>
+                    <TableCell key="supplier" className="hidden md:table-cell text-muted-foreground text-xs">
                           {item.supplierName ? (
                               <TooltipProvider delayDuration={100}>
                                   <Tooltip>
@@ -194,25 +205,24 @@ export function StockDashboard({ items, onView, onEdit, onDelete, onReorder, isA
                                   </Tooltip>
                               </TooltipProvider>
                           ) : (item.supplier ? renderDetail(Building, item.supplier, 'Supplier (Legacy)') : <span className="text-muted-foreground">-</span>)}
-                      </TableCell>,
-                      <TableCell key="location" className="hidden sm:table-cell text-muted-foreground text-xs">{renderLocation(item)}</TableCell>,
-                      isAdmin && <TableCell key="owner" className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(UserCircle, item.userId ? item.userId.substring(0,8)+'...' : 'N/A', 'User ID', item.userId)}</TableCell>,
-                      <TableCell key="current" className="text-right font-mono">{item.currentStock}</TableCell>,
-                      <TableCell key="min" className="text-right font-mono text-muted-foreground">{item.minimumStock ?? '-'}</TableCell>,
-                      <TableCell key="status" className="text-center">{getStatusBadge(item)}</TableCell>,
-                      <TableCell key="actions" className="text-center">
+                    </TableCell>
+                    <TableCell key="location" className="hidden sm:table-cell text-muted-foreground text-xs">{renderLocation(item)}</TableCell>
+                    {isAdmin && <TableCell key="owner" className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(UserCircle, item.userId ? item.userId.substring(0,8)+'...' : 'N/A', 'User ID', item.userId)}</TableCell>}
+                    <TableCell key="current" className="text-right font-mono">{item.currentStock}</TableCell>
+                    <TableCell key="min" className="text-right font-mono text-muted-foreground">{item.minimumStock ?? '-'}</TableCell>
+                    <TableCell key="status" className="text-center">{getStatusBadge(item)}</TableCell>
+                    <TableCell key="actions" className="text-center">
                         {canPerformAction(item) ? (
                           <div className="flex justify-center gap-0.5">
                             <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:text-blue-700" onClick={() => onView(item)}><Eye className="h-4 w-4" /><span className="sr-only">View</span></Button></TooltipTrigger><TooltipContent>View</TooltipContent></Tooltip></TooltipProvider>
                             <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(item)}><Pencil className="h-4 w-4" /><span className="sr-only">Edit</span></Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip></TooltipProvider>
-                            {(statusInfo.priority <= 3 || item.currentStock === 0) && isAdmin && (item.supplierName || item.supplierEmail || item.supplierPhone) &&  // Show reorder if low/out of stock AND admin AND supplier info exists
-                                <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-green-600 hover:text-green-700" onClick={() => onReorder(item)}><ShoppingCart className="h-4 w-4" /><span className="sr-only">Reorder</span></Button></TooltipTrigger><TooltipContent>Reorder</TooltipContent></Tooltip></TooltipProvider>
+                            {(statusInfo.priority <= 3 && (item.supplierName || item.supplierEmail || item.supplierPhone)) && // Show reorder if low/out of stock AND supplier info exists
+                                <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-green-600 hover:text-green-700" onClick={() => onReorder(item)}><ShoppingCart className="h-4 w-4" /><span className="sr-only">Reorder</span></Button></TooltipTrigger><TooltipContent>Reorder/Contact Supplier</TooltipContent></Tooltip></TooltipProvider>
                             }
                             <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(item)}><Trash2 className="h-4 w-4" /><span className="sr-only">Delete</span></Button></TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip></TooltipProvider>
                           </div>
                         ) : (<span className="text-muted-foreground text-xs">-</span>)}
-                      </TableCell>
-                    ].filter(Boolean)}
+                    </TableCell>
                   </TableRow>
                );
             })

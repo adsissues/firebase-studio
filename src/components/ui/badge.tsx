@@ -15,9 +15,15 @@ const badgeVariants = cva(
           "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
         destructive:
           "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
-        success: // Added success variant
+        success: 
           "border-transparent bg-success text-success-foreground hover:bg-success/80",
         outline: "text-foreground",
+        warning: // Added warning variant
+          "border-transparent bg-warning text-warning-foreground hover:bg-warning/80",
+        info: // Added info variant (e.g., for overstock)
+          "border-transparent bg-info text-info-foreground hover:bg-info/80",
+        inactive: // Added inactive variant
+          "border-transparent bg-inactive text-inactive-foreground hover:bg-inactive/80",
       },
     },
     defaultVariants: {

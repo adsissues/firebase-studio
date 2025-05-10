@@ -23,10 +23,16 @@ body {
     /* Accent is often used for focus rings etc. Let's use the blue for accent as well */
     --accent: 213 69% 95%; /* Lighter Blue for hover/accent states */
     --accent-foreground: 213 69% 40%; /* Darker blue text on accent bg */
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 84.2% 60.2%; /* Red for errors/critical */
     --destructive-foreground: 0 0% 98%;
-    --success: 138 58% 37%; /* Green #259643 */
+    --success: 145 63% 42%; /* Green #259643 - adjusted for visibility */
     --success-foreground: 0 0% 98%; /* White */
+    --warning: 38 92% 50%; /* Orange/Yellow for warnings/getting low */
+    --warning-foreground: 0 0% 20%; /* Darker text for warning background */
+    --info: 210 100% 56%; /* Blue for informational/overstock */
+    --info-foreground: 0 0% 98%; /* White */
+    --inactive: 220 13% 69%; /* Grey for inactive items */
+    --inactive-foreground: 0 0% 20%; /* Darker text for inactive background */
     --border: 0 0% 89.8%;
     --input: 0 0% 89.8%;
     --ring: 213 69% 60%; /* Use primary blue for focus rings */
@@ -60,10 +66,16 @@ body {
     --muted-foreground: 0 0% 63.9%;
     --accent: 213 69% 30%; /* Darker Blue for hover/accent */
     --accent-foreground: 0 0% 98%; /* White text on accent bg */
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 72% 51%; /* Dark mode adjusted Red */
     --destructive-foreground: 0 0% 98%;
-    --success: 138 58% 45%; /* Slightly lighter Green for dark mode */
-    --success-foreground: 0 0% 98%; /* White */
+    --success: 145 58% 52%; /* Dark mode adjusted Green */
+    --success-foreground: 0 0% 98%;
+    --warning: 45 90% 55%; /* Dark mode adjusted Orange/Yellow */
+    --warning-foreground: 0 0% 98%; /* Lighter text for dark warning */
+    --info: 210 95% 66%; /* Dark mode adjusted Blue */
+    --info-foreground: 0 0% 98%;
+    --inactive: 220 9% 55%; /* Dark mode adjusted Grey */
+    --inactive-foreground: 0 0% 98%; /* Lighter text for dark inactive */
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 213 69% 60%; /* Use primary blue for focus rings */
@@ -90,4 +102,9 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* For auto-uppercase on specific inputs if needed */
+.input-uppercase {
+  text-transform: uppercase;
 }
