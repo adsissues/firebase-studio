@@ -16,9 +16,10 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { StockItem } from '@/types';
-import { Barcode, MapPin, Tag, Building, Info, Package, AlertTriangle, Circle, MapPinned, XCircle, ImageIcon, UserCircle as UserIconLucide, TrendingDown, DollarSign, Phone, Mail as MailIcon, Globe } from 'lucide-react';
+import { Barcode, MapPin, Tag, Building, Info, Package, AlertTriangle, Circle, MapPinned, XCircle, ImageIcon, UserCircle as UserIconLucide, TrendingDown, DollarSign, Phone, Mail as MailIcon, Globe, Clock } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { cn } from "@/lib/utils";
+import { formatDistanceToNow } from 'date-fns'; // Added import
 
 interface ViewItemDialogProps {
   isOpen: boolean;
@@ -34,29 +35,31 @@ export function ViewItemDialog({ isOpen, onClose, item }: ViewItemDialogProps) {
   }
 
   const getStatusBadgeComponent = () => {
-      const threshold = item.minimumStock ?? 10;
+      const threshold = item.minimumStock ?? 10; // Default to 10 if not set
+      const effectiveMinThreshold = item.minimumStock ?? threshold; // Use item's min or global low as base
+      const overstockPercentage = 200; // Default 200% - consider making this configurable or part of AdminSettings
+      const overstockQtyThreshold = item.overstockThreshold ?? (effectiveMinThreshold * (overstockPercentage / 100));
+
+
       if (item.currentStock === 0) return (
          <Badge variant="destructive" className="flex items-center gap-1 text-xs whitespace-nowrap ml-2">
             <AlertTriangle className="mr-1 h-3 w-3" /> Out of Stock
          </Badge>
       );
-      if (item.currentStock <= threshold) return (
+      if (item.currentStock <= effectiveMinThreshold) return (
           <Badge variant="destructive" className="flex items-center gap-1 text-xs whitespace-nowrap ml-2">
              <TrendingDown className="mr-1 h-3 w-3" /> Low Stock
           </Badge>
       );
-      // Overstock Check (example logic, adjust as needed)
-      const overstockMinBase = item.minimumStock ?? threshold; // Use item's min or global low as base
-      const overstockAlertThreshold = item.overstockThreshold ?? (overstockMinBase * 2); // Example: 2x the min stock
-      if (item.currentStock > overstockAlertThreshold) return (
-        <Badge variant="default" className="flex items-center gap-1 text-xs whitespace-nowrap ml-2 bg-yellow-500 text-black">
+      if (item.currentStock > overstockQtyThreshold && overstockQtyThreshold > 0) return (
+        <Badge variant="default" className="flex items-center gap-1 text-xs whitespace-nowrap ml-2 bg-yellow-500 text-black hover:bg-yellow-600">
              <AlertTriangle className="mr-1 h-3 w-3" /> Overstock
           </Badge>
       );
 
       return (
-         <Badge variant="success" className="flex items-center gap-1 text-xs whitespace-nowrap ml-2">
-            <Circle className="mr-1 h-3 w-3 fill-current" /> Okay
+         <Badge variant="success" className="flex items-center gap-1 text-xs whitespace-nowrap ml-2 bg-green-600 hover:bg-green-700">
+            <Circle className="mr-1 h-3 w-3 fill-current" /> Good
          </Badge>
       );
   };
@@ -135,3 +138,4 @@ export function ViewItemDialog({ isOpen, onClose, item }: ViewItemDialogProps) {
     </Dialog>
   );
 }
+
