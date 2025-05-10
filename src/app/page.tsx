@@ -1,5 +1,4 @@
 
-
  'use client';
 
     import * as React from 'react';
@@ -12,7 +11,7 @@
     import { ViewItemDialog } from '@/components/view-item-dialog';
     import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
     import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-    import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'; // Removed DialogFooter as it's imported from alert-dialog
+    import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'; 
     import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
     import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
     import { Label } from "@/components/ui/label";
@@ -21,7 +20,7 @@
     import { useToast } from "@/hooks/use-toast";
     import { QueryClient, QueryClientProvider, useQuery, useMutation, QueryCache } from '@tanstack/react-query';
     import { db, auth } from '@/lib/firebase/firebase';
-    import { collection, getDocs, addDoc, updateDoc, doc, increment, deleteDoc, writeBatch, query, where, runTransaction, setDoc, getDoc, serverTimestamp, Timestamp, deleteField } from 'firebase/firestore';
+    import { collection, getDocs, addDoc, updateDoc, doc, increment, deleteDoc, writeBatch, query, where, runTransaction, setDoc, getDoc, serverTimestamp, Timestamp, deleteField, or } from 'firebase/firestore';
     import { Skeleton } from '@/components/ui/skeleton';
     import { Button } from '@/components/ui/button';
     import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -69,7 +68,7 @@
 
 
     function StockManagementPageContent() {
-      const { user, isAdmin, loading: authLoading } = useAuth();
+      const { user, isAdmin, loading: authLoading, assignedLocations } = useAuth();
       const [searchQuery, setSearchQuery] = useState('');
       const [filterCategory, setFilterCategory] = useState<string | undefined>(undefined);
       const [filterLocation, setFilterLocation] = useState<string | undefined>(undefined);
@@ -118,11 +117,29 @@
 
 
       const { data: stockItems = [], isLoading: isLoadingItems, error: fetchError, refetch: refetchItems } = useQuery<StockItem[]>({
-        queryKey: ['stockItems', user?.uid], 
+        queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations], 
         queryFn: async () => {
            if (!user) return [];
            const itemsCol = collection(db, 'stockItems');
-           const q = isAdmin ? query(itemsCol) : query(itemsCol, where("userId", "==", user.uid));
+           let q;
+           if (isAdmin) {
+               q = query(itemsCol);
+           } else {
+               const userSpecificQueries = [where("userId", "==", user.uid)];
+               if (assignedLocations && assignedLocations.length > 0) {
+                  userSpecificQueries.push(where("location", "in", assignedLocations));
+               }
+               // If user has assigned locations, fetch items they own OR items in their assigned locations
+               // Otherwise, fetch only items they own.
+               // Firestore 'or' queries require at least one 'in', 'array-contains-any', or '==' condition on different fields for each subquery of the 'or'.
+               // So, if no assigned locations, we can't use 'or'. Fallback to just userId.
+               if (assignedLocations && assignedLocations.length > 0) {
+                    q = query(itemsCol, or(where("userId", "==", user.uid), where("location", "in", assignedLocations)));
+               } else {
+                    q = query(itemsCol, where("userId", "==", user.uid));
+               }
+           }
+
            try {
                const itemSnapshot = await getDocs(q);
                const itemsList = itemSnapshot.docs.map(doc => ({
@@ -160,6 +177,8 @@
                   toast({ variant: "destructive", title: "Permission Denied", description: "You do not have permission to view stock items." });
                } else if ((err as any)?.code === 'unauthenticated') {
                     toast({ variant: "destructive", title: "Authentication Required", description: "Please log in to view stock items." });
+               } else if ((err as any)?.code === 'failed-precondition' && (err as Error).message.includes('query requires an index')) {
+                   toast({ variant: "destructive", title: "Database Index Required", description: "A database index is needed for this query. Please check Firestore console or server logs.", duration: 10000});
                }
               throw err;
           }
@@ -170,11 +189,33 @@
       });
 
       const { data: stockMovements = [], isLoading: isLoadingMovements, refetch: refetchMovements } = useQuery<StockMovementLog[]>({
-         queryKey: ['stockMovements', user?.uid], 
+         queryKey: ['stockMovements', user?.uid, isAdmin, assignedLocations], 
          queryFn: async () => {
              if (!user) return [];
              const logsCol = collection(db, 'stockMovements');
-             const q = isAdmin ? query(logsCol) : query(logsCol, where("userId", "==", user.uid));
+             let q;
+              if (isAdmin) {
+                 q = query(logsCol);
+              } else {
+                  // Users see their own movements.
+                  // Potentially, if items are shared by location, this logic might need to expand
+                  // to show movements for items in their assignedLocations, even if moved by others.
+                  // For simplicity now, users see their own movements + movements of items they own explicitly
+                  // or movements related to items in their assigned locations (if itemId is linked to location)
+                  // This part might need refinement based on how deep location-based access should go for movements.
+                  // Current approach: User sees movements they initiated OR movements for items they own/are in their locations.
+                  // This requires item data to link movement to location, which is not directly in StockMovementLog.
+                  // So, for now, users see their own movements.
+                  // To filter by assigned location items, we would need to fetch items first, then filter movements by those itemIds.
+                  // That would be a more complex query.
+                  q = query(logsCol, where("userId", "==", user.uid));
+
+                  // A more complex query to show movements for items in user's assigned locations:
+                  // 1. Fetch stockItems for the user (already done by stockItems query)
+                  // 2. Get itemIds for items in assignedLocations or owned by user
+                  // 3. Query stockMovements where itemId is in the list of accessible itemIds
+                  // This is not implemented here for brevity but is a consideration.
+              }
              try {
                 const logSnapshot = await getDocs(q);
                  const logsList = logSnapshot.docs.map(doc => ({
@@ -211,7 +252,7 @@
             timestamp: serverTimestamp(),
         };
         await addDoc(collection(db, 'stockMovements'), logData);
-        queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid] });
+        queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid, isAdmin, assignedLocations] });
     };
 
 
@@ -251,12 +292,28 @@
 
                 const barcodeQueryConstraint = barcode ? [where("barcode", "==", barcode)] : [];
                 const nameQueryConstraint = itemName ? [where("itemName", "==", itemName)] : []; 
-                const baseConstraints = !isAdmin ? [where("userId", "==", user.uid)] : [];
+                
+                // For admins, search globally. For users, search within their own items or accessible locations.
+                let baseConstraints = [];
+                if(!isAdmin) {
+                    baseConstraints.push(where("userId", "==", user.uid));
+                    if (assignedLocations && assignedLocations.length > 0 && formData.location && assignedLocations.includes(formData.location)) {
+                       // If user is adding to an assigned location, they can update existing item there
+                       // This logic might need more refinement for items not explicitly owned by user
+                       // but in an assigned location. For now, user primarily creates/updates their own.
+                    } else if (assignedLocations && assignedLocations.length > 0 && !formData.location) {
+                        // If user is adding an item without location, it defaults to their ownership.
+                    } else if (formData.location && (!assignedLocations || !assignedLocations.includes(formData.location))) {
+                         throw new Error("You do not have permission to add stock to this location.");
+                    }
+                }
+
+
                 const queryConstraints = barcode
                     ? [...baseConstraints, ...barcodeQueryConstraint] 
                     : [...baseConstraints, ...nameQueryConstraint]; 
 
-                 if (queryConstraints.length > (isAdmin ? 0 : 1)) { 
+                 if (queryConstraints.length > (isAdmin ? 0 : (baseConstraints.length > 0 ? 1: 0) )) { 
                      targetItemQuery = query(itemsCol, ...queryConstraints);
                  } else {
                       targetItemQuery = null; 
@@ -278,7 +335,7 @@
                       return acc;
                   }, {} as Partial<Omit<StockItem, 'id' | 'userId' | 'currentStock' | 'lastMovementDate'>> & { userId?: string });
 
-                  dataToSave.userId = user.uid; 
+                  dataToSave.userId = user.uid; // Item is always owned by the creator
 
 
                  if (querySnapshot && !querySnapshot.empty) { 
@@ -351,7 +408,7 @@
                  }
              },
              onSuccess: (result) => {
-                 queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
+                 queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations] });
                  toast({
                      variant: "default",
                      title: "Stock Added/Restocked",
@@ -372,8 +429,8 @@
         const editItemMutation = useMutation({
             mutationFn: async (itemData: StockItem) => {
                 if (!user || !db) throw new Error("User not authenticated or DB not available");
-                 if (itemData.userId !== user.uid && !isAdmin) { 
-                     throw new Error("Permission denied: You can only edit your own items.");
+                 if (!isAdmin && itemData.userId !== user.uid && (!itemData.location || !assignedLocations.includes(itemData.location)) ) { 
+                     throw new Error("Permission denied: You can only edit your own items or items in your assigned locations.");
                  }
 
                  if (itemData.barcode && itemData.barcode.trim() !== '') {
@@ -442,7 +499,7 @@
                  return { id: updatedDocSnapAfter.id, ...updatedDocSnapAfter.data() } as StockItem;
             },
             onSuccess: (updatedItem) => {
-                 queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
+                 queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations] });
                 setIsEditDialogOpen(false);
                 setItemToEdit(null);
                 toast({
@@ -475,8 +532,8 @@
         const deleteItemMutation = useMutation({
             mutationFn: async (itemToDelete: StockItem) => {
                 if (!user || !db) throw new Error("User not authenticated or DB not available");
-                 if (itemToDelete.userId !== user.uid && !isAdmin) { 
-                     throw new Error("Permission denied: You can only delete your own items.");
+                 if (!isAdmin && itemToDelete.userId !== user.uid && (!itemToDelete.location || !assignedLocations.includes(itemToDelete.location)) ) {
+                     throw new Error("Permission denied: You can only delete your own items or items in your assigned locations.");
                  }
                 const itemDocRef = doc(db, 'stockItems', itemToDelete.id);
                 await deleteDoc(itemDocRef);
@@ -487,8 +544,8 @@
                 return itemToDelete.id; 
             },
             onSuccess: (itemId) => {
-                 queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
-                 queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid] }); 
+                 queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations] });
+                 queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid, isAdmin, assignedLocations] }); 
                  setIsDeleteDialogOpen(false);
                  const deletedItemName = itemToDelete?.itemName || 'Item'; 
                  setItemToDelete(null);
@@ -508,8 +565,8 @@
                  if (!user || !db) throw new Error("User not authenticated or DB not available");
                   const itemToUpdate = stockItems.find(item => item.id === data.itemId);
                  if (!itemToUpdate) throw new Error("Item not found.");
-                 if (itemToUpdate.userId !== user.uid && !isAdmin) {
-                     throw new Error("Permission denied: Cannot modify stock for items you don't own.");
+                 if (!isAdmin && itemToUpdate.userId !== user.uid && (!itemToUpdate.location || !assignedLocations.includes(itemToUpdate.location)) ) {
+                     throw new Error("Permission denied: Cannot modify stock for this item.");
                  }
                  const itemDocRef = doc(db, 'stockItems', data.itemId);
                  let updatedStockLevel = 0;
@@ -526,7 +583,7 @@
                  return { ...data, itemName: itemToUpdate.itemName }; 
              },
             onSuccess: (data) => {
-                queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid] });
+                queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations] });
                 toast({ variant: "default", title: "Stock Updated", description: `${data.quantity} units of ${data.itemName || 'item'} removed.`});
             },
             onError: (error: any, data) => {
@@ -858,7 +915,7 @@
                  <Card className="shadow-lg mb-6">
                      <CardHeader>
                          <CardTitle>Search Stock</CardTitle>
-                         <CardDescription>Find items by name, barcode, or description.</CardDescription>
+                         <CardDescription>Find items by name, barcode, or description. You can view items you own or items in your assigned locations: {assignedLocations.join(', ') || 'None'}</CardDescription>
                      </CardHeader>
                      <CardContent>
                          <ItemSearch searchQuery={searchQuery} onSearchChange={handleSearchChange} placeholder="Search for items..." />
@@ -866,7 +923,7 @@
                  </Card>
 
                  {isLoadingItems && <div className="space-y-2 pt-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div>}
-                 {fetchError && <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>Could not load stock items.</AlertDescription></Alert>}
+                 {fetchError && <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>Could not load stock items. {(fetchError as Error).message.includes('index required') ? 'A database index is required for this query. Admins, please check Firestore console.' : (fetchError as Error).message}</AlertDescription></Alert>}
                  
                  {!isLoadingItems && !fetchError && (
                     <>
@@ -912,10 +969,10 @@
 
                 <Card className="mt-6 shadow-lg">
                     <CardHeader><CardTitle>Log Stock Out</CardTitle></CardHeader>
-                    <CardContent><StockOutForm items={stockItems.filter(item => item.userId === user?.uid)} onSubmit={handleStockOutSubmit} isLoading={stockOutMutation.isPending} /></CardContent>
+                    <CardContent><StockOutForm items={stockItems} onSubmit={handleStockOutSubmit} isLoading={stockOutMutation.isPending} /></CardContent>
                 </Card>
                 
-                <ActivityFeed movements={stockMovements.filter(m => m.userId === user.uid)} isLoading={isLoadingMovements} />
+                <ActivityFeed movements={stockMovements} isLoading={isLoadingMovements} />
                 
                 <ViewItemDialog isOpen={isViewDialogOpen} onClose={() => setIsViewDialogOpen(false)} item={itemToView} />
              </div>
@@ -976,7 +1033,7 @@
                              </div>
                          </div>
                          {isLoadingItems && (<div className="space-y-2 pt-4"><Skeleton className="h-8 w-full" /><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>)}
-                         {fetchError && (<Alert variant="destructive" className="mt-4"><AlertTriangle className="h-4 w-4" /><AlertTitle>Error Loading Stock</AlertTitle><AlertDescription>Could not load stock items. {(fetchError as Error).message}<Button onClick={handleRetryFetch} variant="link" className="ml-2 p-0 h-auto text-destructive-foreground underline">Retry</Button></AlertDescription></Alert>)}
+                         {fetchError && (<Alert variant="destructive" className="mt-4"><AlertTriangle className="h-4 w-4" /><AlertTitle>Error Loading Stock</AlertTitle><AlertDescription>Could not load stock items. {(fetchError as Error).message.includes('index required') ? 'A database index is required for this query. Admins, please check Firestore console.' : (fetchError as Error).message}<Button onClick={handleRetryFetch} variant="link" className="ml-2 p-0 h-auto text-destructive-foreground underline">Retry</Button></AlertDescription></Alert>)}
                          {!isLoadingItems && !fetchError && (
                              <StockDashboard items={filteredItems} onView={handleViewClick} onEdit={handleEditClick} onDelete={handleDeleteClick} onReorder={handleReorderClick} isAdmin={isAdmin} globalLowStockThreshold={adminSettings.lowStockThreshold} adminSettings={adminSettings}/>
                           )}
@@ -986,7 +1043,7 @@
                          <Tabs defaultValue="add-stock" className="w-full">
                             <CardHeader className="p-4 border-b"><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="add-stock">Add/Restock Item</TabsTrigger><TabsTrigger value="stock-out">Log Stock Out</TabsTrigger></TabsList></CardHeader>
                            <TabsContent value="add-stock"><CardContent className="p-4"><AddStockForm onSubmit={handleAddStockSubmit} isLoading={addStockMutation.isPending} /></CardContent></TabsContent>
-                           <TabsContent value="stock-out"><CardContent className="p-4"><StockOutForm items={stockItems.filter(item => isAdmin || item.userId === user?.uid)} onSubmit={handleStockOutSubmit} isLoading={stockOutMutation.isPending} /></CardContent></TabsContent>
+                           <TabsContent value="stock-out"><CardContent className="p-4"><StockOutForm items={stockItems} onSubmit={handleStockOutSubmit} isLoading={stockOutMutation.isPending} /></CardContent></TabsContent>
                          </Tabs>
                     </Card>
                </div>
@@ -1013,7 +1070,7 @@
            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Edit Item: {itemToEdit?.itemName}</DialogTitle><DialogDescription>Make changes to the item details below. Click save when done.</DialogDescription></DialogHeader>{itemToEdit && (<EditItemForm item={itemToEdit} onSubmit={handleEditItemSubmit} isLoading={editItemMutation.isPending} onCancel={() => setIsEditDialogOpen(false)} />)}</DialogContent></Dialog>
            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete {itemToDelete?.itemName}. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)} disabled={deleteItemMutation.isPending}>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmDeleteItem} disabled={deleteItemMutation.isPending} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">{deleteItemMutation.isPending ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>) : (<><Trash2 className="mr-2 h-4 w-4" /> Delete Item</>)}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
                {isAdmin && isSettingsDialogOpen && (<AdminSettingsDialog isOpen={isSettingsDialogOpen} onClose={() => setIsSettingsDialogOpen(false)} onSave={handleSaveSettings} currentSettings={adminSettings} isLoading={saveSettingsMutation.isPending} />)}
-               {isAdmin && isUserManagementDialogOpen && (<UserManagementDialog isOpen={isUserManagementDialogOpen} onClose={() => setIsUserManagementDialogOpen(false)} />)}
+               {isAdmin && isUserManagementDialogOpen && (<UserManagementDialog isOpen={isUserManagementDialogOpen} onClose={() => setIsUserManagementDialogOpen(false)} allStockItems={stockItems} />)}
                <Dialog open={isPhotoSearchOpen} onOpenChange={setIsPhotoSearchOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Search Item by Photo</DialogTitle><DialogDescription>Center the item in the camera view and capture to search.</DialogDescription></DialogHeader><div className="space-y-4 py-4"><div className="relative aspect-video w-full bg-muted rounded-md overflow-hidden"><video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline /><canvas ref={canvasRef} style={{ display: 'none' }} />{hasCameraPermission === false && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-destructive-foreground p-4"><VideoOff className="h-12 w-12 mb-2" /><p className="text-lg font-semibold">Camera Access Denied</p><p className="text-sm text-center">Please allow camera access in your browser settings.</p></div>)}{hasCameraPermission === null && !photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Accessing Camera...</p></div>)}{photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-primary-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Analyzing Photo...</p></div>)}</div><Button type="button" onClick={handlePhotoSearchCapture} disabled={photoSearchLoading || hasCameraPermission !== true} className="w-full" size="lg">{photoSearchLoading ? (<Loader2 className="mr-2 h-5 w-5 animate-spin" />) : (<Camera className="mr-2 h-5 w-5" />)}{photoSearchLoading ? 'Searching...' : 'Capture & Search'}</Button></div><AlertDialogFooter><Button variant="outline" onClick={() => setIsPhotoSearchOpen(false)} disabled={photoSearchLoading}><XCircle className="mr-2 h-4 w-4"/> Cancel</Button></AlertDialogFooter></DialogContent></Dialog>
          </div>
        );
@@ -1022,5 +1079,6 @@
      export default function Home() {
          return (<QueryClientProvider client={queryClient}><ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange><RequireAuth><StockManagementPageContent /></RequireAuth></ThemeProvider></QueryClientProvider>);
      }
+
 
 

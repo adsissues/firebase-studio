@@ -30,40 +30,46 @@ import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/firebase/firebase';
 import { collection, getDocs, doc, updateDoc, DocumentData } from 'firebase/firestore';
-import type { AppUser } from '@/types';
-import { Loader2, Save, XCircle, Users, ShieldCheck, User as UserIconLucide, Info } from 'lucide-react'; // Added UserIconLucide
+import type { AppUser, StockItem } from '@/types';
+import { Loader2, Save, XCircle, Users, ShieldCheck, User as UserIconLucide, Info, MapPin } from 'lucide-react'; 
 import { Skeleton } from './ui/skeleton';
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription as ShadAlertDescription } from "@/components/ui/alert";
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 interface UserManagementDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  allStockItems: StockItem[]; // Pass all stock items to extract unique locations
 }
 
 interface UserWithPotentialChanges extends AppUser {
   newRole?: 'admin' | 'user';
+  newAssignedLocations?: string[];
 }
 
 async function fetchUsers(): Promise<AppUser[]> {
   if (!db) throw new Error("Firestore is not initialized.");
   const usersCol = collection(db, 'users');
   const userSnapshot = await getDocs(usersCol);
-  const usersList = userSnapshot.docs.map(docData => ({ // Renamed doc to docData to avoid conflict
-    uid: docData.id, // Use docData.id as uid
+  const usersList = userSnapshot.docs.map(docData => ({ 
+    uid: docData.id, 
     ...docData.data(),
+    assignedLocations: docData.data().assignedLocations || [], // Ensure assignedLocations is an array
   } as AppUser));
   return usersList;
 }
 
-async function updateUserRole(userId: string, newRole: 'admin' | 'user'): Promise<void> {
+async function updateUser(userId: string, data: Partial<AppUser>): Promise<void> {
   if (!db) throw new Error("Firestore is not initialized.");
   const userDocRef = doc(db, 'users', userId);
-  await updateDoc(userDocRef, { role: newRole });
+  await updateDoc(userDocRef, data);
 }
 
-export function UserManagementDialog({ isOpen, onClose }: UserManagementDialogProps) {
+export function UserManagementDialog({ isOpen, onClose, allStockItems }: UserManagementDialogProps) {
   const { toast } = useToast();
   const queryClientTanstack = useQueryClient(); 
 
@@ -73,40 +79,87 @@ export function UserManagementDialog({ isOpen, onClose }: UserManagementDialogPr
     enabled: isOpen, 
   });
 
-  const [userChanges, setUserChanges] = React.useState<Record<string, 'admin' | 'user'>>({});
+  const [userChanges, setUserChanges] = React.useState<Record<string, Partial<Pick<UserWithPotentialChanges, 'newRole' | 'newAssignedLocations'>>>>({});
 
-  const updateUserRoleMutation = useMutation({
-    mutationFn: ({ userId, newRole }: { userId: string; newRole: 'admin' | 'user' }) => updateUserRole(userId, newRole),
+  const uniqueLocations = React.useMemo(() => {
+    const locations = new Set<string>();
+    allStockItems.forEach(item => {
+      if (item.location) locations.add(item.location);
+    });
+    return Array.from(locations).sort();
+  }, [allStockItems]);
+
+
+  const updateUserMutation = useMutation({
+    mutationFn: ({ userId, data }: { userId: string; data: Partial<AppUser> }) => updateUser(userId, data),
     onSuccess: (_, variables) => {
       toast({
-        title: 'Role Updated',
-        description: `User role updated successfully for user ID: ${variables.userId}.`,
+        title: 'User Updated',
+        description: `User details updated successfully for user ID: ${variables.userId}.`,
       });
       queryClientTanstack.invalidateQueries({ queryKey: ['allUsers'] });
+      setUserChanges(prev => {
+        const updated = {...prev};
+        delete updated[variables.userId];
+        return updated;
+      });
     },
     onError: (error: any, variables) => {
       toast({
         variant: 'destructive',
-        title: 'Error Updating Role',
-        description: error.message || `Could not update role for user ID: ${variables.userId}.`,
+        title: 'Error Updating User',
+        description: error.message || `Could not update user ID: ${variables.userId}.`,
       });
     },
   });
 
   const handleRoleChange = (userId: string, newRole: 'admin' | 'user') => {
-    setUserChanges(prev => ({ ...prev, [userId]: newRole }));
+    setUserChanges(prev => ({ 
+        ...prev, 
+        [userId]: { ...prev[userId], newRole } 
+    }));
   };
 
+  const handleLocationAssignmentChange = (userId: string, location: string) => {
+    setUserChanges(prev => {
+        const currentUserChanges = prev[userId] || {};
+        const currentAssigned = currentUserChanges.newAssignedLocations || users.find(u=>u.uid === userId)?.assignedLocations || [];
+        const newAssigned = currentAssigned.includes(location)
+            ? currentAssigned.filter(l => l !== location)
+            : [...currentAssigned, location];
+        return {
+            ...prev,
+            [userId]: { ...currentUserChanges, newAssignedLocations: newAssigned }
+        };
+    });
+  };
+
+
   const handleSaveChanges = (userId: string) => {
-    const newRole = userChanges[userId];
+    const changes = userChanges[userId];
     const originalUser = users.find(u => u.uid === userId);
-    if (newRole && originalUser && originalUser.role !== newRole) {
-        updateUserRoleMutation.mutate({ userId, newRole });
-    } else if (newRole === originalUser?.role && userChanges[userId]){
-        const updatedChanges = {...userChanges};
+    if (!changes || !originalUser) return;
+
+    const updatePayload: Partial<AppUser> = {};
+    let hasChanges = false;
+
+    if (changes.newRole && changes.newRole !== originalUser.role) {
+        updatePayload.role = changes.newRole;
+        hasChanges = true;
+    }
+    if (changes.newAssignedLocations && 
+        JSON.stringify(changes.newAssignedLocations.sort()) !== JSON.stringify((originalUser.assignedLocations || []).sort())) {
+        updatePayload.assignedLocations = changes.newAssignedLocations;
+        hasChanges = true;
+    }
+
+    if (hasChanges) {
+        updateUserMutation.mutate({ userId, data: updatePayload });
+    } else {
+        toast({title: "No Change", description: "Selected values are the same as current."});
+        const updatedChanges = {...userChanges}; // Remove if no actual change to save button state
         delete updatedChanges[userId];
         setUserChanges(updatedChanges);
-        toast({title: "No Change", description: "Selected role is the same as current."})
     }
   };
   
@@ -119,12 +172,11 @@ export function UserManagementDialog({ isOpen, onClose }: UserManagementDialogPr
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent className="sm:max-w-3xl max-h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Users className="h-6 w-6" /> User Role Management</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Users className="h-6 w-6" /> User Management</DialogTitle>
           <DialogDescription>
-            This dialog allows administrators to manage the roles of existing users. 
-            Users must first be created in Firebase Authentication and have a corresponding record in Firestore.
+            Assign roles and locations to users. Users access stock items they own or items in their assigned locations.
           </DialogDescription>
         </DialogHeader>
 
@@ -137,9 +189,9 @@ export function UserManagementDialog({ isOpen, onClose }: UserManagementDialogPr
               <li>Go to the Firebase Console &gt; Authentication section and click "Add user". Provide their email and a password. Note the **User UID**.</li>
               <li>Go to Firebase Console &gt; Firestore Database &gt; `users` collection. Click "Add document".</li>
               <li>For the **Document ID**, enter the **User UID** from step 1.</li>
-              <li>Add a field named `role` and set its value to `user` (or `admin`). You can also add `email`, `displayName`, etc.</li>
+              <li>Add a field named `role` (string, e.g., `user` or `admin`) and `assignedLocations` (array of strings). You can also add `email`, `displayName`, etc.</li>
             </ol>
-            Once these steps are completed, the user will appear in this list for role management after their first login or a page refresh.
+            Once these steps are completed, the user will appear in this list after their first login or a page refresh.
           </ShadAlertDescription>
         </Alert>
 
@@ -163,11 +215,21 @@ export function UserManagementDialog({ isOpen, onClose }: UserManagementDialogPr
                   <TableHead>Email</TableHead>
                   <TableHead>Current Role</TableHead>
                   <TableHead className="w-[150px]">New Role</TableHead>
+                  <TableHead>Assigned Locations</TableHead>
                   <TableHead className="w-[100px] text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((user) => (
+                {users.map((user) => {
+                  const currentRole = userChanges[user.uid]?.newRole || user.role || 'user';
+                  const currentAssignedLocations = userChanges[user.uid]?.newAssignedLocations || user.assignedLocations || [];
+                  const isSavingThisUser = updateUserMutation.isPending && updateUserMutation.variables?.userId === user.uid;
+                  const hasPendingChanges = !!userChanges[user.uid] && 
+                    ( (userChanges[user.uid]?.newRole && userChanges[user.uid]?.newRole !== user.role) ||
+                      (userChanges[user.uid]?.newAssignedLocations && JSON.stringify(userChanges[user.uid]?.newAssignedLocations?.sort()) !== JSON.stringify((user.assignedLocations || []).sort()))
+                    );
+
+                  return (
                   <TableRow key={user.uid}>
                     <TableCell>{user.email || 'N/A (UID: ' + user.uid.substring(0,8) + '...)'}</TableCell>
                     <TableCell>
@@ -178,9 +240,9 @@ export function UserManagementDialog({ isOpen, onClose }: UserManagementDialogPr
                     </TableCell>
                     <TableCell>
                       <Select
-                        value={userChanges[user.uid] || user.role || 'user'}
+                        value={currentRole}
                         onValueChange={(newRole) => handleRoleChange(user.uid, newRole as 'admin' | 'user')}
-                        disabled={updateUserRoleMutation.isPending && updateUserRoleMutation.variables?.userId === user.uid}
+                        disabled={isSavingThisUser}
                       >
                         <SelectTrigger className="h-8">
                           <SelectValue placeholder="Select role" />
@@ -191,18 +253,41 @@ export function UserManagementDialog({ isOpen, onClose }: UserManagementDialogPr
                         </SelectContent>
                       </Select>
                     </TableCell>
+                    <TableCell>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-8 w-full justify-start text-left font-normal" disabled={isSavingThisUser}>
+                                    <MapPin className="mr-2 h-4 w-4" />
+                                    {currentAssignedLocations.length > 0 ? `${currentAssignedLocations.length} selected` : "Assign Locations"}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <ScrollArea className="h-[200px] p-2">
+                                 {uniqueLocations.length > 0 ? uniqueLocations.map(location => (
+                                    <div key={location} className="flex items-center space-x-2 p-1.5">
+                                        <Checkbox
+                                            id={`${user.uid}-loc-${location}`}
+                                            checked={currentAssignedLocations.includes(location)}
+                                            onCheckedChange={() => handleLocationAssignmentChange(user.uid, location)}
+                                        />
+                                        <label htmlFor={`${user.uid}-loc-${location}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                            {location}
+                                        </label>
+                                    </div>
+                                )) : <p className="text-xs text-muted-foreground p-2">No locations defined in stock items yet.</p>}
+                                </ScrollArea>
+                            </PopoverContent>
+                        </Popover>
+                    </TableCell>
                     <TableCell className="text-right">
                         <Button 
                             size="sm" 
                             variant="ghost"
                             onClick={() => handleSaveChanges(user.uid)}
-                            disabled={
-                                (!userChanges[user.uid] || userChanges[user.uid] === user.role) ||
-                                (updateUserRoleMutation.isPending && updateUserRoleMutation.variables?.userId === user.uid)
-                            }
-                            title="Save role change"
+                            disabled={!hasPendingChanges || isSavingThisUser}
+                            title="Save changes for this user"
                         >
-                            {updateUserRoleMutation.isPending && updateUserRoleMutation.variables?.userId === user.uid ? (
+                            {isSavingThisUser ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                                 <Save className="h-4 w-4" />
@@ -210,7 +295,8 @@ export function UserManagementDialog({ isOpen, onClose }: UserManagementDialogPr
                         </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -220,9 +306,10 @@ export function UserManagementDialog({ isOpen, onClose }: UserManagementDialogPr
          )}
 
         <DialogFooter className="mt-auto pt-4 border-t">
-          <Button variant="outline" onClick={onClose} disabled={updateUserRoleMutation.isPending}><XCircle className="mr-2 h-4 w-4" /> Close</Button>
+          <Button variant="outline" onClick={onClose} disabled={updateUserMutation.isPending}><XCircle className="mr-2 h-4 w-4" /> Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+

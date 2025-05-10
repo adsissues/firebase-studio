@@ -1,4 +1,3 @@
-
 import type { User as FirebaseUser } from 'firebase/auth'; 
 import type { Timestamp } from 'firebase/firestore'; 
 
@@ -20,7 +19,7 @@ export interface StockItem {
   supplier?: string; 
   photoUrl?: string;
   locationCoords?: LocationCoords;
-  userId: string;
+  userId: string; // The UID of the user who created/owns this item
   costPrice?: number; 
   lastMovementDate?: Timestamp; 
 
@@ -35,6 +34,7 @@ export interface StockItem {
 
 export interface AppUser extends FirebaseUser {
   role?: 'admin' | 'user';
+  assignedLocations?: string[]; // New: List of locations the user is assigned to
 }
 
 export interface AdminSettings {
@@ -76,3 +76,4 @@ export interface AlertType {
   // acknowledgedAt?: Timestamp;
   // actions?: { label: string; onClick: () => void }[];
 }
+
