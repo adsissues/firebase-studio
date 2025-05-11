@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Package, AlertTriangle, XCircle, ArrowDown, ArrowUp, RefreshCcw, DollarSign } from 'lucide-react'; // Import icons
+import { Package, AlertTriangle, XCircle, ArrowDown, ArrowUp, RefreshCcw, PoundSterling } from 'lucide-react'; // Import icons
 
 export interface KPIData {
   totalItems: number;
@@ -26,7 +26,7 @@ interface KPIItemProps {
     icon: React.ElementType;
     iconColor?: string;
     isLoading?: boolean;
-    prefix?: string; // Optional prefix like '$'
+    prefix?: string; // Optional prefix like '£'
 }
 
 const KPIItem: React.FC<KPIItemProps> = ({ title, value, icon: Icon, iconColor = "text-primary", isLoading, prefix = '' }) => (
@@ -94,10 +94,10 @@ export function DashboardKPIs({ data, isLoading = false }: DashboardKPIsProps) {
              <KPIItem
                 title="Inv. Value"
                 value={data.totalInventoryValue.toFixed(2)}
-                icon={DollarSign}
+                icon={PoundSterling}
                 iconColor="text-green-600"
                 isLoading={isLoading}
-                prefix="$"
+                prefix="£"
             />
         )}
     </div>

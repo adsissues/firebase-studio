@@ -16,10 +16,10 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { StockItem } from '@/types';
-import { Barcode, MapPin, Tag, Building, Info, Package, AlertTriangle, Circle, MapPinned, XCircle, ImageIcon, UserCircle as UserIconLucide, TrendingDown, DollarSign, Phone, Mail as MailIcon, Globe, Clock } from 'lucide-react';
+import { Barcode, MapPin, Tag, Building, Info, Package, AlertTriangle, Circle, MapPinned, XCircle, ImageIcon, UserCircle as UserIconLucide, TrendingDown, PoundSterling, Phone, Mail as MailIcon, Globe, Clock } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { cn } from "@/lib/utils";
-import { formatDistanceToNow } from 'date-fns'; // Added import
+import { formatDistanceToNow } from 'date-fns'; 
 
 interface ViewItemDialogProps {
   isOpen: boolean;
@@ -69,7 +69,7 @@ export function ViewItemDialog({ isOpen, onClose, item }: ViewItemDialogProps) {
     const Icon = icon;
     let displayValue = String(value);
      if (formatAsCurrency && typeof value === 'number') {
-         displayValue = `$${value.toFixed(2)}`;
+         displayValue = `£${value.toFixed(2)}`;
      }
 
     return (
@@ -105,7 +105,7 @@ export function ViewItemDialog({ isOpen, onClose, item }: ViewItemDialogProps) {
             {renderDetailRow("Current Stock", item.currentStock, Package)}
             {renderDetailRow("Minimum Stock", item.minimumStock, AlertTriangle)}
             {renderDetailRow("Overstock Threshold", item.overstockThreshold, AlertTriangle)}
-            {renderDetailRow("Cost Price", item.costPrice, DollarSign, true)}
+            {renderDetailRow("Cost Price", item.costPrice, PoundSterling, true)}
             {renderDetailRow("Category", item.category, Tag)}
             {renderDetailRow("Barcode", item.barcode, Barcode)}
             {renderDetailRow("Storage Location", item.location, MapPin)}
@@ -138,4 +138,3 @@ export function ViewItemDialog({ isOpen, onClose, item }: ViewItemDialogProps) {
     </Dialog>
   );
 }
-
