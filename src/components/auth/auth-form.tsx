@@ -87,9 +87,10 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
     const { email, password } = values;
 
     try {
+      // Only handle sign-in
       await signInWithEmailAndPassword(auth, email, password);
       console.log('User signed in successfully');
-      onSuccess?.(); 
+      onSuccess?.(); // Call success callback
     } catch (err) {
       handleAuthError(err as AuthError);
     }
@@ -97,9 +98,9 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
 
   const handleBiometricSignIn = () => {
     toast({
-      title: "Biometric Sign-In",
-      description: "This feature typically requires a native mobile app or specific browser support (WebAuthn) for full functionality. This is a placeholder.",
-      duration: 5000,
+      title: "Biometric Sign-In (Simulated)",
+      description: "True biometric authentication requires native app capabilities or advanced WebAuthn integration, which is not fully implemented in this web demo.",
+      duration: 7000, // Increased duration for better readability
     });
   };
 
@@ -165,7 +166,7 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
                 disabled={isLoading}
               >
                 <Fingerprint className="mr-2 h-4 w-4" />
-                Sign In with Biometrics
+                Sign In with Biometrics (Simulated)
              </Button>
            </form>
          </Form>
