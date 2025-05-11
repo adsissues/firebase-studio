@@ -1,5 +1,3 @@
-
-
  'use client';
 
     import * as React from 'react';
@@ -1121,6 +1119,3 @@
      export default function Home() {
          return (<QueryClientProvider client={queryClient}><ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange><RequireAuth><StockManagementPageContent /></RequireAuth></ThemeProvider></QueryClientProvider>);
      }
-
-
-
