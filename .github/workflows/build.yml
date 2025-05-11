@@ -1,0 +1,51 @@
+name: Next.js Build CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build Next.js application
+      run: npm run build
+      env:
+        # Ensure build-time environment variables are available if needed
+        # For example, if your Firebase config is pulled from env vars during build
+        NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY_DUMMY || 'dummy-key' }}
+        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN_DUMMY || 'dummy-auth-domain.firebaseapp.com' }}
+        NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID_DUMMY || 'dummy-project-id' }}
+        NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET_DUMMY || 'dummy-storage-bucket.appspot.com' }}
+        NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID_DUMMY || 'dummy-sender-id' }}
+        NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID_DUMMY || 'dummy-app-id' }}
+        # Note: It's better practice to use GitHub Secrets for actual sensitive keys
+        # For this example, we're using dummy values if secrets aren't set.
+        # In a real scenario, you'd set these secrets in your GitHub repository settings.
+
+    # Optional: Add a linting step
+    # - name: Lint
+    #   run: npm run lint
+
+    # Optional: Add a testing step if you have tests
+    # - name: Test
+    #   run: npm test --if-present
