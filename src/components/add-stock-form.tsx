@@ -115,12 +115,25 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
   const handleScanBarcode = async () => {
     setIsScanningBarcode(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 100));
       const result = await scanBarcode();
-      form.setValue('barcode', result.barcode, { shouldValidate: true });
-      toast({ title: "Barcode Scanned", description: `Barcode: ${result.barcode}` });
-    } catch (error) { toast({ variant: "destructive", title: "Scan Error" });
-    } finally { setIsScanningBarcode(false); }
+      if (result.isPlaceholder) {
+        toast({ 
+            title: "Manual Barcode Entry", 
+            description: "Scanner not available. Please type the barcode." 
+        });
+        // Optionally focus the barcode input field
+        form.setFocus('barcode');
+      } else if (result.barcode) {
+        form.setValue('barcode', result.barcode, { shouldValidate: true });
+        toast({ title: "Barcode Scanned", description: `Barcode: ${result.barcode}` });
+      } else {
+        toast({ variant: "destructive", title: "Scan Unsuccessful", description: "No barcode captured." });
+      }
+    } catch (error) { 
+        toast({ variant: "destructive", title: "Scan Error", description: "Could not initialize scanner." });
+    } finally { 
+        setIsScanningBarcode(false); 
+    }
   };
 
   const handleCapturePhoto = async () => {
@@ -171,7 +184,7 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
           videoRef.current.srcObject = null;
        }
     }
-  }, [isLoading, form.formState.isSubmitSuccessful, form]); // form.reset was missing in dependencies
+  }, [isLoading, form.formState.isSubmitSuccessful, form]);
 
   return (
     <Form {...form}>

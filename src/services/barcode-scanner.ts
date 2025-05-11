@@ -7,25 +7,29 @@ export interface BarcodeScanResult {
    * The barcode value that was scanned.
    */
   barcode: string;
+  /**
+   * Indicates if the scan was a real scan or a placeholder.
+   */
+  isPlaceholder?: boolean;
 }
 
 /**
  * Asynchronously simulates scanning a barcode.
  * In a real application, this would integrate with a native barcode scanning library or API.
- * For now, it returns a mock barcode after a short delay.
+ * For now, it returns an empty barcode and a flag indicating it's a placeholder.
  *
- * @returns A promise that resolves to a BarcodeScanResult object containing the mock barcode value.
+ * @returns A promise that resolves to a BarcodeScanResult object.
  */
 export async function scanBarcode(): Promise<BarcodeScanResult> {
-   console.log("Simulating barcode scan...");
-   // Simulate asynchronous operation (e.g., opening camera, scanning)
-   await new Promise(resolve => setTimeout(resolve, 750)); // 0.75 second delay
+   console.log("Barcode scan initiated (placeholder)...");
+   // Simulate a brief delay as if trying to access a scanner
+   await new Promise(resolve => setTimeout(resolve, 250));
 
-   // Generate a mock barcode (e.g., a random 12-digit number)
-   const mockBarcode = Math.floor(100000000000 + Math.random() * 900000000000).toString();
-
-   console.log("Simulated scan complete. Barcode:", mockBarcode);
+   // Return an empty barcode and indicate it's a placeholder
+   // The UI will handle informing the user to type manually.
    return {
-     barcode: mockBarcode
+     barcode: '', 
+     isPlaceholder: true,
    };
 }
+

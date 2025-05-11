@@ -25,15 +25,15 @@ import {
 } from '@/components/ui/select';
 import type { StockItem, AppUser } from '@/types'; 
 import { MinusCircle, Loader2, ScanBarcode } from 'lucide-react'; 
-// Removed useAuth import as user info will be passed via props
+
 import { scanBarcode } from '@/services/barcode-scanner';
 import { useToast } from "@/hooks/use-toast";
 
 interface StockOutFormProps {
-  items: StockItem[]; // This list is pre-filtered by the parent
+  items: StockItem[]; 
   onSubmit: (data: StockOutFormDataSubmit) => void;
   isLoading?: boolean;
-  currentUser: AppUser | null; // Pass current user for disable checks
+  currentUser: AppUser | null; 
 }
 
 const createFormSchema = (items: StockItem[]) => z.object({
@@ -75,14 +75,11 @@ export function StockOutForm({ items, onSubmit, isLoading = false, currentUser }
    const { toast } = useToast();
    const [isScanningBarcode, setIsScanningBarcode] = React.useState(false);
 
-   // The `items` prop is now assumed to be pre-filtered by the parent component (page.tsx)
-   // based on user role and assigned locations.
-   // `availableItems` filters this pre-scoped list for items with stock > 0.
    const availableItems = React.useMemo(() => {
        return items.filter(item => item.currentStock > 0);
    }, [items]);
 
-  const formSchema = React.useMemo(() => createFormSchema(items), [items]); // Use `items` prop directly
+  const formSchema = React.useMemo(() => createFormSchema(items), [items]); 
 
   const form = useForm<StockOutFormData>({
     resolver: zodResolver(formSchema),
@@ -91,37 +88,46 @@ export function StockOutForm({ items, onSubmit, isLoading = false, currentUser }
       itemId: '',
       quantity: 1,
     },
-    context: { items }, // For refine context, using the passed `items`
+    context: { items }, 
     mode: "onChange", 
   });
 
     const handleScanBarcode = async () => {
         setIsScanningBarcode(true);
         try {
-            await new Promise(resolve => setTimeout(resolve, 100)); 
             const result = await scanBarcode();
-            const scannedBarcode = result.barcode;
-            form.setValue('barcode', scannedBarcode, { shouldValidate: true });
+            if (result.isPlaceholder) {
+                toast({ 
+                    title: "Manual Barcode Entry", 
+                    description: "Scanner not available. Please type or select the item." 
+                });
+                form.setFocus('barcode'); 
+                form.setValue('itemId', '', { shouldValidate: true }); // Clear item selection
+            } else if (result.barcode) {
+                const scannedBarcode = result.barcode;
+                form.setValue('barcode', scannedBarcode, { shouldValidate: true });
+                const matchedItem = items.find(item => item.barcode === scannedBarcode);
 
-            // Search within the `items` prop (which is already user-accessible)
-            const matchedItem = items.find(item => item.barcode === scannedBarcode);
-
-            if (matchedItem) {
-                 if (matchedItem.currentStock > 0) {
-                    form.setValue('itemId', matchedItem.id, { shouldValidate: true });
-                    toast({ title: "Item Found", description: `${matchedItem.itemName} selected.` });
-                 } else {
-                     form.setValue('itemId', '', { shouldValidate: true }); 
-                     toast({ variant: "destructive", title: "Out of Stock", description: `${matchedItem.itemName} has no stock available.` });
-                 }
+                if (matchedItem) {
+                    if (matchedItem.currentStock > 0) {
+                        form.setValue('itemId', matchedItem.id, { shouldValidate: true });
+                        toast({ title: "Item Found", description: `${matchedItem.itemName} selected.` });
+                    } else {
+                        form.setValue('itemId', '', { shouldValidate: true });
+                        toast({ variant: "destructive", title: "Out of Stock", description: `${matchedItem.itemName} has no stock available.` });
+                    }
+                } else {
+                    form.setValue('itemId', '', { shouldValidate: true });
+                    toast({ variant: "destructive", title: "Barcode Not Found", description: "No matching item found for this barcode." });
+                }
             } else {
-                form.setValue('itemId', '', { shouldValidate: true }); 
-                toast({ variant: "destructive", title: "Barcode Not Found", description: "No matching item found for this barcode." });
+                 toast({ variant: "destructive", title: "Scan Unsuccessful", description: "No barcode captured." });
+                 form.setValue('itemId', '', { shouldValidate: true }); 
             }
         } catch (error) {
             console.error("Barcode scan error:", error);
-            toast({ variant: "destructive", title: "Scan Error", description: "Could not scan barcode." });
-             form.setValue('itemId', '', { shouldValidate: true }); 
+            toast({ variant: "destructive", title: "Scan Error", description: "Could not initialize scanner." });
+            form.setValue('itemId', '', { shouldValidate: true }); 
         } finally {
             setIsScanningBarcode(false);
         }
@@ -140,7 +146,7 @@ export function StockOutForm({ items, onSubmit, isLoading = false, currentUser }
      if (!isLoading && form.formState.isSubmitSuccessful) {
         form.reset({ barcode: '', itemId: '', quantity: 1 });
      }
-   }, [isLoading, form.formState.isSubmitSuccessful, form]); // form.reset added to dependency array
+   }, [isLoading, form.formState.isSubmitSuccessful, form]); 
 
 
   return (
