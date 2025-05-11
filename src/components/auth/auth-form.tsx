@@ -96,52 +96,6 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
     }
   };
 
-  const handleBiometricRegister = async () => {
-    toast({
-      title: "Biometric Registration (Simulated)",
-      description: "This would typically involve: 1. User being logged in. 2. Calling navigator.credentials.create() to generate a new public key credential. 3. Sending the public key to the server to be stored with the user's account. Full WebAuthn implementation needed.",
-      duration: 10000,
-    });
-    // Placeholder for actual WebAuthn registration logic
-    // Example (highly simplified and incomplete):
-    // if (navigator.credentials && navigator.credentials.create) {
-    //   try {
-    //     const publicKeyCredentialCreationOptions = { /* ... challenge from server ... */ };
-    //     const credential = await navigator.credentials.create({ publicKey: publicKeyCredentialCreationOptions });
-    //     // Send credential to server for storage
-    //     console.log("Biometric credential created (simulated):", credential);
-    //   } catch (err) {
-    //     console.error("Biometric registration error (simulated):", err);
-    //     toast({ variant: "destructive", title: "Biometric Registration Failed (Simulated)"});
-    //   }
-    // } else {
-    //   toast({ variant: "destructive", title: "WebAuthn Not Supported (Simulated)"});
-    // }
-  };
-
-  const handleBiometricSignIn = async () => {
-    toast({
-      title: "Biometric Sign-In (Simulated)",
-      description: "This would typically involve: 1. Fetching a challenge from the server. 2. Calling navigator.credentials.get() with the challenge. 3. Sending the assertion to the server for verification. Full WebAuthn implementation needed.",
-      duration: 10000,
-    });
-    // Placeholder for actual WebAuthn sign-in logic
-    // Example (highly simplified and incomplete):
-    // if (navigator.credentials && navigator.credentials.get) {
-    //   try {
-    //     const publicKeyCredentialRequestOptions = { /* ... challenge from server ... */ };
-    //     const assertion = await navigator.credentials.get({ publicKey: publicKeyCredentialRequestOptions });
-    //     // Send assertion to server for verification
-    //     console.log("Biometric assertion received (simulated):", assertion);
-    //     // If server verifies, call onSuccess?.();
-    //   } catch (err) {
-    //     console.error("Biometric sign-in error (simulated):", err);
-    //     toast({ variant: "destructive", title: "Biometric Sign-In Failed (Simulated)"});
-    //   }
-    // } else {
-    //   toast({ variant: "destructive", title: "WebAuthn Not Supported (Simulated)"});
-    // }
-  };
 
   return (
     <Card className="w-full max-w-md mx-auto shadow-lg">
@@ -197,40 +151,9 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
                )}
                {isLoading ? 'Signing In...' : 'Sign In with Email'}
              </Button>
-             <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background px-2 text-muted-foreground">
-                    Or continue with
-                    </span>
-                </div>
-            </div>
-             <Button 
-                type="button" 
-                variant="outline" 
-                className="w-full" 
-                onClick={handleBiometricSignIn}
-                disabled={isLoading}
-              >
-                <Fingerprint className="mr-2 h-4 w-4" />
-                Sign In with Biometrics (Simulated)
-             </Button>
-             <Button 
-                type="button" 
-                variant="outline" 
-                className="w-full" 
-                onClick={handleBiometricRegister}
-                disabled={isLoading}
-                title="Typically done after initial login, on a profile/settings page."
-              >
-                <UserPlus className="mr-2 h-4 w-4" />
-                Register Biometrics (Simulated)
-             </Button>
-             <p className="px-2 text-center text-xs text-muted-foreground">
-                Full biometric authentication requires server-side WebAuthn setup. These buttons are for demonstration.
-             </p>
+            
+             {/* Biometric buttons removed */}
+             
            </form>
          </Form>
       </CardContent>
