@@ -1,8 +1,7 @@
-
 "use client"
 
 import * as React from "react"
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip } from "recharts" // Added Tooltip
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend } from "recharts" 
 
 import {
   Card,
@@ -13,45 +12,43 @@ import {
 } from "@/components/ui/card"
 import {
   ChartContainer,
-  ChartTooltip, // Use ChartTooltip instead of direct Tooltip
+  ChartTooltip, 
   ChartTooltipContent,
+  ChartLegend, // Import ChartLegend
+  ChartLegendContent, // Import ChartLegendContent
   type ChartConfig,
 } from "@/components/ui/chart"
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface MovementTrendChartProps {
-  // Data can now include an optional 'Restock' key
   data: { name: string; StockIn: number; StockOut: number; Restock?: number }[];
   isLoading?: boolean;
 }
 
-// Update chartConfig to include Restock
 const chartConfig = {
   StockIn: {
-    label: "Stock In",
-    color: "hsl(var(--chart-2))", // Greenish
+    label: "Units In", // Clarified label
+    color: "hsl(var(--chart-2))", 
   },
   StockOut: {
-    label: "Stock Out",
-    color: "hsl(var(--chart-1))", // Reddish/Orangish
+    label: "Units Out", // Clarified label
+    color: "hsl(var(--chart-1))", 
   },
-  Restock: { // Add configuration for Restock
-      label: "Restock",
-      color: "hsl(var(--chart-4))", // Yellowish/Different color
+  Restock: { 
+      label: "Units Restocked", // Clarified label
+      color: "hsl(var(--chart-4))", 
   },
 } satisfies ChartConfig
 
 export function MovementTrendChart({ data, isLoading = false }: MovementTrendChartProps) {
   if (isLoading) {
-     return <Skeleton className="h-48 w-full" />; // Return Skeleton for loading state
+     return <Skeleton className="h-48 w-full" />; 
    }
 
   if (!data || data.length === 0) {
-     // Wrap the string in a paragraph tag
      return <p className="text-center text-muted-foreground py-4">No movement data for the selected period.</p>;
    }
 
-   // Check if any data point includes the Restock key to decide whether to render the Area
    const hasRestockData = data.some(d => d.Restock !== undefined && d.Restock > 0);
 
   return (
@@ -62,6 +59,7 @@ export function MovementTrendChart({ data, isLoading = false }: MovementTrendCha
          margin={{
            left: 12,
            right: 12,
+           top: 5, // Added top margin for legend
          }}
        >
          <CartesianGrid vertical={false} />
@@ -71,53 +69,55 @@ export function MovementTrendChart({ data, isLoading = false }: MovementTrendCha
            axisLine={false}
            tickMargin={8}
            tickFormatter={(value) => {
-             // Assuming 'name' is a date string like 'YYYY-MM-DD'
              try {
                    const date = new Date(value);
-                   // Format as MM/DD for brevity
                    return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
                  } catch { return value; }
               }}
-             tick={{ fontSize: 10 }}
+             tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+             stroke="hsl(var(--muted-foreground))"
            />
-            <YAxis tickLine={false} axisLine={false} tickMargin={8} width={30} tick={{ fontSize: 10 }} />
-           {/* Use ChartTooltip for better integration with ChartContainer config */}
+            <YAxis 
+              tickLine={false} 
+              axisLine={false} 
+              tickMargin={8} 
+              width={40} // Increased width for larger numbers
+              tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} 
+              stroke="hsl(var(--muted-foreground))"
+              label={{ value: 'Units', angle: -90, position: 'insideLeft', offset: -5, fontSize: 10, fill: "hsl(var(--foreground))" }} // Added Y-axis label
+            />
            <ChartTooltip
               cursor={false}
-              content={<ChartTooltipContent indicator="dot" />}
+              content={<ChartTooltipContent indicator="dot" nameKey="name" />} // Ensure nameKey is passed if needed
             />
-         {/* Render StockOut Area */}
+          <ChartLegend content={<ChartLegendContent />} /> 
          <Area
            dataKey="StockOut"
-           type="natural"
+           type="monotone" // Changed to monotone for smoother curves
            fill={chartConfig.StockOut.color}
            fillOpacity={0.4}
            stroke={chartConfig.StockOut.color}
-           stackId="a" // Keep same stack ID if you want them stacked
+           stackId="a" 
          />
-          {/* Render Restock Area only if data exists */}
           {hasRestockData && (
               <Area
                   dataKey="Restock"
-                  type="natural"
+                  type="monotone"
                   fill={chartConfig.Restock.color}
-                  fillOpacity={0.5} // Slightly different opacity?
+                  fillOpacity={0.5} 
                   stroke={chartConfig.Restock.color}
-                  stackId="a" // Stack with In/Out
+                  stackId="a" 
               />
            )}
-         {/* Render StockIn Area */}
          <Area
            dataKey="StockIn"
-           type="natural"
+           type="monotone" 
            fill={chartConfig.StockIn.color}
            fillOpacity={0.4}
            stroke={chartConfig.StockIn.color}
-           stackId="a" // Keep same stack ID
+           stackId="a" 
          />
        </AreaChart>
      </ChartContainer>
   )
 }
-
-

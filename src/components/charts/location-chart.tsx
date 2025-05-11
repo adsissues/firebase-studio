@@ -1,9 +1,8 @@
-
 "use client"
 
 import * as React from "react"
 import { TrendingUp } from "lucide-react"
-import { Label, Pie, PieChart, Sector } from "recharts"
+import { Label, Pie, PieChart, Sector, Cell } from "recharts" // Added Cell
 import type { PieSectorDataItem } from "recharts/types/polar/Pie"
 
 import {
@@ -27,7 +26,17 @@ interface LocationChartProps {
   isLoading?: boolean; // Optional loading state
 }
 
-const COLORS = ["#2563eb", "#f97316", "#16a34a", "#dc2626", "#9333ea", "#ea580c", "#0891b2"]; // Example Tailwind colors
+// Use the same broader palette as CategoryBarChart for consistency if needed
+const LOCATION_COLORS = [
+  "hsl(var(--chart-1))", 
+  "hsl(var(--chart-2))", 
+  "hsl(var(--chart-3))", 
+  "hsl(var(--chart-4))", 
+  "hsl(var(--chart-5))",
+  "hsl(100 70% 50%)", // A distinct lime green
+  "hsl(330 70% 60%)", // A distinct pink
+  "hsl(50 80% 55%)",  // A distinct gold
+];
 
 export function LocationChart({ data, isLoading = false }: LocationChartProps) {
 
@@ -36,7 +45,7 @@ export function LocationChart({ data, isLoading = false }: LocationChartProps) {
     data.forEach((item, index) => {
       config[item.name] = {
         label: item.name,
-        color: COLORS[index % COLORS.length],
+        color: LOCATION_COLORS[index % LOCATION_COLORS.length],
       };
     });
     return config;
@@ -63,30 +72,20 @@ export function LocationChart({ data, isLoading = false }: LocationChartProps) {
         <PieChart>
            <ChartTooltip
              cursor={false}
-             content={<ChartTooltipContent hideLabel indicator="dot" />}
+             content={<ChartTooltipContent hideLabel indicator="dot" nameKey="name" />}
            />
             <Pie
              data={data}
              dataKey="value"
              nameKey="name"
              innerRadius={60}
-             strokeWidth={5}
-             activeIndex={0} // Consider making dynamic if interaction needed
-             // Optional: Custom active shape rendering
-            //  activeShape={({ outerRadius = 0, ...props }: PieSectorDataItem) => (
-            //     <g>
-            //       <Sector {...props} outerRadius={outerRadius + 10} />
-            //       <Sector
-            //         {...props}
-            //         outerRadius={outerRadius + 20}
-            //         innerRadius={outerRadius + 12}
-            //       />
-            //     </g>
-            //  )}
-           >
+             outerRadius={80} // Adjust outer radius for better visual
+             strokeWidth={2} // Reduced stroke width slightly
+            >
              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={chartConfig[entry.name]?.color || LOCATION_COLORS[index % LOCATION_COLORS.length]} />
+              ))}
                 <Label
-                   key={`label-${index}`}
                    content={({ viewBox }) => {
                      if (viewBox && "cx" in viewBox && "cy" in viewBox) {
                        return (
@@ -95,18 +94,13 @@ export function LocationChart({ data, isLoading = false }: LocationChartProps) {
                            y={viewBox.cy}
                            textAnchor="middle"
                            dominantBaseline="middle"
+                           className="fill-foreground text-xl font-bold" // Adjusted size
                          >
+                           {totalValue.toLocaleString()}
                            <tspan
                              x={viewBox.cx}
-                             y={viewBox.cy}
-                             className="fill-foreground text-3xl font-bold"
-                           >
-                             {totalValue.toLocaleString()}
-                           </tspan>
-                           <tspan
-                             x={viewBox.cx}
-                             y={(viewBox.cy || 0) + 24}
-                             className="fill-muted-foreground"
+                             y={(viewBox.cy || 0) + 20} // Adjusted y offset
+                             className="fill-muted-foreground text-xs" // Adjusted size
                            >
                              Items
                            </tspan>
@@ -115,12 +109,10 @@ export function LocationChart({ data, isLoading = false }: LocationChartProps) {
                      }
                       return null;
                    }}
+                   position="center" // Ensure label is centered
                  />
-              ))}
            </Pie>
          </PieChart>
      </ChartContainer>
   )
 }
-
-    

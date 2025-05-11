@@ -64,7 +64,7 @@ body {
     --secondary-foreground: 0 0% 98%;
     --muted: 240 3.7% 15.9%;
     --muted-foreground: 0 0% 63.9%;
-    --accent: 213 69% 30%; /* Darker Blue for hover/accent */
+    --accent: 213 69% 45%; /* Darker Blue for hover/accent - increased saturation/lightness */
     --accent-foreground: 0 0% 98%; /* White text on accent bg */
     --destructive: 0 72% 51%; /* Dark mode adjusted Red */
     --destructive-foreground: 0 0% 98%;
@@ -79,19 +79,21 @@ body {
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 213 69% 60%; /* Use primary blue for focus rings */
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    /* Brighter chart colors for dark mode */
+    --chart-1: 12 80% 70%;   /* Brighter Red/Orange */
+    --chart-2: 173 65% 55%;  /* Brighter Green */
+    --chart-3: 197 50% 50%;  /* Brighter Teal */
+    --chart-4: 43 80% 75%;   /* Brighter Yellow */
+    --chart-5: 270 75% 70%;  /* Brighter Purple */
+
     --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-foreground: 0 0% 80%; /* Lighter grey for better contrast */
+    --sidebar-primary: 213 75% 65%; /* Brighter blue for primary sidebar elements */
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 213 69% 35%; /* Darker, more saturated blue for accent */
+    --sidebar-accent-foreground: 0 0% 95%; /* Slightly off-white for accent text */
+    --sidebar-border: 240 3.7% 20%; /* Slightly lighter border */
+    --sidebar-ring: 213 75% 65%; /* Match sidebar primary for ring */
   }
 }
 
