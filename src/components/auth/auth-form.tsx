@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from 'react';
@@ -9,7 +8,6 @@ import {
   signInWithEmailAndPassword,
   AuthError,
 } from 'firebase/auth';
-// Removed createUserWithEmailAndPassword and Firestore imports as Sign Up is removed
 import { auth } from '@/lib/firebase/firebase';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,9 +20,9 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-// Removed Tabs imports as they are no longer used
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, Loader2, LogIn } from 'lucide-react'; // Removed UserPlus icon
+import { AlertTriangle, Loader2, LogIn, Fingerprint } from 'lucide-react'; // Added Fingerprint icon
+import { useToast } from "@/hooks/use-toast"; // Import useToast
 
 // Schema remains the same for sign-in
 const authSchema = z.object({
@@ -41,7 +39,7 @@ interface AuthFormProps {
 export function AuthForm({ onSuccess }: AuthFormProps) {
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  // Removed activeTab state
+  const { toast } = useToast(); // Initialize useToast
 
   const form = useForm<AuthFormData>({
     resolver: zodResolver(authSchema),
@@ -56,8 +54,8 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
     let message = 'An unexpected error occurred. Please try again.';
     switch (authError.code) {
       case 'auth/invalid-api-key':
-      case 'auth/api-key-not-valid': // Handle variations
-      case 'auth/api-key-not-valid.-please-pass-a-valid-api-key.': // Handle variations
+      case 'auth/api-key-not-valid':
+      case 'auth/api-key-not-valid.-please-pass-a-valid-api-key.':
         message = 'Firebase API Key is invalid. Please ensure it is configured correctly in the application setup (.env.local).';
         break;
       case 'auth/invalid-email':
@@ -67,13 +65,12 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
         message = 'This user account has been disabled.';
         break;
       case 'auth/user-not-found':
-      case 'auth/invalid-credential': // Combined for simplicity in sign-in only context
+      case 'auth/invalid-credential': 
         message = 'Invalid credentials. Please check your email and password.';
          break;
       case 'auth/wrong-password':
         message = 'Incorrect password.';
         break;
-      // Removed Sign Up specific errors like 'auth/email-already-in-use', 'auth/weak-password'
     }
     setError(message);
     setIsLoading(false);
@@ -90,17 +87,20 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
     const { email, password } = values;
 
     try {
-      // Only handle sign-in
       await signInWithEmailAndPassword(auth, email, password);
       console.log('User signed in successfully');
-      onSuccess?.(); // Call success callback
+      onSuccess?.(); 
     } catch (err) {
       handleAuthError(err as AuthError);
     }
-     // Set loading to false only on error or completion (handled implicitly by component unmount/redirect on success)
-     // If onSuccess doesn't cause unmount, add setIsLoading(false) in try block after onSuccess()
-     // Keep isLoading true on success if redirecting, otherwise set to false
-     // For safety, ensure it's set to false on error path handled by handleAuthError
+  };
+
+  const handleBiometricSignIn = () => {
+    toast({
+      title: "Biometric Sign-In",
+      description: "This feature typically requires a native mobile app or specific browser support (WebAuthn) for full functionality. This is a placeholder.",
+      duration: 5000,
+    });
   };
 
   return (
@@ -108,11 +108,10 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
       <CardHeader className="text-center">
         <CardTitle className="text-2xl">Welcome to StockWatch</CardTitle>
         <CardDescription>
-           Sign in to manage your inventory {/* Updated description */}
+           Sign in to manage your inventory
         </CardDescription>
       </CardHeader>
       <CardContent>
-         {/* Removed Tabs component */}
          <Form {...form}>
            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-4">
              {error && (
@@ -154,9 +153,19 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
                {isLoading ? (
                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                ) : (
-                 <LogIn className="mr-2 h-4 w-4" /> // Always show LogIn icon
+                 <LogIn className="mr-2 h-4 w-4" />
                )}
-               {isLoading ? 'Signing In...' : 'Sign In'} {/* Updated button text */}
+               {isLoading ? 'Signing In...' : 'Sign In'}
+             </Button>
+             <Button 
+                type="button" 
+                variant="outline" 
+                className="w-full" 
+                onClick={handleBiometricSignIn}
+                disabled={isLoading}
+              >
+                <Fingerprint className="mr-2 h-4 w-4" />
+                Sign In with Biometrics
              </Button>
            </form>
          </Form>
