@@ -1,4 +1,5 @@
 
+
  'use client';
 
     import * as React from 'react';
@@ -42,7 +43,6 @@
     import { Badge } from "@/components/ui/badge";
     import { formatDistanceToNow } from 'date-fns';
     import { AlertsPanel } from '@/components/alerts-panel';
-    import { LocationHeatmapPlaceholder } from '@/components/location-heatmap-placeholder';
     import { ExportReportsButton } from '@/components/export-reports-button';
     import { getItemStatusInfo } from '@/components/stock-dashboard'; 
 
@@ -1038,10 +1038,6 @@
                <Card className="shadow-md md:col-span-1"><CardHeader><CardTitle className="text-lg">Stock by Location</CardTitle></CardHeader><CardContent>{isLoading ? <Skeleton className="h-48 w-full" /> : <LocationChart data={locationChartData} />}</CardContent></Card>
                <Card className="shadow-md md:col-span-1"><CardHeader><CardTitle className="text-lg">Weekly Movement Trend</CardTitle></CardHeader><CardContent>{isLoadingMovements ? <Skeleton className="h-48 w-full" /> : <MovementTrendChart data={movementTrendData} />}</CardContent></Card>
            </div>
-            <Card className="shadow-md md:col-span-3 mb-6">
-                <CardHeader><CardTitle className="text-lg flex items-center gap-2"><MapIcon className="h-5 w-5 text-primary" />Stock Location Heatmap</CardTitle><CardDescription>Visualize stock concentration across locations.</CardDescription></CardHeader>
-                <CardContent><LocationHeatmapPlaceholder /></CardContent>
-            </Card>
 
            <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
@@ -1116,4 +1112,5 @@
      export default function Home() {
          return (<QueryClientProvider client={queryClient}><ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange><RequireAuth><StockManagementPageContent /></RequireAuth></ThemeProvider></QueryClientProvider>);
      }
+
 
