@@ -1,3 +1,4 @@
+
 "use client"
 
 // Inspired by react-hot-toast library
@@ -172,23 +173,32 @@ function toast({ ...props }: Toast) {
 }
 
 function useToast() {
-  const [state, setState] = React.useState<State>(memoryState)
+  const [state, setState] = React.useState<State>(memoryState);
 
   React.useEffect(() => {
-    listeners.push(setState)
-    return () => {
-      const index = listeners.indexOf(setState)
-      if (index > -1) {
-        listeners.splice(index, 1)
-      }
+    // The `setState` function from `React.useState` is stable and doesn't need to be recreated.
+    listeners.push(setState);
+    
+    // Perform an initial sync if memoryState has changed since the component mounted
+    // and before this effect ran. This handles cases where toasts might have been dispatched
+    // between the initial render and the effect's execution.
+    if (state !== memoryState) {
+        setState(memoryState);
     }
-  }, [state])
+    
+    return () => {
+      const index = listeners.indexOf(setState);
+      if (index > -1) {
+        listeners.splice(index, 1);
+      }
+    };
+  }, []); // Empty dependency array ensures this effect runs only once on mount and unmount.
 
   return {
-    ...state,
-    toast,
+    ...state, // This includes the `toasts` array from the current state.
+    toast,    // This is the global `toast` function for dispatching new toasts.
     dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
-  }
+  };
 }
 
 export { useToast, toast }
