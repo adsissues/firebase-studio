@@ -8,7 +8,8 @@ import {
   signInWithEmailAndPassword,
   AuthError,
 } from 'firebase/auth';
-import { auth } from '@/lib/firebase/firebase';
+import { auth, db } from '@/lib/firebase/firebase'; // Added db
+import { doc, setDoc } from 'firebase/firestore'; // Added setDoc for potential WebAuthn credential storage
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -21,10 +22,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, Loader2, LogIn, Fingerprint } from 'lucide-react'; // Added Fingerprint icon
-import { useToast } from "@/hooks/use-toast"; // Import useToast
+import { AlertTriangle, Loader2, LogIn, Fingerprint, UserPlus } from 'lucide-react';
+import { useToast } from "@/hooks/use-toast";
 
-// Schema remains the same for sign-in
+// Schema remains the same for email/password sign-in
 const authSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters long.' }),
@@ -33,13 +34,13 @@ const authSchema = z.object({
 type AuthFormData = z.infer<typeof authSchema>;
 
 interface AuthFormProps {
-   onSuccess?: () => void; // Optional callback on successful authentication
+   onSuccess?: () => void;
 }
 
 export function AuthForm({ onSuccess }: AuthFormProps) {
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const { toast } = useToast(); // Initialize useToast
+  const { toast } = useToast();
 
   const form = useForm<AuthFormData>({
     resolver: zodResolver(authSchema),
@@ -87,21 +88,59 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
     const { email, password } = values;
 
     try {
-      // Only handle sign-in
       await signInWithEmailAndPassword(auth, email, password);
       console.log('User signed in successfully');
-      onSuccess?.(); // Call success callback
+      onSuccess?.();
     } catch (err) {
       handleAuthError(err as AuthError);
     }
   };
 
-  const handleBiometricSignIn = () => {
+  const handleBiometricRegister = async () => {
+    toast({
+      title: "Biometric Registration (Simulated)",
+      description: "This would typically involve: 1. User being logged in. 2. Calling navigator.credentials.create() to generate a new public key credential. 3. Sending the public key to the server to be stored with the user's account. Full WebAuthn implementation needed.",
+      duration: 10000,
+    });
+    // Placeholder for actual WebAuthn registration logic
+    // Example (highly simplified and incomplete):
+    // if (navigator.credentials && navigator.credentials.create) {
+    //   try {
+    //     const publicKeyCredentialCreationOptions = { /* ... challenge from server ... */ };
+    //     const credential = await navigator.credentials.create({ publicKey: publicKeyCredentialCreationOptions });
+    //     // Send credential to server for storage
+    //     console.log("Biometric credential created (simulated):", credential);
+    //   } catch (err) {
+    //     console.error("Biometric registration error (simulated):", err);
+    //     toast({ variant: "destructive", title: "Biometric Registration Failed (Simulated)"});
+    //   }
+    // } else {
+    //   toast({ variant: "destructive", title: "WebAuthn Not Supported (Simulated)"});
+    // }
+  };
+
+  const handleBiometricSignIn = async () => {
     toast({
       title: "Biometric Sign-In (Simulated)",
-      description: "True biometric authentication requires native app capabilities or advanced WebAuthn integration, which is not fully implemented in this web demo.",
-      duration: 7000, // Increased duration for better readability
+      description: "This would typically involve: 1. Fetching a challenge from the server. 2. Calling navigator.credentials.get() with the challenge. 3. Sending the assertion to the server for verification. Full WebAuthn implementation needed.",
+      duration: 10000,
     });
+    // Placeholder for actual WebAuthn sign-in logic
+    // Example (highly simplified and incomplete):
+    // if (navigator.credentials && navigator.credentials.get) {
+    //   try {
+    //     const publicKeyCredentialRequestOptions = { /* ... challenge from server ... */ };
+    //     const assertion = await navigator.credentials.get({ publicKey: publicKeyCredentialRequestOptions });
+    //     // Send assertion to server for verification
+    //     console.log("Biometric assertion received (simulated):", assertion);
+    //     // If server verifies, call onSuccess?.();
+    //   } catch (err) {
+    //     console.error("Biometric sign-in error (simulated):", err);
+    //     toast({ variant: "destructive", title: "Biometric Sign-In Failed (Simulated)"});
+    //   }
+    // } else {
+    //   toast({ variant: "destructive", title: "WebAuthn Not Supported (Simulated)"});
+    // }
   };
 
   return (
@@ -156,8 +195,18 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
                ) : (
                  <LogIn className="mr-2 h-4 w-4" />
                )}
-               {isLoading ? 'Signing In...' : 'Sign In'}
+               {isLoading ? 'Signing In...' : 'Sign In with Email'}
              </Button>
+             <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">
+                    Or continue with
+                    </span>
+                </div>
+            </div>
              <Button 
                 type="button" 
                 variant="outline" 
@@ -168,6 +217,20 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
                 <Fingerprint className="mr-2 h-4 w-4" />
                 Sign In with Biometrics (Simulated)
              </Button>
+             <Button 
+                type="button" 
+                variant="outline" 
+                className="w-full" 
+                onClick={handleBiometricRegister}
+                disabled={isLoading}
+                title="Typically done after initial login, on a profile/settings page."
+              >
+                <UserPlus className="mr-2 h-4 w-4" />
+                Register Biometrics (Simulated)
+             </Button>
+             <p className="px-2 text-center text-xs text-muted-foreground">
+                Full biometric authentication requires server-side WebAuthn setup. These buttons are for demonstration.
+             </p>
            </form>
          </Form>
       </CardContent>
