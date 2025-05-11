@@ -17,7 +17,7 @@
     import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
     import { Label } from "@/components/ui/label";
     import type { StockItem, AdminSettings, StockMovementLog, AlertType } from '@/types';
-    import { useState, useEffect } from 'react';
+    import { useState, useEffect, useCallback } from 'react';
     import { useToast } from "@/hooks/use-toast";
     import { QueryClient, QueryClientProvider, useQuery, useMutation, QueryCache } from '@tanstack/react-query';
     import { db, auth } from '@/lib/firebase/firebase';
@@ -906,6 +906,23 @@
                 ? `Last updated ${formatDistanceToNow(lastDataFetchTime, { addSuffix: true })}`
                 : 'Updating...';
 
+      // Filter change handlers memoized with useCallback
+      const handleFilterCategoryChange = useCallback((value: string) => {
+        setFilterCategory(value === 'all' ? undefined : value);
+      }, []);
+    
+      const handleFilterLocationChange = useCallback((value: string) => {
+        setFilterLocation(value === 'all' ? undefined : value);
+      }, []);
+    
+      const handleFilterSupplierChange = useCallback((value: string) => {
+        setFilterSupplier(value === 'all' ? undefined : value);
+      }, []);
+    
+      const handleFilterStockStatusChange = useCallback((value: string) => {
+        setFilterStockStatus(value === 'all' ? undefined : value);
+      }, []);
+
 
       // USER DASHBOARD VIEW
       if (!isAdmin && user) {
@@ -1017,19 +1034,19 @@
                              <div className="flex gap-2 flex-wrap sm:flex-nowrap">
                                  <div className="min-w-[150px] flex-grow sm:flex-grow-0">
                                      <Label htmlFor="filter-category" className="sr-only">Filter by Category</Label>
-                                     <Select value={filterCategory} onValueChange={(value) => setFilterCategory(value === 'all' ? undefined : value)}><SelectTrigger id="filter-category" className="h-10"><SelectValue placeholder="Category" /></SelectTrigger><SelectContent><SelectItem value="all">All Categories</SelectItem>{uniqueCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent></Select>
+                                     <Select value={filterCategory} onValueChange={handleFilterCategoryChange}><SelectTrigger id="filter-category" className="h-10"><SelectValue placeholder="Category" /></SelectTrigger><SelectContent><SelectItem value="all">All Categories</SelectItem>{uniqueCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent></Select>
                                  </div>
                                  <div className="min-w-[150px] flex-grow sm:flex-grow-0">
                                      <Label htmlFor="filter-location" className="sr-only">Filter by Location</Label>
-                                     <Select value={filterLocation} onValueChange={(value) => setFilterLocation(value === 'all' ? undefined : value)}><SelectTrigger id="filter-location" className="h-10"><SelectValue placeholder="Location" /></SelectTrigger><SelectContent><SelectItem value="all">All Locations</SelectItem>{uniqueLocations.map(loc => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}</SelectContent></Select>
+                                     <Select value={filterLocation} onValueChange={handleFilterLocationChange}><SelectTrigger id="filter-location" className="h-10"><SelectValue placeholder="Location" /></SelectTrigger><SelectContent><SelectItem value="all">All Locations</SelectItem>{uniqueLocations.map(loc => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}</SelectContent></Select>
                                  </div>
                                  <div className="min-w-[150px] flex-grow sm:flex-grow-0">
                                      <Label htmlFor="filter-supplier" className="sr-only">Filter by Supplier</Label>
-                                     <Select value={filterSupplier} onValueChange={(value) => setFilterSupplier(value === 'all' ? undefined : value)}><SelectTrigger id="filter-supplier" className="h-10"><SelectValue placeholder="Supplier" /></SelectTrigger><SelectContent><SelectItem value="all">All Suppliers</SelectItem>{uniqueSuppliers.map(sup => <SelectItem key={sup} value={sup}>{sup}</SelectItem>)}</SelectContent></Select>
+                                     <Select value={filterSupplier} onValueChange={handleFilterSupplierChange}><SelectTrigger id="filter-supplier" className="h-10"><SelectValue placeholder="Supplier" /></SelectTrigger><SelectContent><SelectItem value="all">All Suppliers</SelectItem>{uniqueSuppliers.map(sup => <SelectItem key={sup} value={sup}>{sup}</SelectItem>)}</SelectContent></Select>
                                  </div>
                                   <div className="min-w-[150px] flex-grow sm:flex-grow-0">
                                      <Label htmlFor="filter-stock-status" className="sr-only">Filter by Stock Status</Label>
-                                     <Select value={filterStockStatus} onValueChange={(value) => setFilterStockStatus(value === 'all' ? undefined : value)}><SelectTrigger id="filter-stock-status" className="h-10"><SelectValue placeholder="Stock Status" /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{uniqueStockStatuses.map(status => <SelectItem key={status} value={status}>{status.replace(/([A-Z])/g, ' $1').trim()}</SelectItem>)}</SelectContent></Select>
+                                     <Select value={filterStockStatus} onValueChange={handleFilterStockStatusChange}><SelectTrigger id="filter-stock-status" className="h-10"><SelectValue placeholder="Stock Status" /></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem>{uniqueStockStatuses.map(status => <SelectItem key={status} value={status}>{status.replace(/([A-Z])/g, ' $1').trim()}</SelectItem>)}</SelectContent></Select>
                                  </div>
                              </div>
                          </div>
@@ -1080,6 +1097,7 @@
      export default function Home() {
          return (<QueryClientProvider client={queryClient}><ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange><RequireAuth><StockManagementPageContent /></RequireAuth></ThemeProvider></QueryClientProvider>);
      }
+
 
 
 
