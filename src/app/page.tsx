@@ -740,9 +740,12 @@
 
 
         useEffect(() => {
-            if (isLoading || !stockItems.length || !adminSettings) return;
+            if (isLoading || !stockItems.length || !adminSettings) {
+                 setSystemAlerts([]); // Clear alerts if loading or no data
+                 return;
+            }
 
-            const newAlerts: AlertType[] = [];
+            const newAlertsBasedOnCurrentState: AlertType[] = [];
 
             stockItems.forEach(item => {
                 const effectiveMinThreshold = item.minimumStock ?? adminSettings.lowStockThreshold;
@@ -751,35 +754,32 @@
                     if(item.supplierName || item.supplierEmail || item.supplierPhone){
                         lowStockMessage += ` Contact ${item.supplierName || 'supplier'} at ${item.supplierEmail || item.supplierPhone || 'N/A'}.`;
                     }
-                    newAlerts.push({id: `low-${item.id}`, type: "low_stock", title: "Low Stock Alert", message: lowStockMessage, variant: "destructive", item, timestamp: new Date()});
+                    newAlertsBasedOnCurrentState.push({id: `low-${item.id}`, type: "low_stock", title: "Low Stock Alert", message: lowStockMessage, variant: "destructive", item, timestamp: new Date()});
                 }
 
                 const minStockForOverstock = item.minimumStock ?? adminSettings.lowStockThreshold; 
                 const overstockQtyThreshold = item.overstockThreshold ?? (minStockForOverstock * ( (adminSettings.overstockThresholdPercentage ?? 200) / 100));
                 if (item.currentStock > overstockQtyThreshold && overstockQtyThreshold > 0) {
-                     newAlerts.push({id: `overstock-${item.id}`, type: "overstock", title: "Overstock Alert", message: `${item.itemName} is overstocked (${item.currentStock} > ${overstockQtyThreshold.toFixed(0)}). Consider reducing stock.`, variant: "warning", item, timestamp: new Date()});
+                     newAlertsBasedOnCurrentState.push({id: `overstock-${item.id}`, type: "overstock", title: "Overstock Alert", message: `${item.itemName} is overstocked (${item.currentStock} > ${overstockQtyThreshold.toFixed(0)}). Consider reducing stock.`, variant: "warning", item, timestamp: new Date()});
                 }
                 
                 if (adminSettings.inactivityAlertDays && item.lastMovementDate) {
-                    const lastMovement = item.lastMovementDate.toDate();
+                    const lastMovement = item.lastMovementDate.toDate(); // Ensure toDate() is called
                     const daysSinceMovement = (new Date().getTime() - lastMovement.getTime()) / (1000 * 3600 * 24);
                     if (daysSinceMovement > adminSettings.inactivityAlertDays) {
-                         newAlerts.push({id: `inactive-${item.id}`, type: "inactivity", title: "Inactivity Alert", message: `${item.itemName} has not moved in ${Math.floor(daysSinceMovement)} days (since ${lastMovement.toLocaleDateString()}).`, variant: "info", item, timestamp: new Date()});
+                         newAlertsBasedOnCurrentState.push({id: `inactive-${item.id}`, type: "inactivity", title: "Inactivity Alert", message: `${item.itemName} has not moved in ${Math.floor(daysSinceMovement)} days (since ${lastMovement.toLocaleDateString()}).`, variant: "info", item, timestamp: new Date()});
                     }
                 }
             });
             
-            setSystemAlerts(prevAlerts => {
-                const updatedAlertsMap = new Map(prevAlerts.map(a => [a.id, a]));
-                newAlerts.forEach(na => updatedAlertsMap.set(na.id, na));
-                return Array.from(updatedAlertsMap.values()).sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime());
-            });
+            setSystemAlerts(newAlertsBasedOnCurrentState.sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime()));
 
-
-            if (newAlerts.length > 0 && adminSettings.emailNotifications) {
-                const criticalNewAlerts = newAlerts.filter(a => a.variant === 'destructive');
+            if (newAlertsBasedOnCurrentState.length > 0 && adminSettings.emailNotifications) {
+                const criticalNewAlerts = newAlertsBasedOnCurrentState.filter(a => a.variant === 'destructive');
+                // This toast logic might need refinement to prevent re-toasting for already visible alerts.
+                // For now, it will toast any new critical alerts found in the current state.
                 if (criticalNewAlerts.length > 0) {
-                    console.log("SIMULATED EMAIL ALERTS:", criticalNewAlerts.map(a => `${a.title}: ${a.message}`).join('\n'));
+                    console.log("SIMULATED EMAIL ALERTS (simplified logic):", criticalNewAlerts.map(a => `${a.title}: ${a.message}`).join('\n'));
                     criticalNewAlerts.forEach(alertDetail => {
                          toast({ 
                              variant: alertDetail.variant || "default",
@@ -1080,6 +1080,7 @@
      export default function Home() {
          return (<QueryClientProvider client={queryClient}><ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange><RequireAuth><StockManagementPageContent /></RequireAuth></ThemeProvider></QueryClientProvider>);
      }
+
 
 
 
