@@ -1,3 +1,5 @@
+git add .
+git commit -m "Initial commit"
 # Firebase Studio
 
 This is a NextJS starter in Firebase Studio.
