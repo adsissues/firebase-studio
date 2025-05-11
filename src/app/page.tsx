@@ -198,20 +198,29 @@
                   // Non-admins see movements they initiated for any item,
                   // OR movements related to items they own,
                   // OR movements related to items in their assigned locations.
-                  // This requires more complex querying or client-side filtering if items are shared.
-                  // For simplicity, we'll show movements initiated by the user.
-                  // If item ownership is strict, this is fine. If shared, need more logic.
-
-                  // Option 1: Movements user initiated (current simpler approach)
-                  q = query(logsCol, where("userId", "==", user.uid));
                   
-                  // Option 2: More complex - Movements for items accessible to user
-                  // This would involve:
-                  // 1. Getting all item IDs the user has access to (owned or in assigned locations).
-                  // 2. Querying stockMovements where itemId is in that list of accessible item IDs.
-                  //    This can be slow if many items. Firestore 'in' queries are limited to 30 items per query.
-                  //    A better approach might be to denormalize location into movement logs if filtering by location is crucial.
-                  // For now, sticking with Option 1 for performance and simplicity.
+                  // For users, we can filter by userId on the movement logs
+                  // AND/OR filter by items accessible to them (owned items or items in assigned locations)
+                  // A simple approach is to show movements initiated by the user and for items in their assigned locations.
+                  const userInitiatedCondition = where("userId", "==", user.uid);
+                  
+                  let conditions = [userInitiatedCondition];
+
+                  if (assignedLocations && assignedLocations.length > 0) {
+                    // This part would ideally query based on item.location, which isn't in stockMovements
+                    // A more robust solution would be to either:
+                    // 1. Denormalize `location` into `stockMovements` logs.
+                    // 2. Fetch all accessible item IDs first, then query movements with `itemId in [...]`.
+                    //    This can be complex and limited by Firestore's `in` query (max 30 items).
+                    // For simplicity and performance, let's prioritize user-initiated movements.
+                    // If needed, a separate query could fetch movements related to items in their locations.
+                    // For now, we focus on user-initiated.
+                  }
+                  
+                  // q = query(logsCol, ...conditions); // Spread if multiple conditions
+                  q = query(logsCol, userInitiatedCondition);
+
+
               }
              try {
                 const logSnapshot = await getDocs(q);
@@ -732,8 +741,7 @@
 
 
         useEffect(() => {
-            if (isLoading || !adminSettings) { // Removed !stockItems.length as alerts can exist for empty stock
-                 // setSystemAlerts([]); // Don't clear alerts immediately if only stockItems is loading
+            if (isLoading || !adminSettings) { 
                  return;
             }
 
@@ -774,14 +782,12 @@
                 }
             });
             
-            // Check if the number of alerts changed
             if (newAlertsMap.size !== currentAlertsMap.size) alertsChanged = true;
 
             if (alertsChanged) {
                 setSystemAlerts(Array.from(newAlertsMap.values()).sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime()));
             }
             
-            // Manage toastedAlertIds: remove IDs for alerts that no longer exist
             const currentNewAlertIds = new Set(newAlertsMap.keys());
             toastedAlertIds.current.forEach(alertId => {
                 if (!currentNewAlertIds.has(alertId)) {
@@ -801,11 +807,12 @@
                              description: alertDetail.message,
                              duration: 10000,
                          });
-                         toastedAlertIds.current.add(alertDetail.id); // Add to set after toasting
+                         toastedAlertIds.current.add(alertDetail.id); 
                      });
                 }
             }
-        }, [stockItems, adminSettings, isLoading, toast, isAdmin, systemAlerts]); // Added systemAlerts to dependency
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [stockItems, adminSettings, isLoading, toast, isAdmin]); 
 
 
         const handleSaveSettings = (settings: AdminSettings) => saveSettingsMutation.mutate(settings);
@@ -1009,7 +1016,9 @@
                     <CardContent><StockOutForm items={stockItems.filter(item => item.currentStock > 0)} onSubmit={handleStockOutSubmit} isLoading={stockOutMutation.isPending} currentUser={user} /></CardContent>
                 </Card>
                 
-                <ActivityFeed movements={stockMovements} isLoading={isLoadingMovements} />
+                <div className="mt-6">
+                    <ActivityFeed movements={stockMovements} isLoading={isLoadingMovements} />
+                </div>
                 
                 <ViewItemDialog isOpen={isViewDialogOpen} onClose={() => setIsViewDialogOpen(false)} item={itemToView} />
              </div>
@@ -1112,5 +1121,6 @@
      export default function Home() {
          return (<QueryClientProvider client={queryClient}><ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange><RequireAuth><StockManagementPageContent /></RequireAuth></ThemeProvider></QueryClientProvider>);
      }
+
 
 
