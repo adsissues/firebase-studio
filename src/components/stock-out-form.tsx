@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -22,20 +23,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-// Removed Card components as they are not directly used in this simplified form
-import type { StockItem } from '@/types'; 
+import type { StockItem, AppUser } from '@/types'; 
 import { MinusCircle, Loader2, ScanBarcode } from 'lucide-react'; 
-import { useAuth } from '@/context/auth-context';
+// Removed useAuth import as user info will be passed via props
 import { scanBarcode } from '@/services/barcode-scanner';
 import { useToast } from "@/hooks/use-toast";
 
 interface StockOutFormProps {
-  items: StockItem[];
+  items: StockItem[]; // This list is pre-filtered by the parent
   onSubmit: (data: StockOutFormDataSubmit) => void;
   isLoading?: boolean;
+  currentUser: AppUser | null; // Pass current user for disable checks
 }
 
-// Schema for Stock Out. ItemId and Quantity are essential.
 const createFormSchema = (items: StockItem[]) => z.object({
   barcode: z.string().optional().or(z.literal('')),
   itemId: z.string().min(1, { message: 'Please select an item or scan a barcode.' }),
@@ -46,7 +46,7 @@ const createFormSchema = (items: StockItem[]) => z.object({
 }).refine(
   (data) => {
     const selectedItem = items.find(item => item.id === data.itemId);
-    if (!selectedItem) return true; // Let itemId validation handle this
+    if (!selectedItem) return true; 
     return data.quantity <= selectedItem.currentStock;
   },
   (data) => {
@@ -58,37 +58,31 @@ const createFormSchema = (items: StockItem[]) => z.object({
   }
 ).refine(
     (data) => {
-        if (!data.barcode || !data.itemId) return true; // If no barcode or item, skip this check
+        if (!data.barcode || !data.itemId) return true; 
         const selectedItem = items.find(item => item.id === data.itemId);
         return !selectedItem || !selectedItem.barcode || selectedItem.barcode === data.barcode;
     },
     {
         message: "Barcode does not match the selected item.",
-        path: ['barcode'], // Or itemId if preferred for error display
+        path: ['barcode'], 
     }
 );
 
-// Type for form state, now simpler
 export type StockOutFormData = z.infer<ReturnType<typeof createFormSchema>>;
-// Type for data submitted remains focused on essential fields
 export type StockOutFormDataSubmit = Pick<StockOutFormData, 'itemId' | 'quantity'>;
 
-export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFormProps) {
-   const { user, isAdmin } = useAuth();
+export function StockOutForm({ items, onSubmit, isLoading = false, currentUser }: StockOutFormProps) {
    const { toast } = useToast();
    const [isScanningBarcode, setIsScanningBarcode] = React.useState(false);
 
-  const userVisibleItems = React.useMemo(() => {
-      if (!user) return [];
-      if (isAdmin) return items;
-      return items.filter(item => item.userId === user.uid);
-  }, [items, user, isAdmin]);
-
+   // The `items` prop is now assumed to be pre-filtered by the parent component (page.tsx)
+   // based on user role and assigned locations.
+   // `availableItems` filters this pre-scoped list for items with stock > 0.
    const availableItems = React.useMemo(() => {
-       return userVisibleItems.filter(item => item.currentStock > 0);
-   }, [userVisibleItems]);
+       return items.filter(item => item.currentStock > 0);
+   }, [items]);
 
-  const formSchema = React.useMemo(() => createFormSchema(userVisibleItems), [userVisibleItems]);
+  const formSchema = React.useMemo(() => createFormSchema(items), [items]); // Use `items` prop directly
 
   const form = useForm<StockOutFormData>({
     resolver: zodResolver(formSchema),
@@ -97,8 +91,8 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
       itemId: '',
       quantity: 1,
     },
-    context: { items: userVisibleItems }, // For refine context
-    mode: "onChange", // Validate on change for better UX
+    context: { items }, // For refine context, using the passed `items`
+    mode: "onChange", 
   });
 
     const handleScanBarcode = async () => {
@@ -109,24 +103,25 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
             const scannedBarcode = result.barcode;
             form.setValue('barcode', scannedBarcode, { shouldValidate: true });
 
-            const matchedItem = userVisibleItems.find(item => item.barcode === scannedBarcode);
+            // Search within the `items` prop (which is already user-accessible)
+            const matchedItem = items.find(item => item.barcode === scannedBarcode);
 
             if (matchedItem) {
                  if (matchedItem.currentStock > 0) {
                     form.setValue('itemId', matchedItem.id, { shouldValidate: true });
                     toast({ title: "Item Found", description: `${matchedItem.itemName} selected.` });
                  } else {
-                     form.setValue('itemId', '', { shouldValidate: true }); // Clear item if out of stock
+                     form.setValue('itemId', '', { shouldValidate: true }); 
                      toast({ variant: "destructive", title: "Out of Stock", description: `${matchedItem.itemName} has no stock available.` });
                  }
             } else {
-                form.setValue('itemId', '', { shouldValidate: true }); // Clear item if not found
+                form.setValue('itemId', '', { shouldValidate: true }); 
                 toast({ variant: "destructive", title: "Barcode Not Found", description: "No matching item found for this barcode." });
             }
         } catch (error) {
             console.error("Barcode scan error:", error);
             toast({ variant: "destructive", title: "Scan Error", description: "Could not scan barcode." });
-             form.setValue('itemId', '', { shouldValidate: true }); // Clear item on error
+             form.setValue('itemId', '', { shouldValidate: true }); 
         } finally {
             setIsScanningBarcode(false);
         }
@@ -145,13 +140,13 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
      if (!isLoading && form.formState.isSubmitSuccessful) {
         form.reset({ barcode: '', itemId: '', quantity: 1 });
      }
-   }, [isLoading, form.formState.isSubmitSuccessful, form.reset]);
+   }, [isLoading, form.formState.isSubmitSuccessful, form]); // form.reset added to dependency array
 
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 rounded-lg border p-6 shadow-sm">
-         <fieldset disabled={isLoading || !user} className="space-y-4">
+         <fieldset disabled={isLoading || !currentUser} className="space-y-4">
             <h2 className="text-lg font-semibold text-primary mb-4">Log Stock Out</h2>
 
              <FormField
@@ -169,7 +164,7 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
                          variant="outline"
                          size="icon"
                          onClick={handleScanBarcode}
-                         disabled={isScanningBarcode || isLoading}
+                         disabled={isScanningBarcode || isLoading || !currentUser}
                          aria-label="Scan Barcode"
                        >
                          {isScanningBarcode ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanBarcode className="h-4 w-4" />}
@@ -189,18 +184,18 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Item*</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value} disabled={isLoading}>
+                <Select onValueChange={field.onChange} value={field.value} disabled={isLoading || !currentUser}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select an item" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                     {!user ? (
+                     {!currentUser ? (
                          <SelectItem value="disabled-login" disabled>Please log in</SelectItem>
                      ) : availableItems.length === 0 ? (
                        <SelectItem value="disabled-no-items" disabled>
-                         No items with stock available
+                         No items with stock available for you
                        </SelectItem>
                      ) : (
                        availableItems.map((item) => (
@@ -212,7 +207,7 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
                    </SelectContent>
                 </Select>
                 <FormDescription>
-                  Select item manually if not using barcode.
+                  Select item manually if not using barcode. Only items you can access with stock are shown.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -241,7 +236,7 @@ export function StockOutForm({ items, onSubmit, isLoading = false }: StockOutFor
             )}
           />
          </fieldset>
-         <Button type="submit" className="w-full bg-destructive hover:bg-destructive/90" disabled={isLoading || isScanningBarcode || !user}>
+         <Button type="submit" className="w-full bg-destructive hover:bg-destructive/90" disabled={isLoading || isScanningBarcode || !currentUser}>
             {isLoading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (

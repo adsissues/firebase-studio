@@ -1,4 +1,5 @@
 
+
  'use client';
 
     import * as React from 'react';
@@ -11,7 +12,7 @@
     import { ViewItemDialog } from '@/components/view-item-dialog';
     import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
     import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-    import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'; 
+    import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter as ShadDialogFooter } from '@/components/ui/dialog'; 
     import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
     import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
     import { Label } from "@/components/ui/label";
@@ -969,7 +970,7 @@
 
                 <Card className="mt-6 shadow-lg">
                     <CardHeader><CardTitle>Log Stock Out</CardTitle></CardHeader>
-                    <CardContent><StockOutForm items={stockItems} onSubmit={handleStockOutSubmit} isLoading={stockOutMutation.isPending} /></CardContent>
+                    <CardContent><StockOutForm items={stockItems} onSubmit={handleStockOutSubmit} isLoading={stockOutMutation.isPending} currentUser={user} /></CardContent>
                 </Card>
                 
                 <ActivityFeed movements={stockMovements} isLoading={isLoadingMovements} />
@@ -1043,7 +1044,7 @@
                          <Tabs defaultValue="add-stock" className="w-full">
                             <CardHeader className="p-4 border-b"><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="add-stock">Add/Restock Item</TabsTrigger><TabsTrigger value="stock-out">Log Stock Out</TabsTrigger></TabsList></CardHeader>
                            <TabsContent value="add-stock"><CardContent className="p-4"><AddStockForm onSubmit={handleAddStockSubmit} isLoading={addStockMutation.isPending} /></CardContent></TabsContent>
-                           <TabsContent value="stock-out"><CardContent className="p-4"><StockOutForm items={stockItems} onSubmit={handleStockOutSubmit} isLoading={stockOutMutation.isPending} /></CardContent></TabsContent>
+                           <TabsContent value="stock-out"><CardContent className="p-4"><StockOutForm items={stockItems} onSubmit={handleStockOutSubmit} isLoading={stockOutMutation.isPending} currentUser={user} /></CardContent></TabsContent>
                          </Tabs>
                     </Card>
                </div>
@@ -1071,7 +1072,7 @@
            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete {itemToDelete?.itemName}. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)} disabled={deleteItemMutation.isPending}>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmDeleteItem} disabled={deleteItemMutation.isPending} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">{deleteItemMutation.isPending ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>) : (<><Trash2 className="mr-2 h-4 w-4" /> Delete Item</>)}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
                {isAdmin && isSettingsDialogOpen && (<AdminSettingsDialog isOpen={isSettingsDialogOpen} onClose={() => setIsSettingsDialogOpen(false)} onSave={handleSaveSettings} currentSettings={adminSettings} isLoading={saveSettingsMutation.isPending} />)}
                {isAdmin && isUserManagementDialogOpen && (<UserManagementDialog isOpen={isUserManagementDialogOpen} onClose={() => setIsUserManagementDialogOpen(false)} allStockItems={stockItems} />)}
-               <Dialog open={isPhotoSearchOpen} onOpenChange={setIsPhotoSearchOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Search Item by Photo</DialogTitle><DialogDescription>Center the item in the camera view and capture to search.</DialogDescription></DialogHeader><div className="space-y-4 py-4"><div className="relative aspect-video w-full bg-muted rounded-md overflow-hidden"><video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline /><canvas ref={canvasRef} style={{ display: 'none' }} />{hasCameraPermission === false && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-destructive-foreground p-4"><VideoOff className="h-12 w-12 mb-2" /><p className="text-lg font-semibold">Camera Access Denied</p><p className="text-sm text-center">Please allow camera access in your browser settings.</p></div>)}{hasCameraPermission === null && !photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Accessing Camera...</p></div>)}{photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-primary-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Analyzing Photo...</p></div>)}</div><Button type="button" onClick={handlePhotoSearchCapture} disabled={photoSearchLoading || hasCameraPermission !== true} className="w-full" size="lg">{photoSearchLoading ? (<Loader2 className="mr-2 h-5 w-5 animate-spin" />) : (<Camera className="mr-2 h-5 w-5" />)}{photoSearchLoading ? 'Searching...' : 'Capture & Search'}</Button></div><AlertDialogFooter><Button variant="outline" onClick={() => setIsPhotoSearchOpen(false)} disabled={photoSearchLoading}><XCircle className="mr-2 h-4 w-4"/> Cancel</Button></AlertDialogFooter></DialogContent></Dialog>
+               <Dialog open={isPhotoSearchOpen} onOpenChange={setIsPhotoSearchOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Search Item by Photo</DialogTitle><DialogDescription>Center the item in the camera view and capture to search.</DialogDescription></DialogHeader><div className="space-y-4 py-4"><div className="relative aspect-video w-full bg-muted rounded-md overflow-hidden"><video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline /><canvas ref={canvasRef} style={{ display: 'none' }} />{hasCameraPermission === false && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-destructive-foreground p-4"><VideoOff className="h-12 w-12 mb-2" /><p className="text-lg font-semibold">Camera Access Denied</p><p className="text-sm text-center">Please allow camera access in your browser settings.</p></div>)}{hasCameraPermission === null && !photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Accessing Camera...</p></div>)}{photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-primary-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Analyzing Photo...</p></div>)}</div><Button type="button" onClick={handlePhotoSearchCapture} disabled={photoSearchLoading || hasCameraPermission !== true} className="w-full" size="lg">{photoSearchLoading ? (<Loader2 className="mr-2 h-5 w-5 animate-spin" />) : (<Camera className="mr-2 h-5 w-5" />)}{photoSearchLoading ? 'Searching...' : 'Capture & Search'}</Button></div><ShadDialogFooter><Button variant="outline" onClick={() => setIsPhotoSearchOpen(false)} disabled={photoSearchLoading}><XCircle className="mr-2 h-4 w-4"/> Cancel</Button></ShadDialogFooter></DialogContent></Dialog>
          </div>
        );
      }
@@ -1079,6 +1080,7 @@
      export default function Home() {
          return (<QueryClientProvider client={queryClient}><ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange><RequireAuth><StockManagementPageContent /></RequireAuth></ThemeProvider></QueryClientProvider>);
      }
+
 
 
 
