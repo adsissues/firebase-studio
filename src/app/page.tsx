@@ -1,5 +1,4 @@
 
-
  'use client';
 
     import * as React from 'react';
@@ -17,7 +16,7 @@
     import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
     import { Label } from "@/components/ui/label";
     import type { StockItem, AdminSettings, StockMovementLog, AlertType } from '@/types';
-    import { useState, useEffect, useCallback } from 'react';
+    import { useState, useEffect, useCallback, useRef } from 'react'; // Added useRef
     import { useToast } from "@/hooks/use-toast";
     import { QueryClient, QueryClientProvider, useQuery, useMutation, QueryCache } from '@tanstack/react-query';
     import { db, auth } from '@/lib/firebase/firebase';
@@ -91,6 +90,7 @@
       const canvasRef = React.useRef<HTMLCanvasElement>(null);
       const [systemAlerts, setSystemAlerts] = React.useState<AlertType[]>([]);
       const [lastDataFetchTime, setLastDataFetchTime] = React.useState<Date | null>(null);
+      const toastedAlertIds = useRef(new Set<string>()); // Ref to track toasted alert IDs
 
 
         const { data: adminSettings = defaultAdminSettings, isLoading: isLoadingSettings, refetch: refetchSettings } = useQuery<AdminSettings>({
@@ -126,18 +126,15 @@
            if (isAdmin) {
                q = query(itemsCol);
            } else {
-               const userSpecificQueries = [where("userId", "==", user.uid)];
+               // For non-admins, filter by items they own OR items in their assigned locations.
+               // Firestore 'or' queries need separate conditions.
+               const ownerCondition = where("userId", "==", user.uid);
                if (assignedLocations && assignedLocations.length > 0) {
-                  userSpecificQueries.push(where("location", "in", assignedLocations));
-               }
-               // If user has assigned locations, fetch items they own OR items in their assigned locations
-               // Otherwise, fetch only items they own.
-               // Firestore 'or' queries require at least one 'in', 'array-contains-any', or '==' condition on different fields for each subquery of the 'or'.
-               // So, if no assigned locations, we can't use 'or'. Fallback to just userId.
-               if (assignedLocations && assignedLocations.length > 0) {
-                    q = query(itemsCol, or(where("userId", "==", user.uid), where("location", "in", assignedLocations)));
+                  const locationCondition = where("location", "in", assignedLocations);
+                  q = query(itemsCol, or(ownerCondition, locationCondition));
                } else {
-                    q = query(itemsCol, where("userId", "==", user.uid));
+                  // If no assigned locations, only fetch items owned by the user.
+                  q = query(itemsCol, ownerCondition);
                }
            }
 
@@ -198,24 +195,23 @@
               if (isAdmin) {
                  q = query(logsCol);
               } else {
-                  // Users see their own movements.
-                  // Potentially, if items are shared by location, this logic might need to expand
-                  // to show movements for items in their assignedLocations, even if moved by others.
-                  // For simplicity now, users see their own movements + movements of items they own explicitly
-                  // or movements related to items in their assigned locations (if itemId is linked to location)
-                  // This part might need refinement based on how deep location-based access should go for movements.
-                  // Current approach: User sees movements they initiated OR movements for items they own/are in their locations.
-                  // This requires item data to link movement to location, which is not directly in StockMovementLog.
-                  // So, for now, users see their own movements.
-                  // To filter by assigned location items, we would need to fetch items first, then filter movements by those itemIds.
-                  // That would be a more complex query.
-                  q = query(logsCol, where("userId", "==", user.uid));
+                  // Non-admins see movements they initiated for any item,
+                  // OR movements related to items they own,
+                  // OR movements related to items in their assigned locations.
+                  // This requires more complex querying or client-side filtering if items are shared.
+                  // For simplicity, we'll show movements initiated by the user.
+                  // If item ownership is strict, this is fine. If shared, need more logic.
 
-                  // A more complex query to show movements for items in user's assigned locations:
-                  // 1. Fetch stockItems for the user (already done by stockItems query)
-                  // 2. Get itemIds for items in assignedLocations or owned by user
-                  // 3. Query stockMovements where itemId is in the list of accessible itemIds
-                  // This is not implemented here for brevity but is a consideration.
+                  // Option 1: Movements user initiated (current simpler approach)
+                  q = query(logsCol, where("userId", "==", user.uid));
+                  
+                  // Option 2: More complex - Movements for items accessible to user
+                  // This would involve:
+                  // 1. Getting all item IDs the user has access to (owned or in assigned locations).
+                  // 2. Querying stockMovements where itemId is in that list of accessible item IDs.
+                  //    This can be slow if many items. Firestore 'in' queries are limited to 30 items per query.
+                  //    A better approach might be to denormalize location into movement logs if filtering by location is crucial.
+                  // For now, sticking with Option 1 for performance and simplicity.
               }
              try {
                 const logSnapshot = await getDocs(q);
@@ -294,16 +290,12 @@
                 const barcodeQueryConstraint = barcode ? [where("barcode", "==", barcode)] : [];
                 const nameQueryConstraint = itemName ? [where("itemName", "==", itemName)] : []; 
                 
-                // For admins, search globally. For users, search within their own items or accessible locations.
                 let baseConstraints = [];
                 if(!isAdmin) {
                     baseConstraints.push(where("userId", "==", user.uid));
                     if (assignedLocations && assignedLocations.length > 0 && formData.location && assignedLocations.includes(formData.location)) {
-                       // If user is adding to an assigned location, they can update existing item there
-                       // This logic might need more refinement for items not explicitly owned by user
-                       // but in an assigned location. For now, user primarily creates/updates their own.
-                    } else if (assignedLocations && assignedLocations.length > 0 && !formData.location) {
-                        // If user is adding an item without location, it defaults to their ownership.
+                       // Non-admin can update existing item in their assigned location if they also own it (or rules allow)
+                       // This part ensures user has write access via location.
                     } else if (formData.location && (!assignedLocations || !assignedLocations.includes(formData.location))) {
                          throw new Error("You do not have permission to add stock to this location.");
                     }
@@ -336,7 +328,7 @@
                       return acc;
                   }, {} as Partial<Omit<StockItem, 'id' | 'userId' | 'currentStock' | 'lastMovementDate'>> & { userId?: string });
 
-                  dataToSave.userId = user.uid; // Item is always owned by the creator
+                  dataToSave.userId = user.uid; 
 
 
                  if (querySnapshot && !querySnapshot.empty) { 
@@ -714,7 +706,7 @@
 
         const filteredItems = React.useMemo(() => {
              return stockItems.filter((item) => {
-                const queryLower = searchQuery.trim().toLowerCase(); // Trim and lowercase search query
+                const queryLower = searchQuery.trim().toLowerCase(); 
                 const categoryFilterMatch = !filterCategory || filterCategory === 'all' || (item.category && item.category.toLowerCase() === filterCategory.toLowerCase());
                 const locationFilterMatch = !filterLocation || filterLocation === 'all' || (item.location && item.location.toLowerCase() === filterLocation.toLowerCase());
                 const supplierFilterMatch = !filterSupplier || filterSupplier === 'all' || ((item.supplier && item.supplier.toLowerCase() === filterSupplier.toLowerCase()) || (item.supplierName && item.supplierName.toLowerCase() === filterSupplier.toLowerCase()));
@@ -740,12 +732,14 @@
 
 
         useEffect(() => {
-            if (isLoading || !stockItems.length || !adminSettings) {
-                 setSystemAlerts([]); // Clear alerts if loading or no data
+            if (isLoading || !adminSettings) { // Removed !stockItems.length as alerts can exist for empty stock
+                 // setSystemAlerts([]); // Don't clear alerts immediately if only stockItems is loading
                  return;
             }
 
-            const newAlertsBasedOnCurrentState: AlertType[] = [];
+            const currentAlertsMap = new Map(systemAlerts.map(alert => [alert.id, alert]));
+            const newAlertsMap = new Map<string, AlertType>();
+            let alertsChanged = false;
 
             stockItems.forEach(item => {
                 const effectiveMinThreshold = item.minimumStock ?? adminSettings.lowStockThreshold;
@@ -754,43 +748,64 @@
                     if(item.supplierName || item.supplierEmail || item.supplierPhone){
                         lowStockMessage += ` Contact ${item.supplierName || 'supplier'} at ${item.supplierEmail || item.supplierPhone || 'N/A'}.`;
                     }
-                    newAlertsBasedOnCurrentState.push({id: `low-${item.id}`, type: "low_stock", title: "Low Stock Alert", message: lowStockMessage, variant: "destructive", item, timestamp: new Date()});
+                    const alertId = `low-${item.id}`;
+                    if (!currentAlertsMap.has(alertId) || currentAlertsMap.get(alertId)?.message !== lowStockMessage) alertsChanged = true;
+                    newAlertsMap.set(alertId, {id: alertId, type: "low_stock", title: "Low Stock Alert", message: lowStockMessage, variant: "destructive", item, timestamp: new Date()});
                 }
 
                 const minStockForOverstock = item.minimumStock ?? adminSettings.lowStockThreshold; 
                 const overstockQtyThreshold = item.overstockThreshold ?? (minStockForOverstock * ( (adminSettings.overstockThresholdPercentage ?? 200) / 100));
                 if (item.currentStock > overstockQtyThreshold && overstockQtyThreshold > 0) {
-                     newAlertsBasedOnCurrentState.push({id: `overstock-${item.id}`, type: "overstock", title: "Overstock Alert", message: `${item.itemName} is overstocked (${item.currentStock} > ${overstockQtyThreshold.toFixed(0)}). Consider reducing stock.`, variant: "warning", item, timestamp: new Date()});
+                     const alertId = `overstock-${item.id}`;
+                     const message = `${item.itemName} is overstocked (${item.currentStock} > ${overstockQtyThreshold.toFixed(0)}). Consider reducing stock.`;
+                     if (!currentAlertsMap.has(alertId) || currentAlertsMap.get(alertId)?.message !== message) alertsChanged = true;
+                     newAlertsMap.set(alertId, {id: alertId, type: "overstock", title: "Overstock Alert", message, variant: "warning", item, timestamp: new Date()});
                 }
                 
                 if (adminSettings.inactivityAlertDays && item.lastMovementDate) {
-                    const lastMovement = item.lastMovementDate.toDate(); // Ensure toDate() is called
+                    const lastMovement = item.lastMovementDate.toDate(); 
                     const daysSinceMovement = (new Date().getTime() - lastMovement.getTime()) / (1000 * 3600 * 24);
                     if (daysSinceMovement > adminSettings.inactivityAlertDays) {
-                         newAlertsBasedOnCurrentState.push({id: `inactive-${item.id}`, type: "inactivity", title: "Inactivity Alert", message: `${item.itemName} has not moved in ${Math.floor(daysSinceMovement)} days (since ${lastMovement.toLocaleDateString()}).`, variant: "info", item, timestamp: new Date()});
+                         const alertId = `inactive-${item.id}`;
+                         const message = `${item.itemName} has not moved in ${Math.floor(daysSinceMovement)} days (since ${lastMovement.toLocaleDateString()}).`;
+                         if (!currentAlertsMap.has(alertId) || currentAlertsMap.get(alertId)?.message !== message) alertsChanged = true;
+                         newAlertsMap.set(alertId, {id: alertId, type: "inactivity", title: "Inactivity Alert", message, variant: "info", item, timestamp: new Date()});
                     }
                 }
             });
             
-            setSystemAlerts(newAlertsBasedOnCurrentState.sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime()));
+            // Check if the number of alerts changed
+            if (newAlertsMap.size !== currentAlertsMap.size) alertsChanged = true;
 
-            if (newAlertsBasedOnCurrentState.length > 0 && adminSettings.emailNotifications) {
-                const criticalNewAlerts = newAlertsBasedOnCurrentState.filter(a => a.variant === 'destructive');
-                // This toast logic might need refinement to prevent re-toasting for already visible alerts.
-                // For now, it will toast any new critical alerts found in the current state.
-                if (criticalNewAlerts.length > 0) {
-                    console.log("SIMULATED EMAIL ALERTS (simplified logic):", criticalNewAlerts.map(a => `${a.title}: ${a.message}`).join('\n'));
-                    criticalNewAlerts.forEach(alertDetail => {
+            if (alertsChanged) {
+                setSystemAlerts(Array.from(newAlertsMap.values()).sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime()));
+            }
+            
+            // Manage toastedAlertIds: remove IDs for alerts that no longer exist
+            const currentNewAlertIds = new Set(newAlertsMap.keys());
+            toastedAlertIds.current.forEach(alertId => {
+                if (!currentNewAlertIds.has(alertId)) {
+                    toastedAlertIds.current.delete(alertId);
+                }
+            });
+
+            if (Array.from(newAlertsMap.values()).length > 0 && adminSettings.emailNotifications) {
+                const criticalNewAlertsToToast = Array.from(newAlertsMap.values()).filter(a => a.variant === 'destructive' && !toastedAlertIds.current.has(a.id));
+                
+                if (criticalNewAlertsToToast.length > 0) {
+                    console.log("SIMULATED EMAIL ALERTS (simplified logic):", criticalNewAlertsToToast.map(a => `${a.title}: ${a.message}`).join('\n'));
+                    criticalNewAlertsToToast.forEach(alertDetail => {
                          toast({ 
                              variant: alertDetail.variant || "default",
                              title: alertDetail.title,
                              description: alertDetail.message,
                              duration: 10000,
                          });
+                         toastedAlertIds.current.add(alertDetail.id); // Add to set after toasting
                      });
                 }
             }
-        }, [stockItems, adminSettings, isLoading, toast, isAdmin]);
+        }, [stockItems, adminSettings, isLoading, toast, isAdmin, systemAlerts]); // Added systemAlerts to dependency
 
 
         const handleSaveSettings = (settings: AdminSettings) => saveSettingsMutation.mutate(settings);
@@ -878,9 +893,11 @@
                 const daysThreshold = adminSettings.inactivityAlertDays || 30;
                 const thresholdDate = new Date();
                 thresholdDate.setDate(thresholdDate.getDate() - daysThreshold);
-                const movedItemIds = new Set(stockMovements.filter(log => log.timestamp.toDate() >= thresholdDate).map(log => log.itemId));
-                return stockItems.filter(item => !movedItemIds.has(item.id) && item.currentStock > 0).slice(0, 5);
+                // Filter for items that HAVEN'T moved since thresholdDate
+                const recentlyMovedItemIds = new Set(stockMovements.filter(log => log.timestamp.toDate() >= thresholdDate).map(log => log.itemId));
+                return stockItems.filter(item => !recentlyMovedItemIds.has(item.id) && item.currentStock > 0).slice(0, 5);
             }, [stockItems, stockMovements, isLoadingMovements, isLoadingItems, adminSettings.inactivityAlertDays]);
+
 
             const handleReorderClick = (item: StockItem) => {
                 const supplierInfo = [
@@ -906,22 +923,21 @@
                 ? `Last updated ${formatDistanceToNow(lastDataFetchTime, { addSuffix: true })}`
                 : 'Updating...';
 
-      // Filter change handlers memoized with useCallback
       const handleFilterCategoryChange = useCallback((value: string) => {
         setFilterCategory(value === 'all' ? undefined : value);
-      }, []);
+      }, []); 
     
       const handleFilterLocationChange = useCallback((value: string) => {
         setFilterLocation(value === 'all' ? undefined : value);
-      }, []);
+      }, []); 
     
       const handleFilterSupplierChange = useCallback((value: string) => {
         setFilterSupplier(value === 'all' ? undefined : value);
-      }, []);
+      }, []); 
     
       const handleFilterStockStatusChange = useCallback((value: string) => {
         setFilterStockStatus(value === 'all' ? undefined : value);
-      }, []);
+      }, []); 
 
 
       // USER DASHBOARD VIEW
@@ -945,11 +961,14 @@
                  
                  {!isLoadingItems && !fetchError && (
                     <>
-                        {filteredItems.length === 0 && searchQuery === '' && (
+                        {filteredItems.length === 0 && searchQuery === '' && stockItems.length === 0 && (
                             <Card><CardContent className="pt-6"><p className="text-center text-muted-foreground">No stock items are currently assigned to you or available for your access. Please add stock or contact an administrator if you believe this is an error.</p></CardContent></Card>
                         )}
                         {filteredItems.length === 0 && searchQuery !== '' && (
                             <Card><CardContent className="pt-6"><p className="text-center text-muted-foreground">No items match your search: "{searchQuery}".</p></CardContent></Card>
+                        )}
+                         {filteredItems.length === 0 && searchQuery === '' && stockItems.length > 0 && (
+                            <Card><CardContent className="pt-6"><p className="text-center text-muted-foreground">No items match your current filters. Try adjusting search or filter criteria.</p></CardContent></Card>
                         )}
                     </>
                  )}
@@ -987,7 +1006,7 @@
 
                 <Card className="mt-6 shadow-lg">
                     <CardHeader><CardTitle>Log Stock Out</CardTitle></CardHeader>
-                    <CardContent><StockOutForm items={stockItems} onSubmit={handleStockOutSubmit} isLoading={stockOutMutation.isPending} currentUser={user} /></CardContent>
+                    <CardContent><StockOutForm items={stockItems.filter(item => item.currentStock > 0)} onSubmit={handleStockOutSubmit} isLoading={stockOutMutation.isPending} currentUser={user} /></CardContent>
                 </Card>
                 
                 <ActivityFeed movements={stockMovements} isLoading={isLoadingMovements} />
@@ -1061,7 +1080,7 @@
                          <Tabs defaultValue="add-stock" className="w-full">
                             <CardHeader className="p-4 border-b"><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="add-stock">Add/Restock Item</TabsTrigger><TabsTrigger value="stock-out">Log Stock Out</TabsTrigger></TabsList></CardHeader>
                            <TabsContent value="add-stock"><CardContent className="p-4"><AddStockForm onSubmit={handleAddStockSubmit} isLoading={addStockMutation.isPending} /></CardContent></TabsContent>
-                           <TabsContent value="stock-out"><CardContent className="p-4"><StockOutForm items={stockItems} onSubmit={handleStockOutSubmit} isLoading={stockOutMutation.isPending} currentUser={user} /></CardContent></TabsContent>
+                           <TabsContent value="stock-out"><CardContent className="p-4"><StockOutForm items={stockItems.filter(item => item.currentStock > 0)} onSubmit={handleStockOutSubmit} isLoading={stockOutMutation.isPending} currentUser={user} /></CardContent></TabsContent>
                          </Tabs>
                     </Card>
                </div>
@@ -1097,9 +1116,4 @@
      export default function Home() {
          return (<QueryClientProvider client={queryClient}><ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange><RequireAuth><StockManagementPageContent /></RequireAuth></ThemeProvider></QueryClientProvider>);
      }
-
-
-
-
-
 
