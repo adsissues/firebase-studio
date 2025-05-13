@@ -409,6 +409,7 @@
              },
              onSuccess: (result) => {
                  queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations] });
+                 queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); // Invalidate alerts
                  toast({
                      variant: "default",
                      title: "Stock Added/Restocked",
@@ -500,6 +501,7 @@
             },
             onSuccess: (updatedItem) => {
                  queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations] });
+                 queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); // Invalidate alerts
                 setIsEditDialogOpen(false);
                 setItemToEdit(null);
                 toast({
@@ -546,6 +548,7 @@
             onSuccess: (itemId) => {
                  queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations] });
                  queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid, isAdmin, assignedLocations] }); 
+                 queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); // Invalidate alerts
                  setIsDeleteDialogOpen(false);
                  const deletedItemName = itemToDelete?.itemName || 'Item'; 
                  setItemToDelete(null);
@@ -584,6 +587,7 @@
              },
             onSuccess: (data) => {
                 queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations] });
+                queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); // Invalidate alerts
                 toast({ variant: "default", title: "Stock Updated", description: `${data.quantity} units of ${data.itemName || 'item'} removed.`});
             },
             onError: (error: any, data) => {
@@ -601,6 +605,7 @@
             },
             onSuccess: (savedSettings) => {
                  queryClient.setQueryData(['adminSettings'], (old: AdminSettings | undefined) => ({...defaultAdminSettings, ...old, ...savedSettings}));
+                 queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); // Invalidate alerts
                  refetchSettings(); 
                 toast({ title: "Settings Saved", description: "Admin settings have been updated." });
                 setIsSettingsDialogOpen(false);
@@ -784,6 +789,7 @@
 
             if (alertsChanged) {
                 setSystemAlerts(Array.from(newAlertsMap.values()).sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime()));
+                queryClient.setQueryData(['systemAlerts'], Array.from(newAlertsMap.values()).sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime()));
             }
             
             const currentNewAlertIds = new Set(newAlertsMap.keys());
@@ -810,7 +816,7 @@
                 }
             }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [stockItems, adminSettings, isLoading, toast, isAdmin]); 
+        }, [stockItems, adminSettings, isLoading, toast, isAdmin, queryClient]); 
 
 
         const handleSaveSettings = (settings: AdminSettings) => saveSettingsMutation.mutate(settings);
@@ -883,12 +889,15 @@
                 if (isLoadingMovements || isLoadingItems) return [];
                 const movementCounts: { [itemId: string]: { name: string, count: number, totalMoved: number } } = {};
                 stockMovements.forEach(log => {
-                    if (!movementCounts[log.itemId]) {
-                        const item = stockItems.find(i => i.id === log.itemId);
-                        movementCounts[log.itemId] = { name: item?.itemName || 'Unknown Item', count: 0, totalMoved: 0 };
+                    const item = stockItems.find(i => i.id === log.itemId);
+                     // Only process logs for items that still exist in stockItems
+                    if (item) {
+                        if (!movementCounts[log.itemId]) {
+                            movementCounts[log.itemId] = { name: item.itemName, count: 0, totalMoved: 0 };
+                        }
+                        movementCounts[log.itemId].count++; 
+                        movementCounts[log.itemId].totalMoved += Math.abs(log.quantityChange); 
                     }
-                    movementCounts[log.itemId].count++; 
-                    movementCounts[log.itemId].totalMoved += Math.abs(log.quantityChange); 
                 });
                 return Object.values(movementCounts).sort((a, b) => b.totalMoved - a.totalMoved || b.count - a.count).slice(0, 10); 
             }, [stockMovements, stockItems, isLoadingMovements, isLoadingItems]);
@@ -1119,3 +1128,4 @@
      export default function Home() {
          return (<QueryClientProvider client={queryClient}><ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange><RequireAuth><StockManagementPageContent /></RequireAuth></ThemeProvider></QueryClientProvider>);
      }
+
