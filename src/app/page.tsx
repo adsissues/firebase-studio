@@ -1049,8 +1049,8 @@
             <DashboardKPIs data={kpiData} isLoading={isLoading} />
             <AlertsPanel alerts={systemAlerts} onDismissAlert={(id) => setSystemAlerts(prev => prev.filter(a => a.id !== id))} onItemAction={handleReorderClick}/>
 
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-6">
-               <Card className="shadow-md md:col-span-1"><CardHeader><CardTitle className="text-lg">Items by Category</CardTitle></CardHeader><CardContent>{isLoading ? <Skeleton className="h-48 w-full" /> : <CategoryBarChart data={categoryChartData} />}</CardContent></Card>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6"> {/* Adjusted from 3 columns to 2 for charts */}
+               {/* CategoryBarChart section removed as per request */}
                <Card className="shadow-md md:col-span-1"><CardHeader><CardTitle className="text-lg">Stock by Location</CardTitle></CardHeader><CardContent>{isLoading ? <Skeleton className="h-48 w-full" /> : <LocationChart data={locationChartData} />}</CardContent></Card>
                <Card className="shadow-md md:col-span-1"><CardHeader><CardTitle className="text-lg">Weekly Movement Trend</CardTitle></CardHeader><CardContent>{isLoadingMovements ? <Skeleton className="h-48 w-full" /> : <MovementTrendChart data={movementTrendData} />}</CardContent></Card>
            </div>
@@ -1128,4 +1128,5 @@
      export default function Home() {
          return (<QueryClientProvider client={queryClient}><ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange><RequireAuth><StockManagementPageContent /></RequireAuth></ThemeProvider></QueryClientProvider>);
      }
+
 
