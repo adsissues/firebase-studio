@@ -47,7 +47,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <TanstackQueryClientProvider client={queryClient}>
         <AuthProvider>
-          <SidebarProvider>
+          <SidebarProvider defaultOpen={false}> {/* Set defaultOpen to false */}
             {children}
           </SidebarProvider>
         </AuthProvider>
