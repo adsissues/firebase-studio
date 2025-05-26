@@ -1039,7 +1039,7 @@
             <AlertsPanel alerts={systemAlerts} onDismissAlert={(id) => setSystemAlerts(prev => prev.filter(a => a.id !== id))} onItemAction={handleReorderClick}/>
 
            <div className="grid grid-cols-1 md:grid-cols-1 gap-4 my-6"> {/* Adjusted to 1 column for the remaining chart */}
-               <Card className="shadow-md md:col-span-1"><CardHeader><CardTitle className="text-lg">Stock by Location</CardTitle></CardHeader><CardContent>{isLoading ? <Skeleton className="h-48 w-full" /> : <LocationChart data={locationChartData} />}</CardContent></Card>
+               {/* Stock by Location chart removed */}
                {/* Weekly Movement Trend chart removed */}
            </div>
 
@@ -1116,6 +1116,7 @@
      export default function Home() {
          return (<QueryClientProvider client={queryClient}><ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange><RequireAuth><StockManagementPageContent /></RequireAuth></ThemeProvider></QueryClientProvider>);
      }
+
 
 
 
