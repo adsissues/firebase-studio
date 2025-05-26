@@ -1,3 +1,4 @@
+
  'use client';
 
     import * as React from 'react';
@@ -15,7 +16,7 @@
     import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
     import { Label } from "@/components/ui/label";
     import type { StockItem, AdminSettings, StockMovementLog, AlertType } from '@/types';
-    import { useState, useEffect, useCallback, useRef } from 'react'; // Added useRef
+    import { useState, useEffect, useCallback, useRef } from 'react';
     import { useToast } from "@/hooks/use-toast";
     import { QueryClient, QueryClientProvider, useQuery, useMutation, QueryCache } from '@tanstack/react-query';
     import { db, auth } from '@/lib/firebase/firebase';
@@ -26,14 +27,13 @@
     import { AlertTriangle, Loader2, Trash2, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, PoundSterling, Package, TrendingUp, TrendingDown, Clock, ShoppingCart, Building, Phone, Mail as MailIcon, UserCircle as UserIcon, Globe, Users, FileText, Map as MapIcon, Barcode, MapPin, ExternalLink } from 'lucide-react';
     import { RequireAuth } from '@/components/auth/require-auth';
     import { useAuth } from '@/context/auth-context';
-    import { signOut } from 'firebase/auth';
     import { ThemeProvider } from "@/components/theme-provider";
     import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
     import { UserManagementDialog } from '@/components/user-management-dialog';
     import { searchItemByPhoto, type SearchItemByPhotoInput } from '@/ai/flows/search-item-by-photo-flow';
     import { DashboardKPIs, type KPIData } from '@/components/dashboard-kpis';
-    import { LocationChart } from '@/components/charts/location-chart';
-    import { MovementTrendChart } from '@/components/charts/movement-trend-chart';
+    // import { LocationChart } from '@/components/charts/location-chart'; // Removed
+    // import { MovementTrendChart } from '@/components/charts/movement-trend-chart'; // Removed
     import { PageHeader } from '@/components/page-header';
     import { ActionsPanel } from '@/components/actions-panel';
     import { Separator } from '@/components/ui/separator';
@@ -43,17 +43,18 @@
     import { ExportReportsButton } from '@/components/export-reports-button';
     import { getItemStatusInfo } from '@/components/stock-dashboard'; 
 
-    const queryClient = new QueryClient({
-      queryCache: new QueryCache({
-        onError: (error, queryInstance) => {
-          if ((error as any)?.code === 'permission-denied' || (error as any)?.code === 'unauthenticated') {
-            console.warn("Authentication error detected by React Query. Signing out...");
-            signOut(auth).catch(signOutError => console.error("Error signing out after query error:", signOutError));
-          }
-          console.error(`Query Error [${queryInstance.queryKey}]:`, error);
-        },
-      }),
-    });
+    // QueryClient is now defined in RootLayout, so this local instance can be removed or commented out.
+    // const queryClient = new QueryClient({
+    //   queryCache: new QueryCache({
+    //     onError: (error, queryInstance) => {
+    //       if ((error as any)?.code === 'permission-denied' || (error as any)?.code === 'unauthenticated') {
+    //         console.warn("Authentication error detected by React Query. Signing out...");
+    //         if (auth) signOut(auth).catch(signOutError => console.error("Error signing out after query error:", signOutError));
+    //       }
+    //       console.error(`Query Error [${queryInstance.queryKey}]:`, error);
+    //     },
+    //   }),
+    // });
 
     const defaultAdminSettings: AdminSettings = {
         emailNotifications: true,
@@ -70,7 +71,7 @@
       const [filterCategory, setFilterCategory] = useState<string | undefined>(undefined);
       const [filterLocation, setFilterLocation] = useState<string | undefined>(undefined);
       const [filterSupplier, setFilterSupplier] = useState<string | undefined>(undefined);
-      const [filterStockStatus, setFilterStockStatus] = useState<string | undefined>(undefined); // For StockDashboard filtering
+      const [filterStockStatus, setFilterStockStatus] = useState<string | undefined>(undefined);
       const { toast } = useToast();
       const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
       const [itemToEdit, setItemToEdit] = useState<StockItem | null>(null);
@@ -87,8 +88,8 @@
       const canvasRef = React.useRef<HTMLCanvasElement>(null);
       const [systemAlerts, setSystemAlerts] = React.useState<AlertType[]>([]);
       const [lastDataFetchTime, setLastDataFetchTime] = React.useState<Date | null>(null);
-      const toastedAlertIds = useRef(new Set<string>()); // Ref to track toasted alert IDs
-
+      const toastedAlertIds = useRef(new Set<string>());
+      const queryClient = useQueryClient(); // Get client from context
 
         const { data: adminSettings = defaultAdminSettings, isLoading: isLoadingSettings, refetch: refetchSettings } = useQuery<AdminSettings>({
             queryKey: ['adminSettings'],
@@ -123,14 +124,11 @@
            if (isAdmin) {
                q = query(itemsCol);
            } else {
-               // For non-admins, filter by items they own OR items in their assigned locations.
-               // Firestore 'or' queries need separate conditions.
                const ownerCondition = where("userId", "==", user.uid);
                if (assignedLocations && assignedLocations.length > 0) {
                   const locationCondition = where("location", "in", assignedLocations);
                   q = query(itemsCol, or(ownerCondition, locationCondition));
                } else {
-                  // If no assigned locations, only fetch items owned by the user.
                   q = query(itemsCol, ownerCondition);
                }
            }
@@ -192,32 +190,41 @@
               if (isAdmin) {
                  q = query(logsCol);
               } else {
-                  // Non-admins see movements they initiated for any item,
-                  // OR movements related to items they own,
-                  // OR movements related to items in their assigned locations.
-                  
-                  // For users, we can filter by userId on the movement logs
-                  // AND/OR filter by items accessible to them (owned items or items in assigned locations)
-                  // A simple approach is to show movements initiated by the user and for items in their assigned locations.
                   const userInitiatedCondition = where("userId", "==", user.uid);
-                  
                   let conditions = [userInitiatedCondition];
-
+                  // Non-admin users see movements for items they own or in their assigned locations.
+                  // This part is complex with Firestore 'or' limitations if items are many.
+                  // For now, let's focus on user-initiated and items in assigned locations.
                   if (assignedLocations && assignedLocations.length > 0) {
-                    // This part would ideally query based on item.location, which isn't in stockMovements
-                    // A more robust solution would be to either:
-                    // 1. Denormalize `location` into `stockMovements` logs.
-                    // 2. Fetch all accessible item IDs first, then query movements with `itemId in [...]`.
-                    //    This can be complex and limited by Firestore's `in` query (max 30 items).
-                    // For simplicity and performance, let's prioritize user-initiated movements.
-                    // If needed, a separate query could fetch movements related to items in their locations.
-                    // For now, we focus on user-initiated.
+                    // Fetch items in assigned locations first (can be inefficient if many items/locations)
+                    const accessibleItemsQuery = query(collection(db, 'stockItems'), where("location", "in", assignedLocations));
+                    const accessibleItemsSnap = await getDocs(accessibleItemsQuery);
+                    const accessibleItemIds = accessibleItemsSnap.docs.map(d => d.id);
+
+                    if (accessibleItemIds.length > 0) {
+                        // Firestore 'in' query limit is 30. Handle if more.
+                        const itemIdsChunks = [];
+                        for (let i = 0; i < accessibleItemIds.length; i += 30) {
+                            itemIdsChunks.push(accessibleItemIds.slice(i, i + 30));
+                        }
+                        const locationItemConditions = itemIdsChunks.map(chunk => where("itemId", "in", chunk));
+                        if (locationItemConditions.length > 0) {
+                           // This creates multiple 'or' conditions which might require composite indexes.
+                           // A simpler approach for non-admins might be to just show their own movements.
+                           // Or, if performance allows, fetch all movements and filter client-side based on owned/assigned items.
+                           // For this example, let's stick to user-initiated to avoid query complexity.
+                           // q = query(logsCol, or(userInitiatedCondition, ...locationItemConditions));
+                           // Fallback to just user-initiated for simplicity if location-based becomes too complex
+                           q = query(logsCol, userInitiatedCondition);
+                        } else {
+                            q = query(logsCol, userInitiatedCondition);
+                        }
+                    } else {
+                         q = query(logsCol, userInitiatedCondition);
+                    }
+                  } else {
+                     q = query(logsCol, userInitiatedCondition);
                   }
-                  
-                  // q = query(logsCol, ...conditions); // Spread if multiple conditions
-                  q = query(logsCol, userInitiatedCondition);
-
-
               }
              try {
                 const logSnapshot = await getDocs(q);
@@ -301,7 +308,6 @@
                     baseConstraints.push(where("userId", "==", user.uid));
                     if (assignedLocations && assignedLocations.length > 0 && formData.location && assignedLocations.includes(formData.location)) {
                        // Non-admin can update existing item in their assigned location if they also own it (or rules allow)
-                       // This part ensures user has write access via location.
                     } else if (formData.location && (!assignedLocations || !assignedLocations.includes(formData.location))) {
                          throw new Error("You do not have permission to add stock to this location.");
                     }
@@ -408,7 +414,7 @@
              },
              onSuccess: (result) => {
                  queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations] });
-                 queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); // Invalidate alerts
+                 queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); 
                  toast({
                      variant: "default",
                      title: "Stock Added/Restocked",
@@ -500,7 +506,7 @@
             },
             onSuccess: (updatedItem) => {
                  queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations] });
-                 queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); // Invalidate alerts
+                 queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); 
                 setIsEditDialogOpen(false);
                 setItemToEdit(null);
                 toast({
@@ -547,7 +553,7 @@
             onSuccess: (itemId) => {
                  queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations] });
                  queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid, isAdmin, assignedLocations] }); 
-                 queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); // Invalidate alerts
+                 queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); 
                  setIsDeleteDialogOpen(false);
                  const deletedItemName = itemToDelete?.itemName || 'Item'; 
                  setItemToDelete(null);
@@ -586,7 +592,7 @@
              },
             onSuccess: (data) => {
                 queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations] });
-                queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); // Invalidate alerts
+                queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); 
                 toast({ variant: "default", title: "Stock Updated", description: `${data.quantity} units of ${data.itemName || 'item'} removed.`});
             },
             onError: (error: any, data) => {
@@ -604,7 +610,7 @@
             },
             onSuccess: (savedSettings) => {
                  queryClient.setQueryData(['adminSettings'], (old: AdminSettings | undefined) => ({...defaultAdminSettings, ...old, ...savedSettings}));
-                 queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); // Invalidate alerts
+                 queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); 
                  refetchSettings(); 
                 toast({ title: "Settings Saved", description: "Admin settings have been updated." });
                 setIsSettingsDialogOpen(false);
@@ -709,12 +715,6 @@
        const handleDeleteClick = (item: StockItem) => { setItemToDelete(item); setIsDeleteDialogOpen(true); };
        const confirmDeleteItem = () => { if (itemToDelete) deleteItemMutation.mutate(itemToDelete);};
 
-       const handleSignOut = async () => {
-        if (!auth) { toast({ variant: "destructive", title: "Sign Out Error", description: "Auth service not available." }); return; }
-        try { await signOut(auth); queryClient.clear(); toast({ title: "Signed Out" });
-        } catch (error) { toast({ variant: "destructive", title: "Sign Out Error" }); }
-      };
-
         const filteredItems = React.useMemo(() => {
              return stockItems.filter((item) => {
                 const queryLower = searchQuery.trim().toLowerCase(); 
@@ -787,8 +787,9 @@
             if (newAlertsMap.size !== currentAlertsMap.size) alertsChanged = true;
 
             if (alertsChanged) {
-                setSystemAlerts(Array.from(newAlertsMap.values()).sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime()));
-                queryClient.setQueryData(['systemAlerts'], Array.from(newAlertsMap.values()).sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime()));
+                const newAlertsArray = Array.from(newAlertsMap.values()).sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime());
+                setSystemAlerts(newAlertsArray);
+                queryClient.setQueryData(['systemAlerts'], newAlertsArray);
             }
             
             const currentNewAlertIds = new Set(newAlertsMap.keys());
@@ -815,7 +816,7 @@
                 }
             }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [stockItems, adminSettings, isLoading, toast, isAdmin, queryClient]); 
+        }, [stockItems, adminSettings, isLoading, toast, isAdmin, queryClient, systemAlerts /* Added systemAlerts to dependencies */]); 
 
 
         const handleSaveSettings = (settings: AdminSettings) => saveSettingsMutation.mutate(settings);
@@ -879,13 +880,20 @@
                 const movementCounts: { [itemId: string]: { name: string, count: number, totalMoved: number } } = {};
                 stockMovements.forEach(log => {
                     const item = stockItems.find(i => i.id === log.itemId);
-                     // Only process logs for items that still exist in stockItems
                     if (item) {
                         if (!movementCounts[log.itemId]) {
                             movementCounts[log.itemId] = { name: item.itemName, count: 0, totalMoved: 0 };
                         }
                         movementCounts[log.itemId].count++; 
                         movementCounts[log.itemId].totalMoved += Math.abs(log.quantityChange); 
+                    } else {
+                        // Handle logs for items that might have been deleted but still have logs
+                        // Or, decide if these logs should be filtered out earlier (e.g., in the query)
+                        if (!movementCounts[log.itemId]) {
+                             movementCounts[log.itemId] = { name: log.itemName || "Unknown Item (Deleted?)", count: 0, totalMoved: 0 };
+                        }
+                         movementCounts[log.itemId].count++;
+                         movementCounts[log.itemId].totalMoved += Math.abs(log.quantityChange);
                     }
                 });
                 return Object.values(movementCounts).sort((a, b) => b.totalMoved - a.totalMoved || b.count - a.count).slice(0, 10); 
@@ -896,7 +904,6 @@
                 const daysThreshold = adminSettings.inactivityAlertDays || 30;
                 const thresholdDate = new Date();
                 thresholdDate.setDate(thresholdDate.getDate() - daysThreshold);
-                // Filter for items that HAVEN'T moved since thresholdDate
                 const recentlyMovedItemIds = new Set(stockMovements.filter(log => log.timestamp.toDate() >= thresholdDate).map(log => log.itemId));
                 return stockItems.filter(item => !recentlyMovedItemIds.has(item.id) && item.currentStock > 0).slice(0, 5);
             }, [stockItems, stockMovements, isLoadingMovements, isLoadingItems, adminSettings.inactivityAlertDays]);
@@ -947,7 +954,7 @@
       if (!isAdmin && user) {
         return (
              <div className="container mx-auto p-4 md:p-6 lg:p-8">
-                <PageHeader user={user} isAdmin={false} isLoading={isLoading} onSignOutClick={handleSignOut} onSettingsClick={() => {}} onManageUsersClick={() => {}} />
+                <PageHeader user={user} isAdmin={false} isLoading={isLoading} onSettingsClick={() => {}} onManageUsersClick={() => {}} />
                  <p className="text-sm text-muted-foreground mb-4 text-right">{lastUpdatedString}</p>
                  <Card className="shadow-lg mb-6">
                      <CardHeader>
@@ -1030,17 +1037,19 @@
              isAdmin={isAdmin} 
              isLoading={isLoading} 
              onSettingsClick={() => setIsSettingsDialogOpen(true)} 
-             onSignOutClick={handleSignOut} 
              onManageUsersClick={() => setIsUserManagementDialogOpen(true)}
              lastLogin={user?.metadata?.lastSignInTime ? formatDistanceToNow(new Date(user.metadata.lastSignInTime), {addSuffix: true}) : undefined} 
            />
            <p className="text-sm text-muted-foreground mb-4 text-right">{lastUpdatedString}</p>
             <DashboardKPIs data={kpiData} isLoading={isLoading} />
-            <AlertsPanel alerts={systemAlerts} onDismissAlert={(id) => setSystemAlerts(prev => prev.filter(a => a.id !== id))} onItemAction={handleReorderClick}/>
+            <AlertsPanel alerts={systemAlerts} onDismissAlert={(id) => {
+                setSystemAlerts(prev => prev.filter(a => a.id !== id));
+                toastedAlertIds.current.delete(id); // Also remove from toasted if dismissed manually
+            }} onItemAction={handleReorderClick}/>
 
-           <div className="grid grid-cols-1 md:grid-cols-1 gap-4 my-6"> {/* Adjusted to 1 column for the remaining chart */}
-               {/* Stock by Location chart removed */}
-               {/* Weekly Movement Trend chart removed */}
+
+           <div className="grid grid-cols-1 md:grid-cols-1 gap-4 my-6">
+               {/* Charts removed as per user request */}
            </div>
 
            <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1114,9 +1123,6 @@
      }
 
      export default function Home() {
-         return (<QueryClientProvider client={queryClient}><ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange><RequireAuth><StockManagementPageContent /></RequireAuth></ThemeProvider></QueryClientProvider>);
+         // ThemeProvider and QueryClientProvider are now in RootLayout
+         return (<RequireAuth><StockManagementPageContent /></RequireAuth>);
      }
-
-
-
-
