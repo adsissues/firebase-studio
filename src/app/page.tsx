@@ -32,7 +32,6 @@
     import { UserManagementDialog } from '@/components/user-management-dialog';
     import { searchItemByPhoto, type SearchItemByPhotoInput } from '@/ai/flows/search-item-by-photo-flow';
     import { DashboardKPIs, type KPIData } from '@/components/dashboard-kpis';
-    import { CategoryBarChart } from '@/components/charts/category-bar-chart';
     import { LocationChart } from '@/components/charts/location-chart';
     import { MovementTrendChart } from '@/components/charts/movement-trend-chart';
     import { PageHeader } from '@/components/page-header';
@@ -846,16 +845,6 @@
          const uniqueStockStatuses = ['all', 'Good', 'LowStock', 'OutOfStock', 'Overstock', 'Inactive']; 
 
 
-         const categoryChartData = React.useMemo(() => {
-              if (isLoading) return [];
-              const counts: { [key: string]: number } = {};
-              stockItems.forEach(item => {
-                  const category = item.category || 'Uncategorized';
-                  counts[category] = (counts[category] || 0) + 1;
-              });
-              return Object.entries(counts).map(([name, value]) => ({ name, value }));
-          }, [stockItems, isLoading]);
-
           const locationChartData = React.useMemo(() => {
               if (isLoading) return [];
               const counts: { [key: string]: number } = {};
@@ -1049,10 +1038,9 @@
             <DashboardKPIs data={kpiData} isLoading={isLoading} />
             <AlertsPanel alerts={systemAlerts} onDismissAlert={(id) => setSystemAlerts(prev => prev.filter(a => a.id !== id))} onItemAction={handleReorderClick}/>
 
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-6"> {/* Adjusted from 3 columns to 2 for charts */}
-               {/* CategoryBarChart section removed as per request */}
+           <div className="grid grid-cols-1 md:grid-cols-1 gap-4 my-6"> {/* Adjusted to 1 column for the remaining chart */}
                <Card className="shadow-md md:col-span-1"><CardHeader><CardTitle className="text-lg">Stock by Location</CardTitle></CardHeader><CardContent>{isLoading ? <Skeleton className="h-48 w-full" /> : <LocationChart data={locationChartData} />}</CardContent></Card>
-               <Card className="shadow-md md:col-span-1"><CardHeader><CardTitle className="text-lg">Weekly Movement Trend</CardTitle></CardHeader><CardContent>{isLoadingMovements ? <Skeleton className="h-48 w-full" /> : <MovementTrendChart data={movementTrendData} />}</CardContent></Card>
+               {/* Weekly Movement Trend chart removed */}
            </div>
 
            <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1128,5 +1116,6 @@
      export default function Home() {
          return (<QueryClientProvider client={queryClient}><ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange><RequireAuth><StockManagementPageContent /></RequireAuth></ThemeProvider></QueryClientProvider>);
      }
+
 
 
