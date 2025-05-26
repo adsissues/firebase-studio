@@ -18,7 +18,7 @@
     import type { StockItem, AdminSettings, StockMovementLog, AlertType } from '@/types';
     import { useState, useEffect, useCallback, useRef } from 'react';
     import { useToast } from "@/hooks/use-toast";
-    import { QueryClient, QueryClientProvider, useQuery, useMutation, QueryCache } from '@tanstack/react-query';
+    import { QueryClient, QueryClientProvider, useQuery, useMutation, QueryCache, useQueryClient } from '@tanstack/react-query'; // Added useQueryClient
     import { db, auth } from '@/lib/firebase/firebase';
     import { collection, getDocs, addDoc, updateDoc, doc, increment, deleteDoc, writeBatch, query, where, runTransaction, setDoc, getDoc, serverTimestamp, Timestamp, deleteField, or } from 'firebase/firestore';
     import { Skeleton } from '@/components/ui/skeleton';
@@ -27,7 +27,8 @@
     import { AlertTriangle, Loader2, Trash2, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, PoundSterling, Package, TrendingUp, TrendingDown, Clock, ShoppingCart, Building, Phone, Mail as MailIcon, UserCircle as UserIcon, Globe, Users, FileText, Map as MapIcon, Barcode, MapPin, ExternalLink } from 'lucide-react';
     import { RequireAuth } from '@/components/auth/require-auth';
     import { useAuth } from '@/context/auth-context';
-    import { ThemeProvider } from "@/components/theme-provider";
+    // ThemeProvider is now in AppProviders
+    // import { ThemeProvider } from "@/components/theme-provider";
     import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
     import { UserManagementDialog } from '@/components/user-management-dialog';
     import { searchItemByPhoto, type SearchItemByPhotoInput } from '@/ai/flows/search-item-by-photo-flow';
@@ -1123,6 +1124,7 @@
      }
 
      export default function Home() {
-         // ThemeProvider and QueryClientProvider are now in RootLayout
+         // ThemeProvider and QueryClientProvider are now in RootLayout / AppProviders
          return (<RequireAuth><StockManagementPageContent /></RequireAuth>);
      }
+
