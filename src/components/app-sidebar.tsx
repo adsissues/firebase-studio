@@ -38,6 +38,8 @@ export function AppSidebar() {
       await signOut(auth);
       queryClient.clear(); // Clear react-query cache on sign out
       toast({ title: "Signed Out" });
+      // Potentially redirect to login page or refresh to reflect signed-out state
+      // window.location.href = '/login'; // Example redirect
     } catch (error) {
       toast({ variant: "destructive", title: "Sign Out Error", description: (error as Error).message });
     }
@@ -45,7 +47,7 @@ export function AppSidebar() {
 
   const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: ['admin', 'user'] },
-    { href: "/#stock-levels", label: "Stock Management", icon: PackageSearch, roles: ['admin', 'user'] }, // Example anchor link
+    { href: "/#stock-levels", label: "Stock Management", icon: PackageSearch, roles: ['admin', 'user'] },
     // Placeholder routes, actual pages would need to be created
     // { href: "/admin/settings", label: "Admin Settings", icon: Settings, roles: ['admin'] },
     // { href: "/admin/users", label: "User Management", icon: Users, roles: ['admin'] },
@@ -83,14 +85,17 @@ export function AppSidebar() {
             .map(item => (
               <SidebarMenuItem key={item.label}>
                 <SidebarMenuButton
-                  asChild 
+                  asChild
                   isActive={pathname === item.href || (item.href.startsWith("/#") && pathname === "/" && typeof window !== "undefined" && window.location.hash === item.href.substring(1) )}
                   tooltip={item.label}
                   aria-label={item.label}
                 >
                   <Link href={item.href}>
-                    <item.icon />
-                    <span>{item.label}</span>
+                    {/* Wrap icon and span in a single div */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sidebar-menu-item-gap, 0.5rem)' }} className="group-data-[collapsible=icon]:justify-center">
+                      <item.icon />
+                      <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                    </div>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
