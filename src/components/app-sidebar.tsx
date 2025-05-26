@@ -82,19 +82,17 @@ export function AppSidebar() {
             .filter(item => user && item.roles.includes(isAdmin ? 'admin' : 'user'))
             .map(item => (
               <SidebarMenuItem key={item.label}>
-                <Link href={item.href}>
-                  <SidebarMenuButton
-                    asChild 
-                    isActive={pathname === item.href || (item.href.startsWith("/#") && pathname === "/" && typeof window !== "undefined" && window.location.hash === item.href.substring(1) )}
-                    tooltip={item.label}
-                    aria-label={item.label}
-                  >
-                    <>
-                      <item.icon />
-                      <span>{item.label}</span>
-                    </>
-                  </SidebarMenuButton>
-                </Link>
+                <SidebarMenuButton
+                  asChild 
+                  isActive={pathname === item.href || (item.href.startsWith("/#") && pathname === "/" && typeof window !== "undefined" && window.location.hash === item.href.substring(1) )}
+                  tooltip={item.label}
+                  aria-label={item.label}
+                >
+                  <Link href={item.href}>
+                    <item.icon />
+                    <span>{item.label}</span>
+                  </Link>
+                </SidebarMenuButton>
               </SidebarMenuItem>
             ))}
         </SidebarMenu>
