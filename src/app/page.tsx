@@ -721,7 +721,7 @@
                 const queryLower = searchQuery.trim().toLowerCase(); 
                 const categoryFilterMatch = !filterCategory || filterCategory === 'all' || (item.category && item.category.toLowerCase() === filterCategory.toLowerCase());
                 const locationFilterMatch = !filterLocation || filterLocation === 'all' || (item.location && item.location.toLowerCase() === filterLocation.toLowerCase());
-                const supplierFilterMatch = !filterSupplier || filterSupplier === 'all' || ((item.supplier && item.supplier.toLowerCase() === filterSupplier.toLowerCase()) || (item.supplierName && item.supplierName.toLowerCase() === filterSupplier.toLowerCase()));
+                const supplierFilterMatch = !filterSupplier || filterSupplier === 'all' || ((item.supplier && item.supplier.toLowerCase() === filterSupplier.toLowerCase()) || (item.supplierName && item.supplierName.toLowerCase() === supplierFilterMatch));
                 
                 let statusFilterMatch = true;
                 if (filterStockStatus && filterStockStatus !== 'all') {
@@ -1053,7 +1053,7 @@
                {/* Charts removed as per user request */}
            </div>
 
-           <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+           <main className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="stock-levels">
               <div className="lg:col-span-2 space-y-6">
                  <Card className="shadow-md">
                      <CardHeader><CardTitle className="text-2xl">Stock Levels {isAdmin && '(Admin View)'}</CardTitle><CardDescription>Manage and view current inventory. <ExportReportsButton items={filteredItems} movements={stockMovements} /></CardDescription></CardHeader>
