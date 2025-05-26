@@ -535,8 +535,8 @@ const sidebarMenuButtonVariants = cva(
 )
 
 const SidebarMenuButton = React.forwardRef<
-  HTMLButtonElement, // Keeping as HTMLButtonElement for refs, Slot handles underlying element type
-  React.ComponentProps<"button"> & {
+  HTMLElement, // Changed from HTMLButtonElement to HTMLElement
+  React.ComponentProps<"button"> & { // Still accept button props for compatibility
     asChild?: boolean
     isActive?: boolean
     tooltip?: string | React.ComponentProps<typeof TooltipContent>
@@ -550,7 +550,7 @@ const SidebarMenuButton = React.forwardRef<
       size = "default",
       tooltip,
       className,
-      children, // Explicitly accept children
+      children, 
       ...props
     },
     ref
@@ -567,7 +567,7 @@ const SidebarMenuButton = React.forwardRef<
         className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
         {...props}
       >
-        {children} {/* Pass children to Comp (Slot or button) */}
+        {children} 
       </Comp>
     )
 
