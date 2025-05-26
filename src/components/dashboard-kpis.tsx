@@ -1,9 +1,10 @@
+
 "use client";
 
 import * as React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Package, AlertTriangle, XCircle, ArrowDown, ArrowUp, RefreshCcw, PoundSterling } from 'lucide-react'; // Import icons
+import { Package, AlertTriangle, XCircle, ArrowDown, ArrowUp, RefreshCcw } from 'lucide-react'; // Removed PoundSterling
 
 export interface KPIData {
   totalItems: number;
@@ -12,7 +13,7 @@ export interface KPIData {
   todayIn: number;
   todayOut: number;
   todayRestock: number;
-  totalInventoryValue?: number; // Optional: Total value of inventory
+  totalInventoryValue?: number; 
 }
 
 interface DashboardKPIsProps {
@@ -26,7 +27,7 @@ interface KPIItemProps {
     icon: React.ElementType;
     iconColor?: string;
     isLoading?: boolean;
-    prefix?: string; // Optional prefix like '£'
+    prefix?: string; 
 }
 
 const KPIItem: React.FC<KPIItemProps> = ({ title, value, icon: Icon, iconColor = "text-primary", isLoading, prefix = '' }) => (
@@ -48,7 +49,7 @@ const KPIItem: React.FC<KPIItemProps> = ({ title, value, icon: Icon, iconColor =
 
 export function DashboardKPIs({ data, isLoading = false }: DashboardKPIsProps) {
   return (
-    <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 mb-6"> {/* Adjusted grid for more KPIs */}
+    <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 mb-6"> {/* Adjusted grid to xl:grid-cols-6 since one item is removed */}
         <KPIItem
             title="Total Items"
             value={data?.totalItems ?? 0}
@@ -90,16 +91,8 @@ export function DashboardKPIs({ data, isLoading = false }: DashboardKPIsProps) {
             iconColor="text-blue-500"
             isLoading={isLoading}
         />
-        {data?.totalInventoryValue !== undefined && ( // Conditionally render inventory value
-             <KPIItem
-                title="Inv. Value"
-                value={data.totalInventoryValue.toFixed(2)}
-                icon={PoundSterling}
-                iconColor="text-green-600"
-                isLoading={isLoading}
-                prefix="£"
-            />
-        )}
+        {/* Removed KPIItem for 'Inv. Value' */}
     </div>
   );
 }
+
