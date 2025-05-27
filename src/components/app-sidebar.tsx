@@ -13,7 +13,7 @@ import {
   SidebarMenuButton,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/context/auth-context";
-import { LayoutDashboard, Settings, Users, LogOut, PackageSearch } from "lucide-react";
+import { LayoutDashboard, Settings, Users, LogOut, PackageSearch, ListOrdered } from "lucide-react"; // Added ListOrdered
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "./ui/button";
@@ -48,6 +48,7 @@ export function AppSidebar() {
   const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: ['admin', 'user'] },
     { href: "/#stock-levels", label: "Stock Management", icon: PackageSearch, roles: ['admin', 'user'] },
+    { href: "/inventory", label: "Full Inventory", icon: ListOrdered, roles: ['admin'] }, // New link for admins
     // Placeholder routes, actual pages would need to be created
     // { href: "/admin/settings", label: "Admin Settings", icon: Settings, roles: ['admin'] },
     // { href: "/admin/users", label: "User Management", icon: Users, roles: ['admin'] },
@@ -116,3 +117,4 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
+

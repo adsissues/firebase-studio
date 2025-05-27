@@ -22,7 +22,7 @@
     import { collection, getDocs, addDoc, updateDoc, doc, increment, deleteDoc, writeBatch, query, where, runTransaction, setDoc, getDoc, serverTimestamp, Timestamp, deleteField, or } from 'firebase/firestore';
     import { Skeleton } from '@/components/ui/skeleton';
     import { Button } from '@/components/ui/button';
-    import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+    import { Alert, AlertDescription as ShadAlertDescription, AlertTitle as ShadAlertTitle } from "@/components/ui/alert";
     import { AlertTriangle, Loader2, Trash2, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, PoundSterling, Package, TrendingUp, TrendingDown, Clock, ShoppingCart, Building, Phone, Mail as MailIcon, UserCircle as UserIconLucide, Globe, Users, FileText, Map as MapIcon, Barcode, MapPin, ExternalLink, PlusCircle, MinusCircle, PackagePlus, EyeIcon } from 'lucide-react';
     import { RequireAuth } from '@/components/auth/require-auth';
     import { useAuth } from '@/context/auth-context';
@@ -38,6 +38,7 @@
     import { AlertsPanel } from '@/components/alerts-panel';
     import { ExportReportsButton } from '@/components/export-reports-button';
     import { getItemStatusInfo } from '@/components/stock-dashboard';
+    import { useRouter } from 'next/navigation';
 
 
     const defaultAdminSettings: AdminSettings = {
@@ -57,6 +58,7 @@
       const [filterSupplier, setFilterSupplier] = useState<string | undefined>(undefined);
       const [filterStockStatus, setFilterStockStatus] = useState<string | undefined>(undefined);
       const { toast } = useToast();
+      const router = useRouter();
       const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
       const [itemToEdit, setItemToEdit] = useState<StockItem | null>(null);
       const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
@@ -957,7 +959,7 @@
                  </Card>
 
                  {isLoadingItems && <div className="space-y-2 pt-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div>}
-                 {fetchError && <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>Could not load stock items. {(fetchError as Error).message.includes('index required') ? 'A database index is required for this query. Admins, please check Firestore console.' : (fetchError as Error).message}</AlertDescription></Alert>}
+                 {fetchError && <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><ShadAlertTitle>Error</ShadAlertTitle><ShadAlertDescription>Could not load stock items. {(fetchError as Error).message.includes('index required') ? 'A database index is required for this query. Admins, please check Firestore console.' : (fetchError as Error).message}</ShadAlertDescription></Alert>}
 
                  {!isLoadingItems && !fetchError && (
                     <>
@@ -1069,7 +1071,7 @@
                              </div>
                          </div>
                          {isLoadingItems && (<div className="space-y-2 pt-4"><Skeleton className="h-8 w-full" /><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>)}
-                         {fetchError && (<Alert variant="destructive" className="mt-4"><AlertTriangle className="h-4 w-4" /><AlertTitle>Error Loading Stock</AlertTitle><AlertDescription>Could not load stock items. {(fetchError as Error).message.includes('index required') ? 'A database index is required for this query. Admins, please check Firestore console.' : (fetchError as Error).message}<Button onClick={handleRetryFetch} variant="link" className="ml-2 p-0 h-auto text-destructive-foreground underline">Retry</Button></AlertDescription></Alert>)}
+                         {fetchError && (<Alert variant="destructive" className="mt-4"><AlertTriangle className="h-4 w-4" /><ShadAlertTitle>Error Loading Stock</ShadAlertTitle><ShadAlertDescription>Could not load stock items. {(fetchError as Error).message.includes('index required') ? 'A database index is required for this query. Admins, please check Firestore console.' : (fetchError as Error).message}<Button onClick={handleRetryFetch} variant="link" className="ml-2 p-0 h-auto text-destructive-foreground underline">Retry</Button></ShadAlertDescription></Alert>)}
                          {!isLoadingItems && !fetchError && (
                             <>
                              <StockDashboard items={filteredItems.slice(0, 5)} onView={handleViewClick} onEdit={handleEditClick} onDelete={handleDeleteClick} onReorder={handleReorderClick} isAdmin={isAdmin} globalLowStockThreshold={adminSettings.lowStockThreshold} adminSettings={adminSettings}/>
@@ -1078,13 +1080,8 @@
                                     <Button
                                         variant="outline"
                                         onClick={() => {
-                                            console.log('View All Stock Items button clicked!');
-                                            toast({
-                                                title: "Functionality Note",
-                                                description: "This button is intended to navigate to a full inventory page. That page is currently under development. Thank you for your patience!",
-                                                duration: 5000,
-                                            });
-                                            // Future: router.push('/inventory');
+                                            console.log('View All Stock Items button clicked! Navigating to /inventory');
+                                            router.push('/inventory');
                                         }}
                                     >
                                         <EyeIcon className="mr-2 h-4 w-4" /> View All Stock Items ({filteredItems.length})
