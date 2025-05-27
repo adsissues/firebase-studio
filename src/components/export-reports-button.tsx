@@ -19,9 +19,9 @@ function convertToCSV(data: any[], headers: string[]): string {
   const rows = data.map(obj => {
     return headers.map(header => {
       let cell = obj[header] === null || obj[header] === undefined ? '' : String(obj[header]);
-      if (typeof obj[header] === 'object' && obj[header] !== null && 'toDate' in obj[header]) { // Firestore Timestamp
+      if (typeof obj[header] === 'object' && obj[header] !== null && typeof (obj[header] as any).toDate === 'function') { // Firestore Timestamp
         try {
-          cell = format(obj[header].toDate(), 'yyyy-MM-dd HH:mm:ss');
+          cell = format((obj[header] as any).toDate(), 'yyyy-MM-dd HH:mm:ss');
         } catch (e) {
           cell = String(obj[header]); // fallback
         }
@@ -52,7 +52,8 @@ function downloadCSV(csvString: string, filename: string) {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   } else {
-    alert('CSV download is not supported by your browser.');
+    console.warn('CSV download attribute not supported. CSV content:', csvString);
+    alert('CSV download is not supported by your browser. Data logged to console.');
   }
 }
 
@@ -76,7 +77,6 @@ export function ExportReportsButton({ items, movements }: ExportReportsButtonPro
       'photoUrl', 'locationCoords', 'userId', 'costPrice', 'lastMovementDate'
     ];
     
-    // Sanitize items for CSV - handle potential complex objects or missing fields
     const sanitizedItems = items.map(item => ({
       id: item.id,
       itemName: item.itemName,
@@ -97,7 +97,7 @@ export function ExportReportsButton({ items, movements }: ExportReportsButtonPro
       locationCoords: item.locationCoords ? `${item.locationCoords.latitude},${item.locationCoords.longitude}` : '',
       userId: item.userId,
       costPrice: item.costPrice ?? '',
-      lastMovementDate: item.lastMovementDate ? item.lastMovementDate.toDate().toISOString() : '',
+      lastMovementDate: item.lastMovementDate ? (typeof (item.lastMovementDate as any).toDate === 'function' ? (item.lastMovementDate as any).toDate().toISOString() : String(item.lastMovementDate)) : '',
     }));
 
     try {
@@ -135,7 +135,7 @@ export function ExportReportsButton({ items, movements }: ExportReportsButtonPro
 
     const sanitizedMovements = movements.map(log => ({
         ...log,
-        timestamp: log.timestamp ? log.timestamp.toDate().toISOString() : '',
+        timestamp: log.timestamp ? (typeof (log.timestamp as any).toDate === 'function' ? (log.timestamp as any).toDate().toISOString() : String(log.timestamp)) : '',
         userEmail: log.userEmail || '',
         batchNumber: log.batchNumber || '',
         notes: log.notes || '',
@@ -172,9 +172,9 @@ export function ExportReportsButton({ items, movements }: ExportReportsButtonPro
       <Button variant="outline" size="sm" onClick={() => {
          toast({
           title: `PDF Export (Coming Soon)`,
-          description: `This feature is planned for a future update.`,
+          description: `This feature is planned for a future update. Full PDF generation is complex.`,
         });
-      }} disabled>
+      }}>
         <Download className="mr-2 h-4 w-4" />
         Export PDF (Soon)
       </Button>
