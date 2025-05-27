@@ -10,7 +10,6 @@
     import { EditItemForm, type EditItemFormData } from '@/components/edit-item-form';
     import { ViewItemDialog } from '@/components/view-item-dialog';
     import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
-    // import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'; // Tabs no longer used for forms
     import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter as ShadDialogFooter } from '@/components/ui/dialog';
     import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
     import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,13 +17,13 @@
     import type { StockItem, AdminSettings, StockMovementLog, AlertType } from '@/types';
     import { useState, useEffect, useCallback, useRef } from 'react';
     import { useToast } from "@/hooks/use-toast";
-    import { QueryClient, QueryClientProvider, useQuery, useMutation, QueryCache, useQueryClient } from '@tanstack/react-query'; // Added useQueryClient
+    import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'; // Added useQueryClient
     import { db, auth } from '@/lib/firebase/firebase';
     import { collection, getDocs, addDoc, updateDoc, doc, increment, deleteDoc, writeBatch, query, where, runTransaction, setDoc, getDoc, serverTimestamp, Timestamp, deleteField, or } from 'firebase/firestore';
     import { Skeleton } from '@/components/ui/skeleton';
     import { Button } from '@/components/ui/button';
     import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-    import { AlertTriangle, Loader2, Trash2, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, PoundSterling, Package, TrendingUp, TrendingDown, Clock, ShoppingCart, Building, Phone, Mail as MailIcon, UserCircle as UserIcon, Globe, Users, FileText, Map as MapIcon, Barcode, MapPin, ExternalLink, PlusCircle, MinusCircle, PackagePlus } from 'lucide-react'; // Added PlusCircle, MinusCircle, PackagePlus
+    import { AlertTriangle, Loader2, Trash2, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, PoundSterling, Package, TrendingUp, TrendingDown, Clock, ShoppingCart, Building, Phone, Mail as MailIcon, UserCircle as UserIcon, Globe, Users, FileText, Map as MapIcon, Barcode, MapPin, ExternalLink, PlusCircle, MinusCircle, PackagePlus, EyeIcon } from 'lucide-react'; // Added PlusCircle, MinusCircle, PackagePlus, EyeIcon
     import { RequireAuth } from '@/components/auth/require-auth';
     import { useAuth } from '@/context/auth-context';
     import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
@@ -180,38 +179,43 @@
                  q = query(logsCol);
               } else {
                   const userInitiatedCondition = where("userId", "==", user.uid);
-                  // let conditions = [userInitiatedCondition]; // Commented out as not used directly for OR query in this structure
-
                   if (assignedLocations && assignedLocations.length > 0) {
                     const accessibleItemsQuery = query(collection(db, 'stockItems'), where("location", "in", assignedLocations));
                     const accessibleItemsSnap = await getDocs(accessibleItemsQuery);
                     const accessibleItemIds = accessibleItemsSnap.docs.map(d => d.id);
 
                     if (accessibleItemIds.length > 0) {
-                        // Firestore 'in' queries are limited to 30 elements per query.
-                        // For simplicity, if more than 30 accessible items, this part of the filter might be too complex
-                        // or require multiple queries + client-side merging, which is not implemented here.
-                        // This example proceeds assuming a manageable number of accessibleItemIds for a direct 'in' query.
-                        // A more robust solution might involve a subcollection on users for accessible items or different data modeling.
                         const itemIdsChunks = [];
-                        for (let i = 0; i < accessibleItemIds.length; i += 30) { // Firestore limitation for 'in' queries
+                        for (let i = 0; i < accessibleItemIds.length; i += 30) { 
                             itemIdsChunks.push(accessibleItemIds.slice(i, i + 30));
                         }
-                        // This simplified version will only query for user-initiated logs if complex OR logic isn't straightforward.
-                        // A true OR between user-initiated and item-location based would require separate queries and merging.
-                        // For now, we'll just ensure it doesn't break and prioritize user-initiated ones if locations are complex.
-                        // This is a simplification and might not perfectly implement "user logs OR logs for items in assigned locations"
-                        // without more complex query logic or data duplication.
-                        // The simplest is to filter client-side after fetching user's logs OR all logs if admin.
-                        // Current logic fetches ALL logs for admin, and ONLY user-initiated logs for non-admins.
-                        // To include items in assigned locations for non-admins, a more complex query strategy is needed.
-                        // For now, it just uses userInitiatedCondition.
-                        q = query(logsCol, userInitiatedCondition);
+                        const movementQueries = itemIdsChunks.map(chunk => 
+                            query(logsCol, where("itemId", "in", chunk))
+                        );
+                        const userLogsQuery = query(logsCol, userInitiatedCondition);
+                        movementQueries.push(userLogsQuery); // Add user's own logs query
+
+                        const allSnapshots = await Promise.all(movementQueries.map(q => getDocs(q)));
+                        const logsSet = new Map<string, StockMovementLog>();
+                        allSnapshots.forEach(snapshot => {
+                            snapshot.docs.forEach(doc => {
+                                if (!logsSet.has(doc.id)) {
+                                    logsSet.set(doc.id, {
+                                        id: doc.id,
+                                        ...doc.data(),
+                                        timestamp: doc.data().timestamp as Timestamp
+                                    } as StockMovementLog);
+                                }
+                            });
+                        });
+                        const combinedLogs = Array.from(logsSet.values());
+                        combinedLogs.sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
+                        return combinedLogs;
                     } else {
-                         q = query(logsCol, userInitiatedCondition); // No items in assigned locations, so just user's logs.
+                         q = query(logsCol, userInitiatedCondition); 
                     }
                   } else {
-                     q = query(logsCol, userInitiatedCondition); // No assigned locations, just user's logs.
+                     q = query(logsCol, userInitiatedCondition); 
                   }
               }
              try {
@@ -708,7 +712,7 @@
                 const queryLower = searchQuery.trim().toLowerCase();
                 const categoryFilterMatch = !filterCategory || filterCategory === 'all' || (item.category && item.category.toLowerCase() === filterCategory.toLowerCase());
                 const locationFilterMatch = !filterLocation || filterLocation === 'all' || (item.location && item.location.toLowerCase() === filterLocation.toLowerCase());
-                const supplierFilterMatch = !filterSupplier || filterSupplier === 'all' || ((item.supplier && item.supplier.toLowerCase() === filterSupplier.toLowerCase()) || (item.supplierName && item.supplierName.toLowerCase() === supplierFilterMatch)); // Corrected: should be filterSupplier.toLowerCase()
+                const supplierFilterMatch = !filterSupplier || filterSupplier === 'all' || ((item.supplier && item.supplier.toLowerCase() === filterSupplier.toLowerCase()) || (item.supplierName && item.supplierName.toLowerCase() === filterSupplier.toLowerCase())); 
 
                 let statusFilterMatch = true;
                 if (filterStockStatus && filterStockStatus !== 'all') {
@@ -1067,7 +1071,22 @@
                          {isLoadingItems && (<div className="space-y-2 pt-4"><Skeleton className="h-8 w-full" /><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>)}
                          {fetchError && (<Alert variant="destructive" className="mt-4"><AlertTriangle className="h-4 w-4" /><AlertTitle>Error Loading Stock</AlertTitle><AlertDescription>Could not load stock items. {(fetchError as Error).message.includes('index required') ? 'A database index is required for this query. Admins, please check Firestore console.' : (fetchError as Error).message}<Button onClick={handleRetryFetch} variant="link" className="ml-2 p-0 h-auto text-destructive-foreground underline">Retry</Button></AlertDescription></Alert>)}
                          {!isLoadingItems && !fetchError && (
-                             <StockDashboard items={filteredItems} onView={handleViewClick} onEdit={handleEditClick} onDelete={handleDeleteClick} onReorder={handleReorderClick} isAdmin={isAdmin} globalLowStockThreshold={adminSettings.lowStockThreshold} adminSettings={adminSettings}/>
+                            <>
+                             <StockDashboard items={filteredItems.slice(0, 5)} onView={handleViewClick} onEdit={handleEditClick} onDelete={handleDeleteClick} onReorder={handleReorderClick} isAdmin={isAdmin} globalLowStockThreshold={adminSettings.lowStockThreshold} adminSettings={adminSettings}/>
+                             {filteredItems.length > 5 && (
+                                <div className="mt-4 text-center">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => {
+                                            toast({ title: "View All Items", description: "Full inventory page coming soon!" });
+                                            // Future: router.push('/inventory');
+                                        }}
+                                    >
+                                        <EyeIcon className="mr-2 h-4 w-4" /> View All Stock Items ({filteredItems.length})
+                                    </Button>
+                                </div>
+                            )}
+                            </>
                           )}
                       </CardContent>
                    </Card>
@@ -1088,8 +1107,8 @@
                </div>
               <div className="lg:col-span-1 space-y-6 flex flex-col">
                  <ActionsPanel onPhotoSearchClick={() => setIsPhotoSearchOpen(true)} isLoading={isMutating || hasCameraPermission === false || isLoading} frequentlyUsedItems={stockItems.filter(item => item.currentStock < (item.minimumStock ?? adminSettings.lowStockThreshold) && item.currentStock > 0).slice(0,5)} onQuickAction={(action, item) => {
-                        if (action === 'in') handleAddStockSubmit({ itemName: item.itemName, quantity: 1, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location, supplierName: item.supplierName, formId: 'addStockFormDialog' }); // Added formId
-                        else if (action === 'restock') handleAddStockSubmit({ itemName: item.itemName, quantity: 10, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location, supplierName: item.supplierName, formId: 'addStockFormDialog' }); // Added formId
+                        if (action === 'in') handleAddStockSubmit({ itemName: item.itemName, quantity: 1, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location, supplierName: item.supplierName, formId: 'addStockFormDialog' }); 
+                        else if (action === 'restock') handleAddStockSubmit({ itemName: item.itemName, quantity: 10, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location, supplierName: item.supplierName, formId: 'addStockFormDialog' }); 
                         else if (action === 'out') handleStockOutSubmit({ itemId: item.id, quantity: 1 });
                     }} />
                    <ActivityFeed movements={stockMovements} isLoading={isLoadingMovements} />
@@ -1113,9 +1132,9 @@
                         <DialogTitle>Add/Restock Item</DialogTitle>
                         <DialogDescription>Enter details to add new stock or restock an existing item.</DialogDescription>
                     </DialogHeader>
-                    <div className="flex-grow overflow-y-auto pr-2"> {/* Scrollable area for form */}
+                    <div className="flex-grow overflow-y-auto pr-2"> {}
                         <AddStockForm
-                            formId="addStockFormDialog" // Assign an ID to the form
+                            formId="addStockFormDialog" 
                             onSubmit={(data) => {
                                 handleAddStockSubmit(data);
                                 setIsAddStockDialogOpen(false);
@@ -1127,7 +1146,7 @@
                         <Button variant="outline" onClick={() => setIsAddStockDialogOpen(false)} disabled={addStockMutation.isPending}><XCircle className="mr-2 h-4 w-4"/>Cancel</Button>
                         <Button
                             type="submit"
-                            form="addStockFormDialog" // Link this button to the form
+                            form="addStockFormDialog" 
                             className="bg-primary hover:bg-primary/90"
                             disabled={addStockMutation.isPending}
                         >
@@ -1170,6 +1189,4 @@
      export default function Home() {
          return (<RequireAuth><StockManagementPageContent /></RequireAuth>);
      }
-
-
 
