@@ -28,13 +28,15 @@ import {
 import { ThemeToggle } from './theme-toggle';
 import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
 import { UserManagementDialog } from '@/components/user-management-dialog';
-import type { AdminSettings, StockItem } from '@/types'; // Ensure StockItem is imported if needed by UserManagementDialog
+import type { AdminSettings, StockItem } from '@/types';
 import { Menu, LayoutDashboard, PackageSearch, ListOrdered, Bell, UserCircle, LogOut, Settings, Users, Loader2, Briefcase } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton'; // Import the global Skeleton component
+import { cn } from '@/lib/utils'; // Import cn if TopNavbar itself uses it, though not strictly needed for Skeleton anymore
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: ['admin', 'user'] },
   { href: "/#stock-levels", label: "Stock Management", icon: PackageSearch, roles: ['admin', 'user'] },
-  { href: "/inventory", label: "Full Inventory", icon: ListOrdered, roles: ['admin', 'user'] }, // Changed role to user as well, can be adjusted
+  { href: "/inventory", label: "Full Inventory", icon: ListOrdered, roles: ['admin', 'user'] },
 ];
 
 const defaultAdminSettings: AdminSettings = {
@@ -57,10 +59,8 @@ export function TopNavbar() {
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = React.useState(false);
   const [isUserManagementDialogOpen, setIsUserManagementDialogOpen] = React.useState(false);
 
-  // Fetch admin settings and stock items if dialogs are part of TopNavbar
-  // For simplicity, assuming AdminSettingsDialog and UserManagementDialog fetch their own data or receive it if opened
-   const { data: adminSettings = defaultAdminSettings } = useQueryClient().getQueryData<AdminSettings>(['adminSettings']) ?? { data: defaultAdminSettings };
-   const { data: stockItems = [] } = useQueryClient().getQueryData<StockItem[]>(['allStockItems', user?.uid, isAdmin, []]) ?? { data: [] };
+  const { data: adminSettings = defaultAdminSettings } = useQueryClient().getQueryData<AdminSettings>(['adminSettings']) ?? { data: defaultAdminSettings };
+  const { data: stockItems = [] } = useQueryClient().getQueryData<StockItem[]>(['allStockItems', user?.uid, isAdmin, user?.assignedLocations]) ?? { data: [] };
 
 
   const handleSignOut = async () => {
@@ -72,18 +72,24 @@ export function TopNavbar() {
       await signOut(auth);
       queryClient.clear();
       toast({ title: "Signed Out" });
-      router.push('/'); // Redirect to home or login page
+      router.push('/'); 
     } catch (error) {
       toast({ variant: "destructive", title: "Sign Out Error", description: (error as Error).message });
     }
   };
 
-  const saveSettingsMutation = { // Placeholder mutation
+  const saveSettingsMutation = { 
     isPending: false,
     mutate: (settings: AdminSettings) => {
         console.log("Saving admin settings (placeholder):", settings);
-        toast({ title: "Settings (Placeholder)", description: "Save function needs implementation."});
-        queryClient.setQueryData(['adminSettings'], settings);
+        
+        const currentAdminSettings = queryClient.getQueryData<AdminSettings>(['adminSettings']) || defaultAdminSettings;
+        const updatedSettings = { ...currentAdminSettings, ...settings };
+        
+        queryClient.setQueryData(['adminSettings'], updatedSettings);
+        queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); // Invalidate alerts if settings change
+        
+        toast({ title: "Settings Saved", description: "Admin settings have been updated locally. Backend save needs implementation."});
         setIsSettingsDialogOpen(false);
     }
   };
@@ -131,18 +137,22 @@ export function TopNavbar() {
                 {navItems
                   .filter(item => user && item.roles.includes(isAdmin ? 'admin' : 'user'))
                   .map(item => (
-                    <Link
-                      key={item.label}
-                      href={item.href}
-                      onClick={() => setIsSheetOpen(false)}
-                      className={cn(
+                    <SidebarMenuButton // Assuming SidebarMenuButton is now Link compatible
+                        key={item.label}
+                        asChild
+                        className={cn(
                         "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-accent",
                         (pathname === item.href || (item.href.startsWith("/#") && pathname === "/" && typeof window !== "undefined" && window.location.hash === item.href.substring(1))) && "bg-accent text-primary font-medium"
-                      )}
+                        )}
+                        onClick={() => setIsSheetOpen(false)} // onClick on Button, not Link for sheet closing
                     >
-                      <item.icon className="h-4 w-4" />
-                      {item.label}
-                    </Link>
+                        <Link href={item.href} legacyBehavior={false}>
+                             <div className="flex items-center gap-3 w-full"> {/* Ensure icon and label are wrapped */}
+                                <item.icon className="h-4 w-4" />
+                                {item.label}
+                            </div>
+                        </Link>
+                    </SidebarMenuButton>
                   ))}
               </nav>
             </SheetContent>
@@ -153,11 +163,10 @@ export function TopNavbar() {
             StockWatch
           </Link>
           
-          {/* Desktop Navigation Links (Optional - kept minimal for now) */}
            <nav className="hidden md:flex items-center space-x-1">
              {navItems
                 .filter(item => user && item.roles.includes(isAdmin ? 'admin' : 'user'))
-                .slice(0, 2) // Show first 2 items on desktop nav, rest in sheet
+                .slice(0, 2) 
                 .map((item) => (
                 <Button
                     key={item.label}
@@ -176,7 +185,7 @@ export function TopNavbar() {
                     </Link>
                 </Button>
                 ))}
-                {navItems.length > 2 && (
+                {navItems.length > 2 && user && (
                      <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-primary hover:bg-accent/50">More</Button>
@@ -219,7 +228,6 @@ export function TopNavbar() {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                   {/* <DropdownMenuItem onClick={() => toast({title: "Profile feature coming soon."})}>Profile</DropdownMenuItem> */}
                   {isAdmin && (
                     <>
                       <DropdownMenuItem onClick={() => setIsSettingsDialogOpen(true)}>
@@ -237,13 +245,12 @@ export function TopNavbar() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button onClick={() => router.push('/')} variant="outline" size="sm">Sign In</Button> // Assuming '/' is login or will redirect
+              <Button onClick={() => router.push('/')} variant="outline" size="sm">Sign In</Button>
             )}
           </div>
         </div>
       </header>
       
-      {/* Dialogs (conditionally rendered) */}
         {isAdmin && isSettingsDialogOpen && (
             <AdminSettingsDialog
             isOpen={isSettingsDialogOpen}
@@ -264,7 +271,24 @@ export function TopNavbar() {
   );
 }
 
-// Helper Skeleton component (if not already global)
-function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded-md bg-muted", className)} />;
-}
+// Removed local Skeleton component definition
+// function Skeleton({ className }: { className?: string }) {
+//   return <div className={cn("animate-pulse rounded-md bg-muted", className)} />;
+// }
+
+// Assuming SidebarMenuButton is either a standard button or Link compatible
+// This is a placeholder if SidebarMenuButton is a custom component that needs specific Link integration
+const SidebarMenuButton = React.forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean }
+>(({ className, asChild, children, ...props }, ref) => {
+  if (asChild) {
+    return React.cloneElement(children as React.ReactElement, { ref, className, ...props });
+  }
+  return (
+    <button ref={ref} className={className} {...props}>
+      {children}
+    </button>
+  );
+});
+SidebarMenuButton.displayName = "SidebarMenuButton";
