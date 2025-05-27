@@ -17,13 +17,13 @@
     import type { StockItem, AdminSettings, StockMovementLog, AlertType } from '@/types';
     import { useState, useEffect, useCallback, useRef } from 'react';
     import { useToast } from "@/hooks/use-toast";
-    import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'; // Added useQueryClient
+    import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
     import { db, auth } from '@/lib/firebase/firebase';
     import { collection, getDocs, addDoc, updateDoc, doc, increment, deleteDoc, writeBatch, query, where, runTransaction, setDoc, getDoc, serverTimestamp, Timestamp, deleteField, or } from 'firebase/firestore';
     import { Skeleton } from '@/components/ui/skeleton';
     import { Button } from '@/components/ui/button';
     import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-    import { AlertTriangle, Loader2, Trash2, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, PoundSterling, Package, TrendingUp, TrendingDown, Clock, ShoppingCart, Building, Phone, Mail as MailIcon, UserCircle as UserIcon, Globe, Users, FileText, Map as MapIcon, Barcode, MapPin, ExternalLink, PlusCircle, MinusCircle, PackagePlus, EyeIcon } from 'lucide-react'; // Added PlusCircle, MinusCircle, PackagePlus, EyeIcon
+    import { AlertTriangle, Loader2, Trash2, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, PoundSterling, Package, TrendingUp, TrendingDown, Clock, ShoppingCart, Building, Phone, Mail as MailIcon, UserCircle as UserIconLucide, Globe, Users, FileText, Map as MapIcon, Barcode, MapPin, ExternalLink, PlusCircle, MinusCircle, PackagePlus, EyeIcon } from 'lucide-react';
     import { RequireAuth } from '@/components/auth/require-auth';
     import { useAuth } from '@/context/auth-context';
     import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
@@ -123,9 +123,9 @@
 
            try {
                const itemSnapshot = await getDocs(q);
-               const itemsList = itemSnapshot.docs.map(doc => ({
-                  id: doc.id,
-                  ...doc.data(),
+               const itemsList = itemSnapshot.docs.map(docSnap => ({ // Renamed doc to docSnap
+                  id: docSnap.id,
+                  ...docSnap.data(),
               } as StockItem));
               setLastDataFetchTime(new Date());
 
@@ -195,15 +195,15 @@
                         const userLogsQuery = query(logsCol, userInitiatedCondition);
                         movementQueries.push(userLogsQuery); // Add user's own logs query
 
-                        const allSnapshots = await Promise.all(movementQueries.map(q => getDocs(q)));
+                        const allSnapshots = await Promise.all(movementQueries.map(innerQ => getDocs(innerQ))); // Renamed q to innerQ
                         const logsSet = new Map<string, StockMovementLog>();
                         allSnapshots.forEach(snapshot => {
-                            snapshot.docs.forEach(doc => {
-                                if (!logsSet.has(doc.id)) {
-                                    logsSet.set(doc.id, {
-                                        id: doc.id,
-                                        ...doc.data(),
-                                        timestamp: doc.data().timestamp as Timestamp
+                            snapshot.docs.forEach(docSnap => { // Renamed doc to docSnap
+                                if (!logsSet.has(docSnap.id)) {
+                                    logsSet.set(docSnap.id, {
+                                        id: docSnap.id,
+                                        ...docSnap.data(),
+                                        timestamp: docSnap.data().timestamp as Timestamp
                                     } as StockMovementLog);
                                 }
                             });
@@ -220,10 +220,10 @@
               }
              try {
                 const logSnapshot = await getDocs(q);
-                 const logsList = logSnapshot.docs.map(doc => ({
-                     id: doc.id,
-                     ...doc.data(),
-                     timestamp: doc.data().timestamp as Timestamp
+                 const logsList = logSnapshot.docs.map(docSnap => ({ // Renamed doc to docSnap
+                     id: docSnap.id,
+                     ...docSnap.data(),
+                     timestamp: docSnap.data().timestamp as Timestamp
                  } as StockMovementLog));
                  logsList.sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
                  return logsList;
@@ -398,9 +398,9 @@
                           return acc;
                       }, {} as Partial<StockItem>);
 
-                     const docRef = await addDoc(itemsCol, finalNewItemData);
-                     const newItem = { id: docRef.id, ...finalNewItemData } as StockItem;
-                     await logStockMovementAndUpdateItem(docRef, newItem, quantity, newItem.currentStock, 'in');
+                     const newDocRef = await addDoc(itemsCol, finalNewItemData); // Renamed docRef to newDocRef
+                     const newItem = { id: newDocRef.id, ...finalNewItemData } as StockItem;
+                     await logStockMovementAndUpdateItem(newDocRef, newItem, quantity, newItem.currentStock, 'in');
                      return { ...newItem, quantityAdded: quantity };
                  }
              },
@@ -1078,7 +1078,12 @@
                                     <Button
                                         variant="outline"
                                         onClick={() => {
-                                            toast({ title: "View All Items", description: "Full inventory page coming soon!" });
+                                            console.log('View All Stock Items button clicked!');
+                                            toast({
+                                                title: "Functionality Note",
+                                                description: "This button is intended to navigate to a full inventory page. That page is currently under development. Thank you for your patience!",
+                                                duration: 5000,
+                                            });
                                             // Future: router.push('/inventory');
                                         }}
                                     >
