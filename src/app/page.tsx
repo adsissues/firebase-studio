@@ -10,7 +10,7 @@
     import { EditItemForm, type EditItemFormData } from '@/components/edit-item-form';
     import { ViewItemDialog } from '@/components/view-item-dialog';
     import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
-    import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    // import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'; // Tabs no longer used for forms
     import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter as ShadDialogFooter } from '@/components/ui/dialog'; 
     import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
     import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,17 +24,13 @@
     import { Skeleton } from '@/components/ui/skeleton';
     import { Button } from '@/components/ui/button';
     import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-    import { AlertTriangle, Loader2, Trash2, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, PoundSterling, Package, TrendingUp, TrendingDown, Clock, ShoppingCart, Building, Phone, Mail as MailIcon, UserCircle as UserIcon, Globe, Users, FileText, Map as MapIcon, Barcode, MapPin, ExternalLink } from 'lucide-react';
+    import { AlertTriangle, Loader2, Trash2, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, PoundSterling, Package, TrendingUp, TrendingDown, Clock, ShoppingCart, Building, Phone, Mail as MailIcon, UserCircle as UserIcon, Globe, Users, FileText, Map as MapIcon, Barcode, MapPin, ExternalLink, PlusCircle, MinusCircle } from 'lucide-react'; // Added PlusCircle, MinusCircle
     import { RequireAuth } from '@/components/auth/require-auth';
     import { useAuth } from '@/context/auth-context';
-    // ThemeProvider is now in AppProviders
-    // import { ThemeProvider } from "@/components/theme-provider";
     import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
     import { UserManagementDialog } from '@/components/user-management-dialog';
     import { searchItemByPhoto, type SearchItemByPhotoInput } from '@/ai/flows/search-item-by-photo-flow';
     import { DashboardKPIs, type KPIData } from '@/components/dashboard-kpis';
-    // import { LocationChart } from '@/components/charts/location-chart'; // Removed
-    // import { MovementTrendChart } from '@/components/charts/movement-trend-chart'; // Removed
     import { PageHeader } from '@/components/page-header';
     import { ActionsPanel } from '@/components/actions-panel';
     import { Separator } from '@/components/ui/separator';
@@ -44,18 +40,6 @@
     import { ExportReportsButton } from '@/components/export-reports-button';
     import { getItemStatusInfo } from '@/components/stock-dashboard'; 
 
-    // QueryClient is now defined in RootLayout, so this local instance can be removed or commented out.
-    // const queryClient = new QueryClient({
-    //   queryCache: new QueryCache({
-    //     onError: (error, queryInstance) => {
-    //       if ((error as any)?.code === 'permission-denied' || (error as any)?.code === 'unauthenticated') {
-    //         console.warn("Authentication error detected by React Query. Signing out...");
-    //         if (auth) signOut(auth).catch(signOutError => console.error("Error signing out after query error:", signOutError));
-    //       }
-    //       console.error(`Query Error [${queryInstance.queryKey}]:`, error);
-    //     },
-    //   }),
-    // });
 
     const defaultAdminSettings: AdminSettings = {
         emailNotifications: true,
@@ -90,7 +74,11 @@
       const [systemAlerts, setSystemAlerts] = React.useState<AlertType[]>([]);
       const [lastDataFetchTime, setLastDataFetchTime] = React.useState<Date | null>(null);
       const toastedAlertIds = useRef(new Set<string>());
-      const queryClient = useQueryClient(); // Get client from context
+      const queryClient = useQueryClient(); 
+
+      const [isAddStockDialogOpen, setIsAddStockDialogOpen] = useState(false);
+      const [isStockOutDialogOpen, setIsStockOutDialogOpen] = useState(false);
+
 
         const { data: adminSettings = defaultAdminSettings, isLoading: isLoadingSettings, refetch: refetchSettings } = useQuery<AdminSettings>({
             queryKey: ['adminSettings'],
@@ -193,30 +181,20 @@
               } else {
                   const userInitiatedCondition = where("userId", "==", user.uid);
                   let conditions = [userInitiatedCondition];
-                  // Non-admin users see movements for items they own or in their assigned locations.
-                  // This part is complex with Firestore 'or' limitations if items are many.
-                  // For now, let's focus on user-initiated and items in assigned locations.
+                  
                   if (assignedLocations && assignedLocations.length > 0) {
-                    // Fetch items in assigned locations first (can be inefficient if many items/locations)
                     const accessibleItemsQuery = query(collection(db, 'stockItems'), where("location", "in", assignedLocations));
                     const accessibleItemsSnap = await getDocs(accessibleItemsQuery);
                     const accessibleItemIds = accessibleItemsSnap.docs.map(d => d.id);
 
                     if (accessibleItemIds.length > 0) {
-                        // Firestore 'in' query limit is 30. Handle if more.
                         const itemIdsChunks = [];
                         for (let i = 0; i < accessibleItemIds.length; i += 30) {
                             itemIdsChunks.push(accessibleItemIds.slice(i, i + 30));
                         }
                         const locationItemConditions = itemIdsChunks.map(chunk => where("itemId", "in", chunk));
                         if (locationItemConditions.length > 0) {
-                           // This creates multiple 'or' conditions which might require composite indexes.
-                           // A simpler approach for non-admins might be to just show their own movements.
-                           // Or, if performance allows, fetch all movements and filter client-side based on owned/assigned items.
-                           // For this example, let's stick to user-initiated to avoid query complexity.
-                           // q = query(logsCol, or(userInitiatedCondition, ...locationItemConditions));
-                           // Fallback to just user-initiated for simplicity if location-based becomes too complex
-                           q = query(logsCol, userInitiatedCondition);
+                           q = query(logsCol, userInitiatedCondition); // Simplified for now, complex OR queries can be tricky
                         } else {
                             q = query(logsCol, userInitiatedCondition);
                         }
@@ -817,7 +795,7 @@
                 }
             }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [stockItems, adminSettings, isLoading, toast, isAdmin, queryClient, systemAlerts /* Added systemAlerts to dependencies */]); 
+        }, [stockItems, adminSettings, isLoading, toast, isAdmin, queryClient, systemAlerts ]); 
 
 
         const handleSaveSettings = (settings: AdminSettings) => saveSettingsMutation.mutate(settings);
@@ -888,8 +866,6 @@
                         movementCounts[log.itemId].count++; 
                         movementCounts[log.itemId].totalMoved += Math.abs(log.quantityChange); 
                     } else {
-                        // Handle logs for items that might have been deleted but still have logs
-                        // Or, decide if these logs should be filtered out earlier (e.g., in the query)
                         if (!movementCounts[log.itemId]) {
                              movementCounts[log.itemId] = { name: log.itemName || "Unknown Item (Deleted?)", count: 0, totalMoved: 0 };
                         }
@@ -1014,17 +990,17 @@
                         ))}
                     </div>
                  )}
-
-                <Card className="mt-6 shadow-lg">
-                    <CardHeader><CardTitle>Log Stock Out</CardTitle></CardHeader>
-                    <CardContent><StockOutForm items={stockItems.filter(item => item.currentStock > 0)} onSubmit={handleStockOutSubmit} isLoading={stockOutMutation.isPending} currentUser={user} /></CardContent>
-                </Card>
                 
+                <div className="mt-6">
+                    <Button onClick={() => setIsStockOutDialogOpen(true)} className="w-full sm:w-auto">
+                        <MinusCircle className="mr-2 h-4 w-4" /> Log Stock Out
+                    </Button>
+                </div>
+
                 <div className="mt-6">
                     <ActivityFeed movements={stockMovements} isLoading={isLoadingMovements} />
                 </div>
                 
-                <ViewItemDialog isOpen={isViewDialogOpen} onClose={() => setIsViewDialogOpen(false)} item={itemToView} />
              </div>
         );
       }
@@ -1045,12 +1021,12 @@
             <DashboardKPIs data={kpiData} isLoading={isLoading} />
             <AlertsPanel alerts={systemAlerts} onDismissAlert={(id) => {
                 setSystemAlerts(prev => prev.filter(a => a.id !== id));
-                toastedAlertIds.current.delete(id); // Also remove from toasted if dismissed manually
+                toastedAlertIds.current.delete(id); 
             }} onItemAction={handleReorderClick}/>
 
 
            <div className="grid grid-cols-1 md:grid-cols-1 gap-4 my-6">
-               {/* Charts removed as per user request */}
+              
            </div>
 
            <main className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="stock-levels">
@@ -1087,11 +1063,18 @@
                       </CardContent>
                    </Card>
                     <Card className="shadow-md">
-                         <Tabs defaultValue="add-stock" className="w-full">
-                            <CardHeader className="p-4 border-b"><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="add-stock">Add/Restock Item</TabsTrigger><TabsTrigger value="stock-out">Log Stock Out</TabsTrigger></TabsList></CardHeader>
-                           <TabsContent value="add-stock"><CardContent className="p-4"><AddStockForm onSubmit={handleAddStockSubmit} isLoading={addStockMutation.isPending} /></CardContent></TabsContent>
-                           <TabsContent value="stock-out"><CardContent className="p-4"><StockOutForm items={stockItems.filter(item => item.currentStock > 0)} onSubmit={handleStockOutSubmit} isLoading={stockOutMutation.isPending} currentUser={user} /></CardContent></TabsContent>
-                         </Tabs>
+                        <CardHeader>
+                            <CardTitle>Stock Actions</CardTitle>
+                            <CardDescription>Manage your inventory by adding, restocking, or logging out items.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex flex-col sm:flex-row gap-4">
+                            <Button onClick={() => setIsAddStockDialogOpen(true)} className="flex-1">
+                                <PlusCircle className="mr-2 h-4 w-4" /> Add / Restock Item
+                            </Button>
+                            <Button onClick={() => setIsStockOutDialogOpen(true)} variant="outline" className="flex-1">
+                                <MinusCircle className="mr-2 h-4 w-4" /> Log Stock Out
+                            </Button>
+                        </CardContent>
                     </Card>
                </div>
               <div className="lg:col-span-1 space-y-6 flex flex-col">
@@ -1113,6 +1096,43 @@
                 </div>
                 <Separator className="my-6"/><p className="text-sm text-muted-foreground text-center">More reports and analytics coming soon.</p>
             </section>
+
+           {/* Dialogs for Add/Restock and Stock Out */}
+            <Dialog open={isAddStockDialogOpen} onOpenChange={setIsAddStockDialogOpen}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Add/Restock Item</DialogTitle>
+                        <DialogDescription>Enter details to add new stock or restock an existing item.</DialogDescription>
+                    </DialogHeader>
+                    <AddStockForm 
+                        onSubmit={(data) => {
+                            handleAddStockSubmit(data);
+                            setIsAddStockDialogOpen(false); 
+                        }} 
+                        isLoading={addStockMutation.isPending} 
+                    />
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isStockOutDialogOpen} onOpenChange={setIsStockOutDialogOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Log Stock Out</DialogTitle>
+                        <DialogDescription>Select an item and quantity to log stock out.</DialogDescription>
+                    </DialogHeader>
+                    <StockOutForm 
+                        items={stockItems.filter(item => item.currentStock > 0)} 
+                        onSubmit={(data) => {
+                            handleStockOutSubmit(data);
+                            setIsStockOutDialogOpen(false); 
+                        }} 
+                        isLoading={stockOutMutation.isPending} 
+                        currentUser={user} 
+                    />
+                </DialogContent>
+            </Dialog>
+
+
            <ViewItemDialog isOpen={isViewDialogOpen} onClose={() => setIsViewDialogOpen(false)} item={itemToView} />
            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Edit Item: {itemToEdit?.itemName}</DialogTitle><DialogDescription>Make changes to the item details below. Click save when done.</DialogDescription></DialogHeader>{itemToEdit && (<EditItemForm item={itemToEdit} onSubmit={handleEditItemSubmit} isLoading={editItemMutation.isPending} onCancel={() => setIsEditDialogOpen(false)} />)}</DialogContent></Dialog>
            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete {itemToDelete?.itemName}. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)} disabled={deleteItemMutation.isPending}>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmDeleteItem} disabled={deleteItemMutation.isPending} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">{deleteItemMutation.isPending ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>) : (<><Trash2 className="mr-2 h-4 w-4" /> Delete Item</>)}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
@@ -1124,7 +1144,7 @@
      }
 
      export default function Home() {
-         // ThemeProvider and QueryClientProvider are now in RootLayout / AppProviders
          return (<RequireAuth><StockManagementPageContent /></RequireAuth>);
      }
 
+    
