@@ -16,7 +16,7 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea'; 
+import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { PlusCircle, Loader2, Camera, MapPin, ScanBarcode, VideoOff, PackagePlus, Building, User as UserIcon, Phone, Mail as MailIcon, Globe } from 'lucide-react';
 import type { StockItem, LocationCoords } from '@/types';
@@ -29,6 +29,7 @@ import { useAuth } from '@/context/auth-context';
 interface AddStockFormProps {
   onSubmit: (data: AddStockFormData) => void;
   isLoading?: boolean;
+  formId: string; // Added to link external submit button
 }
 
 const formSchema = z.object({
@@ -43,7 +44,7 @@ const formSchema = z.object({
     .int({ message: 'Minimum stock must be a whole number.' })
     .nonnegative({ message: 'Minimum stock cannot be negative.' })
     .optional(),
-  overstockThreshold: z.coerce 
+  overstockThreshold: z.coerce
     .number({ invalid_type_error: 'Overstock threshold must be a number.' })
     .int({ message: 'Overstock threshold must be a whole number.' })
     .positive({ message: 'Overstock threshold must be positive.' })
@@ -53,7 +54,7 @@ const formSchema = z.object({
   category: z.string().max(50).optional().or(z.literal('')),
   photoUrl: z.string().url({ message: "Please enter a valid URL or capture a photo." }).optional().or(z.literal('')),
   locationCoords: z.object({ latitude: z.number(), longitude: z.number() }).optional(),
-  costPrice: z.coerce.number().nonnegative().optional(), 
+  costPrice: z.coerce.number().nonnegative().optional(),
 
   // Supplier Details
   supplierName: z.string().max(100).optional().or(z.literal('')),
@@ -62,12 +63,12 @@ const formSchema = z.object({
   supplierEmail: z.string().email({ message: "Invalid email address." }).max(100).optional().or(z.literal('')),
   supplierWebsite: z.string().url({ message: "Please enter a valid URL." }).max(100).optional().or(z.literal('')),
   supplierAddress: z.string().max(200).optional().or(z.literal('')),
-  description: z.string().max(500).optional().or(z.literal('')), 
+  description: z.string().max(500).optional().or(z.literal('')),
 });
 
 export type AddStockFormData = z.infer<typeof formSchema>;
 
-export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps) {
+export function AddStockForm({ onSubmit, isLoading = false, formId }: AddStockFormProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const videoRef = React.useRef<HTMLVideoElement>(null);
@@ -117,9 +118,9 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
     try {
       const result = await scanBarcode();
       if (result.isPlaceholder) {
-        toast({ 
-            title: "Manual Barcode Entry", 
-            description: "Scanner not available. Please type the barcode." 
+        toast({
+            title: "Manual Barcode Entry",
+            description: "Scanner not available. Please type the barcode."
         });
         // Optionally focus the barcode input field
         form.setFocus('barcode');
@@ -129,10 +130,10 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
       } else {
         toast({ variant: "destructive", title: "Scan Unsuccessful", description: "No barcode captured." });
       }
-    } catch (error) { 
+    } catch (error) {
         toast({ variant: "destructive", title: "Scan Error", description: "Could not initialize scanner." });
-    } finally { 
-        setIsScanningBarcode(false); 
+    } finally {
+        setIsScanningBarcode(false);
     }
   };
 
@@ -188,9 +189,9 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4 rounded-lg border p-6 shadow-sm">
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} id={formId} className="space-y-4 rounded-lg p-1"> {/* Removed border, p-6, shadow */}
         <fieldset disabled={isLoading || !user} className="space-y-4">
-            <h3 className="text-xl font-semibold text-primary mb-4 col-span-full">Add/Restock Item Details</h3>
+            {/* No H3 title here, it's in DialogHeader */}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField control={form.control} name="itemName" render={({ field }) => (<FormItem><FormLabel>Item Name*</FormLabel><FormControl><Input placeholder="e.g., Large Red Box" {...field} className="input-uppercase" /></FormControl><FormMessage /></FormItem>)} />
@@ -267,10 +268,7 @@ export function AddStockForm({ onSubmit, isLoading = false }: AddStockFormProps)
                  </div>
              </FormItem>
         </fieldset>
-        <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading || isCapturingLocation || isScanningBarcode || !user}>
-          {isLoading ? (<Loader2 className="mr-2 h-4 w-4 animate-spin" />) : (<PackagePlus className="mr-2 h-4 w-4" />)}
-          {isLoading ? 'Adding...' : 'Add Stock / Restock'}
-        </Button>
+        {/* Submit button removed from here, will be in DialogFooter */}
       </form>
     </Form>
   );
