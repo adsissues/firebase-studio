@@ -3,11 +3,8 @@ import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
-// Removed AuthProvider, ThemeProvider, SidebarProvider, TanstackQueryClientProvider, QueryClient imports
-// They are now handled by AppProviders
 import { AppProviders } from '@/components/providers'; // Import the new providers component
-import { AppSidebar } from '@/components/app-sidebar';
-import { SidebarInset } from "@/components/ui/sidebar";
+import { TopNavbar } from '@/components/top-navbar'; // Import the new TopNavbar
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -31,9 +28,6 @@ export const metadata: Metadata = {
   },
 };
 
-// QueryClient instance is now created within AppProviders
-// const queryClient = new QueryClient(); // REMOVE THIS
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -42,12 +36,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <AppProviders> {/* Use the new AppProviders component to wrap everything */}
-          <div className="flex min-h-screen bg-background">
-            <AppSidebar />
-            <SidebarInset className="flex-1 flex flex-col overflow-y-auto">
+        <AppProviders>
+          <div className="flex min-h-screen flex-col bg-background">
+            <TopNavbar /> {/* Add TopNavbar here */}
+            <main className="flex-1 flex flex-col overflow-y-auto"> {/* Main content area */}
               {children}
-            </SidebarInset>
+            </main>
           </div>
           <Toaster />
         </AppProviders>

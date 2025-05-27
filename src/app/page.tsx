@@ -26,11 +26,12 @@
     import { AlertTriangle, Loader2, Trash2, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, PoundSterling, Package, TrendingUp, TrendingDown, Clock, ShoppingCart, Building, Phone, Mail as MailIcon, UserCircle as UserIconLucide, Globe, Users, FileText, Map as MapIcon, Barcode, MapPin, ExternalLink, PlusCircle, MinusCircle, PackagePlus, EyeIcon } from 'lucide-react';
     import { RequireAuth } from '@/components/auth/require-auth';
     import { useAuth } from '@/context/auth-context';
-    import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
-    import { UserManagementDialog } from '@/components/user-management-dialog';
+    // AdminSettingsDialog and UserManagementDialog are now part of TopNavbar or managed globally if needed
+    // import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
+    // import { UserManagementDialog } from '@/components/user-management-dialog';
     import { searchItemByPhoto, type SearchItemByPhotoInput } from '@/ai/flows/search-item-by-photo-flow';
     import { DashboardKPIs, type KPIData } from '@/components/dashboard-kpis';
-    import { PageHeader } from '@/components/page-header';
+    import { PageHeader } from '@/components/page-header'; // PageHeader might still be used for titles
     import { ActionsPanel } from '@/components/actions-panel';
     import { Separator } from '@/components/ui/separator';
     import { Badge } from "@/components/ui/badge";
@@ -65,8 +66,9 @@
       const [itemToView, setItemToView] = useState<StockItem | null>(null);
       const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
       const [itemToDelete, setItemToDelete] = useState<StockItem | null>(null);
-      const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
-      const [isUserManagementDialogOpen, setIsUserManagementDialogOpen] = useState(false);
+      // Settings and User Management dialog states might be moved to TopNavbar or managed globally
+      // const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
+      // const [isUserManagementDialogOpen, setIsUserManagementDialogOpen] = useState(false);
       const [isPhotoSearchOpen, setIsPhotoSearchOpen] = useState(false);
       const [photoSearchLoading, setPhotoSearchLoading] = useState(false);
       const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
@@ -106,7 +108,7 @@
 
 
       const { data: stockItems = [], isLoading: isLoadingItems, error: fetchError, refetch: refetchItems } = useQuery<StockItem[]>({
-        queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations],
+        queryKey: ['allStockItems', user?.uid, isAdmin, assignedLocations], // Changed query key from stockItems to allStockItems for clarity
         queryFn: async () => {
            if (!user) return [];
            const itemsCol = collection(db, 'stockItems');
@@ -125,7 +127,7 @@
 
            try {
                const itemSnapshot = await getDocs(q);
-               const itemsList = itemSnapshot.docs.map(docSnap => ({ // Renamed doc to docSnap
+               const itemsList = itemSnapshot.docs.map(docSnap => ({
                   id: docSnap.id,
                   ...docSnap.data(),
               } as StockItem));
@@ -195,12 +197,12 @@
                             query(logsCol, where("itemId", "in", chunk))
                         );
                         const userLogsQuery = query(logsCol, userInitiatedCondition);
-                        movementQueries.push(userLogsQuery); // Add user's own logs query
+                        movementQueries.push(userLogsQuery); 
 
-                        const allSnapshots = await Promise.all(movementQueries.map(innerQ => getDocs(innerQ))); // Renamed q to innerQ
+                        const allSnapshots = await Promise.all(movementQueries.map(innerQ => getDocs(innerQ))); 
                         const logsSet = new Map<string, StockMovementLog>();
                         allSnapshots.forEach(snapshot => {
-                            snapshot.docs.forEach(docSnap => { // Renamed doc to docSnap
+                            snapshot.docs.forEach(docSnap => { 
                                 if (!logsSet.has(docSnap.id)) {
                                     logsSet.set(docSnap.id, {
                                         id: docSnap.id,
@@ -222,7 +224,7 @@
               }
              try {
                 const logSnapshot = await getDocs(q);
-                 const logsList = logSnapshot.docs.map(docSnap => ({ // Renamed doc to docSnap
+                 const logsList = logSnapshot.docs.map(docSnap => ({ 
                      id: docSnap.id,
                      ...docSnap.data(),
                      timestamp: docSnap.data().timestamp as Timestamp
@@ -400,14 +402,14 @@
                           return acc;
                       }, {} as Partial<StockItem>);
 
-                     const newDocRef = await addDoc(itemsCol, finalNewItemData); // Renamed docRef to newDocRef
+                     const newDocRef = await addDoc(itemsCol, finalNewItemData); 
                      const newItem = { id: newDocRef.id, ...finalNewItemData } as StockItem;
                      await logStockMovementAndUpdateItem(newDocRef, newItem, quantity, newItem.currentStock, 'in');
                      return { ...newItem, quantityAdded: quantity };
                  }
              },
              onSuccess: (result) => {
-                 queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations] });
+                 queryClient.invalidateQueries({ queryKey: ['allStockItems', user?.uid, isAdmin, assignedLocations] });
                  queryClient.invalidateQueries({ queryKey: ['systemAlerts'] });
                  toast({
                      variant: "default",
@@ -499,7 +501,7 @@
                  return { id: updatedDocSnapAfter.id, ...updatedDocSnapAfter.data() } as StockItem;
             },
             onSuccess: (updatedItem) => {
-                 queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations] });
+                 queryClient.invalidateQueries({ queryKey: ['allStockItems', user?.uid, isAdmin, assignedLocations] });
                  queryClient.invalidateQueries({ queryKey: ['systemAlerts'] });
                 setIsEditDialogOpen(false);
                 setItemToEdit(null);
@@ -545,7 +547,7 @@
                 return itemToDelete.id;
             },
             onSuccess: (itemId) => {
-                 queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations] });
+                 queryClient.invalidateQueries({ queryKey: ['allStockItems', user?.uid, isAdmin, assignedLocations] });
                  queryClient.invalidateQueries({ queryKey: ['stockMovements', user?.uid, isAdmin, assignedLocations] });
                  queryClient.invalidateQueries({ queryKey: ['systemAlerts'] });
                  setIsDeleteDialogOpen(false);
@@ -585,7 +587,7 @@
                  return { ...data, itemName: itemToUpdate.itemName };
              },
             onSuccess: (data) => {
-                queryClient.invalidateQueries({ queryKey: ['stockItems', user?.uid, isAdmin, assignedLocations] });
+                queryClient.invalidateQueries({ queryKey: ['allStockItems', user?.uid, isAdmin, assignedLocations] });
                 queryClient.invalidateQueries({ queryKey: ['systemAlerts'] });
                 toast({ variant: "default", title: "Stock Updated", description: `${data.quantity} units of ${data.itemName || 'item'} removed.`});
             },
@@ -595,7 +597,7 @@
             },
         });
 
-         const saveSettingsMutation = useMutation({
+         const saveSettingsMutation = useMutation({ // This mutation is defined here but its dialog trigger is in TopNavbar
             mutationFn: async (newSettings: AdminSettings) => {
                 if (!isAdmin || !db) throw new Error("Permission denied or DB not available.");
                 const settingsDocRef = doc(db, 'settings', 'admin');
@@ -607,7 +609,7 @@
                  queryClient.invalidateQueries({ queryKey: ['systemAlerts'] });
                  refetchSettings();
                 toast({ title: "Settings Saved", description: "Admin settings have been updated." });
-                setIsSettingsDialogOpen(false);
+                // setIsSettingsDialogOpen(false); // Dialog state is managed in TopNavbar
             },
             onError: (error: any) => {
                 toast({ variant: "destructive", title: "Error Saving Settings", description: error.message || "Could not save settings."});
@@ -813,7 +815,7 @@
         }, [stockItems, adminSettings, isLoading, toast, isAdmin, queryClient ]);
 
 
-        const handleSaveSettings = (settings: AdminSettings) => saveSettingsMutation.mutate(settings);
+        // const handleSaveSettings = (settings: AdminSettings) => saveSettingsMutation.mutate(settings); // Moved to TopNavbar context potentially
         const handleRetryFetch = () => { if (fetchError) refetchItems(); refetchMovements(); };
 
          const kpiData: KPIData | null = React.useMemo(() => {
@@ -946,7 +948,8 @@
       if (!isAdmin && user) {
         return (
              <div className="container mx-auto p-4 md:p-6 lg:p-8">
-                <PageHeader user={user} isAdmin={false} isLoading={isLoading} onSettingsClick={() => {}} onManageUsersClick={() => {}} />
+                 {/* PageHeader is rendered in RootLayout now or can be placed here if specific content is needed */}
+                 {/* <PageHeader user={user} isAdmin={false} isLoading={isLoading} onSettingsClick={() => {}} onManageUsersClick={() => {}} /> */}
                  <p className="text-sm text-muted-foreground mb-4 text-right">{lastUpdatedString}</p>
                  <Card className="shadow-lg mb-6">
                      <CardHeader>
@@ -1028,8 +1031,7 @@
              user={user}
              isAdmin={isAdmin}
              isLoading={isLoading}
-             onSettingsClick={() => setIsSettingsDialogOpen(true)}
-             onManageUsersClick={() => setIsUserManagementDialogOpen(true)}
+             // onSettingsClick and onManageUsersClick are now handled by TopNavbar
              lastLogin={user?.metadata?.lastSignInTime ? formatDistanceToNow(new Date(user.metadata.lastSignInTime), {addSuffix: true}) : undefined}
            />
            <p className="text-sm text-muted-foreground mb-4 text-right">{lastUpdatedString}</p>
@@ -1181,8 +1183,7 @@
            <ViewItemDialog isOpen={isViewDialogOpen} onClose={() => setIsViewDialogOpen(false)} item={itemToView} />
            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}><DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col"><DialogHeader><DialogTitle>Edit Item: {itemToEdit?.itemName}</DialogTitle><DialogDescription>Make changes to the item details below. Click save when done.</DialogDescription></DialogHeader><div className="flex-grow overflow-y-auto pr-2">{itemToEdit && (<EditItemForm item={itemToEdit} onSubmit={handleEditItemSubmit} isLoading={editItemMutation.isPending} onCancel={() => setIsEditDialogOpen(false)} />)}</div></DialogContent></Dialog>
            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete {itemToDelete?.itemName}. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)} disabled={deleteItemMutation.isPending}>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmDeleteItem} disabled={deleteItemMutation.isPending} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">{deleteItemMutation.isPending ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>) : (<><Trash2 className="mr-2 h-4 w-4" /> Delete Item</>)}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-               {isAdmin && isSettingsDialogOpen && (<AdminSettingsDialog isOpen={isSettingsDialogOpen} onClose={() => setIsSettingsDialogOpen(false)} onSave={handleSaveSettings} currentSettings={adminSettings} isLoading={saveSettingsMutation.isPending} />)}
-               {isAdmin && isUserManagementDialogOpen && (<UserManagementDialog isOpen={isUserManagementDialogOpen} onClose={() => setIsUserManagementDialogOpen(false)} allStockItems={stockItems} />)}
+               {/* AdminSettingsDialog and UserManagementDialog are now triggered from TopNavbar */}
                <Dialog open={isPhotoSearchOpen} onOpenChange={setIsPhotoSearchOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Search Item by Photo</DialogTitle><DialogDescription>Center the item in the camera view and capture to search.</DialogDescription></DialogHeader><div className="space-y-4 py-4"><div className="relative aspect-video w-full bg-muted rounded-md overflow-hidden"><video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline /><canvas ref={canvasRef} style={{ display: 'none' }} />{hasCameraPermission === false && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-destructive-foreground p-4"><VideoOff className="h-12 w-12 mb-2" /><p className="text-lg font-semibold">Camera Access Denied</p><p className="text-sm text-center">Please allow camera access in your browser settings.</p></div>)}{hasCameraPermission === null && !photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Accessing Camera...</p></div>)}{photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-primary-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Analyzing Photo...</p></div>)}</div><Button type="button" onClick={handlePhotoSearchCapture} disabled={photoSearchLoading || hasCameraPermission !== true} className="w-full" size="lg">{photoSearchLoading ? (<Loader2 className="mr-2 h-5 w-5 animate-spin" />) : (<Camera className="mr-2 h-5 w-5" />)}{photoSearchLoading ? 'Searching...' : 'Capture & Search'}</Button></div><ShadDialogFooter><Button variant="outline" onClick={() => setIsPhotoSearchOpen(false)} disabled={photoSearchLoading}><XCircle className="mr-2 h-4 w-4"/> Cancel</Button></ShadDialogFooter></DialogContent></Dialog>
          </div>
        );
