@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { StockItem } from '@/types';
-import { Barcode, MapPin, Tag, Building, Info, Package, AlertTriangle, Circle, MapPinned, XCircle, ImageIcon, UserCircle as UserIconLucide, TrendingDown, PoundSterling, Phone, Mail as MailIcon, Globe, Clock } from 'lucide-react';
+import { Barcode, MapPin, Tag, Building, Info, Package, AlertTriangle, Circle, MapPinned, XCircle, ImageIcon, UserCircle as UserIconLucide, TrendingDown, PoundSterling, Phone, Mail as MailIcon, Globe, Clock, Archive } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from 'date-fns'; 
@@ -109,6 +109,8 @@ export function ViewItemDialog({ isOpen, onClose, item }: ViewItemDialogProps) {
             {renderDetailRow("Category", item.category, Tag)}
             {renderDetailRow("Barcode", item.barcode, Barcode)}
             {renderDetailRow("Storage Location", item.location, MapPin)}
+            {renderDetailRow("Rack", item.rack, Archive)}
+            {renderDetailRow("Shelf/Bin", item.shelf, Archive)}
             {item.locationCoords && renderDetailRow("GPS Coordinates", `Lat: ${item.locationCoords.latitude.toFixed(5)}, Lon: ${item.locationCoords.longitude.toFixed(5)}`, MapPinned)}
             {item.description && renderDetailRow("Description", item.description, Info)}
             {isAdmin && item.userId && renderDetailRow("Owner User ID", item.userId, UserIconLucide)}

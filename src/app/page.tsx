@@ -136,6 +136,8 @@
                   itemName: item.itemName || 'Unknown Item',
                   barcode: item.barcode || undefined,
                   location: item.location || undefined,
+                  rack: item.rack || undefined,
+                  shelf: item.shelf || undefined,
                   description: item.description || undefined,
                   category: item.category || undefined,
                   supplier: item.supplier || undefined,
@@ -356,6 +358,8 @@
                             updatedData.supplierEmail = formData.supplierEmail ?? currentData.supplierEmail;
                             updatedData.supplierWebsite = formData.supplierWebsite ?? currentData.supplierWebsite;
                             updatedData.supplierAddress = formData.supplierAddress ?? currentData.supplierAddress;
+                            updatedData.rack = formData.rack ?? currentData.rack;
+                            updatedData.shelf = formData.shelf ?? currentData.shelf;
 
 
                            const finalUpdateData = Object.keys(updatedData).reduce((acc, key) => {
@@ -391,6 +395,8 @@
                          supplierEmail: formData.supplierEmail,
                          supplierWebsite: formData.supplierWebsite,
                          supplierAddress: formData.supplierAddress,
+                         rack: formData.rack,
+                         shelf: formData.shelf,
                      };
                      const finalNewItemData = Object.entries(newItemDataWithStock).reduce((acc, [key, value]) => {
                           if (value !== undefined) acc[key as keyof typeof acc] = value;
@@ -661,6 +667,8 @@
               overstockThreshold: data.overstockThreshold === undefined || data.overstockThreshold === null ? undefined : Number(data.overstockThreshold),
               barcode: data.barcode || undefined,
               location: data.location || undefined,
+              rack: data.rack || undefined,
+              shelf: data.shelf || undefined,
               description: data.description || undefined,
               category: data.category || undefined,
               supplier: data.supplier || undefined,
@@ -1058,8 +1066,8 @@
                     isLoading={isMutating || hasCameraPermission === false || isLoading}
                     frequentlyUsedItems={stockItems.filter(item => item.currentStock < (item.minimumStock ?? adminSettings.lowStockThreshold) && item.currentStock > 0).slice(0,5)}
                     onQuickAction={(action, item) => {
-                        if (action === 'in') handleAddStockSubmit({ itemName: item.itemName, quantity: 1, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location, supplierName: item.supplierName, formId: 'addStockFormDialog' });
-                        else if (action === 'restock') handleAddStockSubmit({ itemName: item.itemName, quantity: 10, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location, supplierName: item.supplierName, formId: 'addStockFormDialog' });
+                        if (action === 'in') handleAddStockSubmit({ itemName: item.itemName, quantity: 1, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location, supplierName: item.supplierName, rack:item.rack, shelf: item.shelf, formId: 'addStockFormDialog' });
+                        else if (action === 'restock') handleAddStockSubmit({ itemName: item.itemName, quantity: 10, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location, supplierName: item.supplierName, rack:item.rack, shelf: item.shelf, formId: 'addStockFormDialog' });
                         else if (action === 'out') handleStockOutSubmit({ itemId: item.id, quantity: 1 });
                     }}
                     onBarcodeScanned={(barcode) => setSearchQuery(barcode)} // Handle scanned barcode

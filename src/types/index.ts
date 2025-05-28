@@ -1,3 +1,4 @@
+
 import type { User as FirebaseUser } from 'firebase/auth'; 
 import type { Timestamp } from 'firebase/firestore'; 
 
@@ -14,6 +15,8 @@ export interface StockItem {
   minimumStock?: number;
   overstockThreshold?: number; 
   location?: string; // Can be more specific e.g., "Building A, Shelf 3, Bin 2"
+  rack?: string; // New: For rack location
+  shelf?: string; // New: For shelf/bin location
   description?: string;
   category?: string;
   supplier?: string; 
@@ -77,3 +80,4 @@ export interface AlertType {
   // actions?: { label: string; onClick: () => void }[];
 }
 
+    

@@ -18,7 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Save, Loader2, Camera, MapPin, ScanBarcode, VideoOff, XCircle, Building, User as UserIcon, Phone, Mail as MailIcon, Globe } from 'lucide-react';
+import { Save, Loader2, Camera, MapPin, ScanBarcode, VideoOff, XCircle, Building, User as UserIcon, Phone, Mail as MailIcon, Globe, Archive } from 'lucide-react';
 import type { StockItem, LocationCoords } from '@/types';
 import { scanBarcode } from '@/services/barcode-scanner';
 import { captureProductPhoto } from '@/services/camera';
@@ -50,6 +50,8 @@ const formSchema = z.object({
     .optional(),
   barcode: z.string().max(50).optional().or(z.literal('')),
   location: z.string().max(100).optional().or(z.literal('')),
+  rack: z.string().max(50).optional().or(z.literal('')), // New field
+  shelf: z.string().max(50).optional().or(z.literal('')), // New field
   description: z.string().max(500).optional().or(z.literal('')),
   category: z.string().max(50).optional().or(z.literal('')),
   supplier: z.string().max(100).optional().or(z.literal('')), // Legacy field
@@ -90,6 +92,8 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
       overstockThreshold: item.overstockThreshold ?? undefined,
       barcode: item.barcode || '',
       location: item.location || '',
+      rack: item.rack || '',
+      shelf: item.shelf || '',
       description: item.description || '',
       category: item.category || '',
       supplier: item.supplier || '', // Legacy
@@ -226,15 +230,21 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
 
             <FormField control={form.control} name="location" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Storage Location</FormLabel>
+                  <FormLabel>General Storage Location / Area</FormLabel>
                    <div className="flex gap-2 items-end">
-                       <FormControl><Input placeholder="e.g., Shelf A3, Bin 5" {...field} className="flex-grow input-uppercase" /></FormControl>
+                       <FormControl><Input placeholder="e.g., Warehouse A, Cold Storage" {...field} className="flex-grow input-uppercase" /></FormControl>
                         <Button type="button" variant="outline" size="icon" onClick={handleGetLocation} disabled={isCapturingLocation || isLoading} aria-label="Get Current Location">{isCapturingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}</Button>
                     </div>
-                  <FormDescription>{capturedLocation ? `(Using GPS: ${capturedLocation.latitude.toFixed(4)}, ${capturedLocation.longitude.toFixed(4)})` : 'Manually enter or capture current GPS.'}</FormDescription>
+                  <FormDescription>{capturedLocation ? `(Using GPS: ${capturedLocation.latitude.toFixed(4)}, ${capturedLocation.longitude.toFixed(4)})` : 'General area where the item is stored.'}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )} />
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="rack" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><Archive className="h-4 w-4 text-muted-foreground" />Rack Number/ID</FormLabel><FormControl><Input placeholder="e.g., R12, Section 3" {...field} className="input-uppercase" /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="shelf" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><Archive className="h-4 w-4 text-muted-foreground" />Shelf/Bin Number</FormLabel><FormControl><Input placeholder="e.g., S05, B-101" {...field} className="input-uppercase" /></FormControl><FormMessage /></FormItem>)} />
+            </div>
+
 
             <div className="pt-4 border-t mt-4 col-span-full">
                 <h4 className="text-lg font-semibold text-primary mb-3">Supplier Details</h4>

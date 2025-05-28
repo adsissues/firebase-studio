@@ -18,7 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { PlusCircle, Loader2, Camera, MapPin, ScanBarcode, VideoOff, PackagePlus, Building, User as UserIcon, Phone, Mail as MailIcon, Globe } from 'lucide-react';
+import { PlusCircle, Loader2, Camera, MapPin, ScanBarcode, VideoOff, PackagePlus, Building, User as UserIcon, Phone, Mail as MailIcon, Globe, Archive } from 'lucide-react';
 import type { StockItem, LocationCoords } from '@/types';
 import { scanBarcode } from '@/services/barcode-scanner';
 import { captureProductPhoto } from '@/services/camera';
@@ -50,6 +50,8 @@ const formSchema = z.object({
     .positive({ message: 'Overstock threshold must be positive.' })
     .optional(),
   location: z.string().max(100).optional().or(z.literal('')),
+  rack: z.string().max(50).optional().or(z.literal('')), // New field
+  shelf: z.string().max(50).optional().or(z.literal('')), // New field
   supplier: z.string().max(100).optional().or(z.literal('')), // Legacy supplier name
   category: z.string().max(50).optional().or(z.literal('')),
   photoUrl: z.string().url({ message: "Please enter a valid URL or capture a photo." }).optional().or(z.literal('')),
@@ -82,7 +84,7 @@ export function AddStockForm({ onSubmit, isLoading = false, formId }: AddStockFo
     resolver: zodResolver(formSchema),
     defaultValues: {
       barcode: '', itemName: '', quantity: 1, minimumStock: undefined, overstockThreshold: undefined,
-      location: '', supplier: '', category: '', photoUrl: '', locationCoords: undefined, costPrice: undefined,
+      location: '', rack: '', shelf: '', supplier: '', category: '', photoUrl: '', locationCoords: undefined, costPrice: undefined,
       supplierName: '', supplierContactPerson: '', supplierPhone: '', supplierEmail: '', supplierWebsite: '', supplierAddress: '',
       description: '',
     },
@@ -220,15 +222,21 @@ export function AddStockForm({ onSubmit, isLoading = false, formId }: AddStockFo
 
             <FormField control={form.control} name="location" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Storage Location</FormLabel>
+                  <FormLabel>General Storage Location / Area</FormLabel>
                    <div className="flex gap-2 items-end">
-                       <FormControl><Input placeholder="e.g., Shelf A3, Bin 5" {...field} className="input-uppercase" /></FormControl>
+                       <FormControl><Input placeholder="e.g., Warehouse A, Cold Storage" {...field} className="input-uppercase" /></FormControl>
                         <Button type="button" variant="outline" size="icon" onClick={handleGetLocation} disabled={isCapturingLocation || isLoading} aria-label="Get Current Location">{isCapturingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}</Button>
                     </div>
-                  <FormDescription>{capturedLocation ? `(Using GPS: ${capturedLocation.latitude.toFixed(4)}, ${capturedLocation.longitude.toFixed(4)})` : 'Where is this item stored?'}</FormDescription>
+                  <FormDescription>{capturedLocation ? `(Using GPS: ${capturedLocation.latitude.toFixed(4)}, ${capturedLocation.longitude.toFixed(4)})` : 'General area where the item is stored.'}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )} />
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={form.control} name="rack" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><Archive className="h-4 w-4 text-muted-foreground" />Rack Number/ID</FormLabel><FormControl><Input placeholder="e.g., R12, Section 3" {...field} className="input-uppercase" /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="shelf" render={({ field }) => (<FormItem><FormLabel className="flex items-center gap-1"><Archive className="h-4 w-4 text-muted-foreground" />Shelf/Bin Number</FormLabel><FormControl><Input placeholder="e.g., S05, B-101" {...field} className="input-uppercase" /></FormControl><FormMessage /></FormItem>)} />
+            </div>
+
 
             <div className="pt-4 border-t mt-4 col-span-full">
                 <h4 className="text-lg font-semibold text-primary mb-3">Supplier Details (Optional)</h4>
@@ -269,5 +277,3 @@ export function AddStockForm({ onSubmit, isLoading = false, formId }: AddStockFo
     </Form>
   );
 }
-
-    

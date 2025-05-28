@@ -84,6 +84,8 @@ function InventoryPageContent() {
           currentStock: Number(item.currentStock ?? 0),
           minimumStock: item.minimumStock !== undefined ? Number(item.minimumStock) : undefined,
           itemName: item.itemName || 'Unknown Item',
+          rack: item.rack || undefined,
+          shelf: item.shelf || undefined,
       }));
     },
     enabled: !!user,
@@ -164,6 +166,8 @@ function InventoryPageContent() {
         overstockThreshold: data.overstockThreshold === undefined || data.overstockThreshold === null ? undefined : Number(data.overstockThreshold),
         barcode: data.barcode || undefined,
         location: data.location || undefined,
+        rack: data.rack || undefined,
+        shelf: data.shelf || undefined,
         description: data.description || undefined,
         category: data.category || undefined,
         supplier: data.supplier || undefined,
