@@ -13,7 +13,7 @@ export interface BarcodeScanResult {
  * Simulates scanning a barcode.
  * In a real application, this would interface with camera hardware and barcode decoding libraries.
  * This placeholder version simulates a scenario where a real scanner is not available
- * and might return a predefined barcode or indicate that it's a placeholder action.
+ * and returns a predefined test barcode.
  *
  * @returns A promise that resolves to a BarcodeScanResult.
  */
@@ -21,13 +21,11 @@ export async function scanBarcode(): Promise<BarcodeScanResult> {
   return new Promise((resolve) => {
     // Simulate a delay as if a scanner is working
     setTimeout(() => {
-      // Simulate a scenario where the scanner is not available or it's a demo
-      // You can change this to return a test barcode if needed for development.
-      // For example: resolve({ barcode: "TEST12345", isPlaceholder: false });
-      console.log("Barcode scanner service: Placeholder invoked. Actual scanning not implemented.");
+      console.log("Barcode scanner service: Placeholder invoked. Returning a test barcode.");
+      // Simulate a successful scan with a test barcode
       resolve({
-        barcode: null, // Or a dummy barcode like "PLACEHOLDER_BARCODE"
-        isPlaceholder: true,
+        barcode: "TESTBARCODE123", // Predefined test barcode
+        isPlaceholder: true, // Indicate it's still a simulation
       });
     }, 500); // 0.5 second delay
   });

@@ -26,12 +26,9 @@
     import { AlertTriangle, Loader2, Trash2, Settings, Camera, XCircle, VideoOff, BarChart2, BrainCircuit, Bot, Settings2, ListFilter, PoundSterling, Package, TrendingUp, TrendingDown, Clock, ShoppingCart, Building, Phone, Mail as MailIcon, UserCircle as UserIconLucide, Globe, Users, FileText, Map as MapIcon, Barcode, MapPin, ExternalLink, PlusCircle, MinusCircle, PackagePlus, EyeIcon } from 'lucide-react';
     import { RequireAuth } from '@/components/auth/require-auth';
     import { useAuth } from '@/context/auth-context';
-    // AdminSettingsDialog and UserManagementDialog are now part of TopNavbar or managed globally if needed
-    // import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
-    // import { UserManagementDialog } from '@/components/user-management-dialog';
     import { searchItemByPhoto, type SearchItemByPhotoInput } from '@/ai/flows/search-item-by-photo-flow';
     import { DashboardKPIs, type KPIData } from '@/components/dashboard-kpis';
-    import { PageHeader } from '@/components/page-header'; // PageHeader might still be used for titles
+    import { PageHeader } from '@/components/page-header';
     import { ActionsPanel } from '@/components/actions-panel';
     import { Separator } from '@/components/ui/separator';
     import { Badge } from "@/components/ui/badge";
@@ -66,9 +63,7 @@
       const [itemToView, setItemToView] = useState<StockItem | null>(null);
       const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
       const [itemToDelete, setItemToDelete] = useState<StockItem | null>(null);
-      // Settings and User Management dialog states might be moved to TopNavbar or managed globally
-      // const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
-      // const [isUserManagementDialogOpen, setIsUserManagementDialogOpen] = useState(false);
+
       const [isPhotoSearchOpen, setIsPhotoSearchOpen] = useState(false);
       const [photoSearchLoading, setPhotoSearchLoading] = useState(false);
       const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
@@ -108,7 +103,7 @@
 
 
       const { data: stockItems = [], isLoading: isLoadingItems, error: fetchError, refetch: refetchItems } = useQuery<StockItem[]>({
-        queryKey: ['allStockItems', user?.uid, isAdmin, assignedLocations], // Changed query key from stockItems to allStockItems for clarity
+        queryKey: ['allStockItems', user?.uid, isAdmin, assignedLocations],
         queryFn: async () => {
            if (!user) return [];
            const itemsCol = collection(db, 'stockItems');
@@ -190,19 +185,19 @@
 
                     if (accessibleItemIds.length > 0) {
                         const itemIdsChunks = [];
-                        for (let i = 0; i < accessibleItemIds.length; i += 30) { 
+                        for (let i = 0; i < accessibleItemIds.length; i += 30) {
                             itemIdsChunks.push(accessibleItemIds.slice(i, i + 30));
                         }
-                        const movementQueries = itemIdsChunks.map(chunk => 
+                        const movementQueries = itemIdsChunks.map(chunk =>
                             query(logsCol, where("itemId", "in", chunk))
                         );
                         const userLogsQuery = query(logsCol, userInitiatedCondition);
-                        movementQueries.push(userLogsQuery); 
+                        movementQueries.push(userLogsQuery);
 
-                        const allSnapshots = await Promise.all(movementQueries.map(innerQ => getDocs(innerQ))); 
+                        const allSnapshots = await Promise.all(movementQueries.map(innerQ => getDocs(innerQ)));
                         const logsSet = new Map<string, StockMovementLog>();
                         allSnapshots.forEach(snapshot => {
-                            snapshot.docs.forEach(docSnap => { 
+                            snapshot.docs.forEach(docSnap => {
                                 if (!logsSet.has(docSnap.id)) {
                                     logsSet.set(docSnap.id, {
                                         id: docSnap.id,
@@ -216,15 +211,15 @@
                         combinedLogs.sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
                         return combinedLogs;
                     } else {
-                         q = query(logsCol, userInitiatedCondition); 
+                         q = query(logsCol, userInitiatedCondition);
                     }
                   } else {
-                     q = query(logsCol, userInitiatedCondition); 
+                     q = query(logsCol, userInitiatedCondition);
                   }
               }
              try {
                 const logSnapshot = await getDocs(q);
-                 const logsList = logSnapshot.docs.map(docSnap => ({ 
+                 const logsList = logSnapshot.docs.map(docSnap => ({
                      id: docSnap.id,
                      ...docSnap.data(),
                      timestamp: docSnap.data().timestamp as Timestamp
@@ -402,7 +397,7 @@
                           return acc;
                       }, {} as Partial<StockItem>);
 
-                     const newDocRef = await addDoc(itemsCol, finalNewItemData); 
+                     const newDocRef = await addDoc(itemsCol, finalNewItemData);
                      const newItem = { id: newDocRef.id, ...finalNewItemData } as StockItem;
                      await logStockMovementAndUpdateItem(newDocRef, newItem, quantity, newItem.currentStock, 'in');
                      return { ...newItem, quantityAdded: quantity };
@@ -597,25 +592,6 @@
             },
         });
 
-         const saveSettingsMutation = useMutation({ // This mutation is defined here but its dialog trigger is in TopNavbar
-            mutationFn: async (newSettings: AdminSettings) => {
-                if (!isAdmin || !db) throw new Error("Permission denied or DB not available.");
-                const settingsDocRef = doc(db, 'settings', 'admin');
-                await setDoc(settingsDocRef, newSettings, { merge: true });
-                return newSettings;
-            },
-            onSuccess: (savedSettings) => {
-                 queryClient.setQueryData(['adminSettings'], (old: AdminSettings | undefined) => ({...defaultAdminSettings, ...old, ...savedSettings}));
-                 queryClient.invalidateQueries({ queryKey: ['systemAlerts'] });
-                 refetchSettings();
-                toast({ title: "Settings Saved", description: "Admin settings have been updated." });
-                // setIsSettingsDialogOpen(false); // Dialog state is managed in TopNavbar
-            },
-            onError: (error: any) => {
-                toast({ variant: "destructive", title: "Error Saving Settings", description: error.message || "Could not save settings."});
-            },
-        });
-
 
         React.useEffect(() => {
             let stream: MediaStream | null = null;
@@ -716,7 +692,7 @@
                 const queryLower = searchQuery.trim().toLowerCase();
                 const categoryFilterMatch = !filterCategory || filterCategory === 'all' || (item.category && item.category.toLowerCase() === filterCategory.toLowerCase());
                 const locationFilterMatch = !filterLocation || filterLocation === 'all' || (item.location && item.location.toLowerCase() === filterLocation.toLowerCase());
-                const supplierFilterMatch = !filterSupplier || filterSupplier === 'all' || ((item.supplier && item.supplier.toLowerCase() === filterSupplier.toLowerCase()) || (item.supplierName && item.supplierName.toLowerCase() === filterSupplier.toLowerCase())); 
+                const supplierFilterMatch = !filterSupplier || filterSupplier === 'all' || ((item.supplier && item.supplier.toLowerCase() === filterSupplier.toLowerCase()) || (item.supplierName && item.supplierName.toLowerCase() === filterSupplier.toLowerCase()));
 
                 let statusFilterMatch = true;
                 if (filterStockStatus && filterStockStatus !== 'all') {
@@ -734,7 +710,7 @@
         }, [stockItems, searchQuery, filterCategory, filterLocation, filterSupplier, filterStockStatus, adminSettings]);
 
 
-       const isMutating = stockOutMutation.isPending || addStockMutation.isPending || editItemMutation.isPending || deleteItemMutation.isPending || saveSettingsMutation.isPending || photoSearchLoading;
+       const isMutating = stockOutMutation.isPending || addStockMutation.isPending || editItemMutation.isPending || deleteItemMutation.isPending || photoSearchLoading;
        const isLoading = authLoading || isLoadingItems || isLoadingSettings || isLoadingMovements;
 
 
@@ -815,7 +791,6 @@
         }, [stockItems, adminSettings, isLoading, toast, isAdmin, queryClient ]);
 
 
-        // const handleSaveSettings = (settings: AdminSettings) => saveSettingsMutation.mutate(settings); // Moved to TopNavbar context potentially
         const handleRetryFetch = () => { if (fetchError) refetchItems(); refetchMovements(); };
 
          const kpiData: KPIData | null = React.useMemo(() => {
@@ -841,35 +816,6 @@
          const uniqueSuppliers = React.useMemo(() => Array.from(new Set(stockItems.map(item => item.supplierName || item.supplier).filter(Boolean) as string[])).sort(), [stockItems]);
          const uniqueStockStatuses = ['all', 'Good', 'LowStock', 'OutOfStock', 'Overstock', 'Inactive'];
 
-
-          const locationChartData = React.useMemo(() => {
-              if (isLoading) return [];
-              const counts: { [key: string]: number } = {};
-              stockItems.forEach(item => {
-                   let locationLabel = item.location?.trim();
-                   if (!locationLabel && item.locationCoords) locationLabel = `GPS (${item.locationCoords.latitude.toFixed(2)}, ${item.locationCoords.longitude.toFixed(2)})`;
-                   locationLabel = locationLabel || 'Unknown Location';
-                   counts[locationLabel] = (counts[locationLabel] || 0) + item.currentStock;
-              });
-              return Object.entries(counts).map(([name, value]) => ({ name, value })).filter(d => d.value > 0);
-          }, [stockItems, isLoading]);
-
-          const movementTrendData = React.useMemo(() => {
-              if (isLoadingMovements) return [];
-              const weeklyMovements: { [week: string]: { in: number; out: number; restock: number } } = {};
-               const now = new Date(); const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-               stockMovements.filter(log => log.timestamp.toDate() >= oneWeekAgo).forEach(log => {
-                       const date = log.timestamp.toDate(); const weekStart = new Date(date);
-                       weekStart.setDate(date.getDate() - date.getDay());
-                       const weekKey = `${weekStart.getFullYear()}-${(weekStart.getMonth() + 1).toString().padStart(2, '0')}-${weekStart.getDate().toString().padStart(2, '0')}`;
-                       if (!weeklyMovements[weekKey]) weeklyMovements[weekKey] = { in: 0, out: 0, restock: 0 };
-                       if (log.type === 'in') weeklyMovements[weekKey].in += log.quantityChange;
-                       else if (log.type === 'out') weeklyMovements[weekKey].out += Math.abs(log.quantityChange);
-                       else if (log.type === 'restock') weeklyMovements[weekKey].restock += log.quantityChange;
-                   });
-               return Object.entries(weeklyMovements).map(([week, data]) => ({ name: week, StockIn: data.in, StockOut: data.out, Restock: data.restock }))
-                   .sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime());
-          }, [stockMovements, isLoadingMovements]);
 
             const topMovingItems = React.useMemo(() => {
                 if (isLoadingMovements || isLoadingItems) return [];
@@ -948,8 +894,6 @@
       if (!isAdmin && user) {
         return (
              <div className="container mx-auto p-4 md:p-6 lg:p-8">
-                 {/* PageHeader is rendered in RootLayout now or can be placed here if specific content is needed */}
-                 {/* <PageHeader user={user} isAdmin={false} isLoading={isLoading} onSettingsClick={() => {}} onManageUsersClick={() => {}} /> */}
                  <p className="text-sm text-muted-foreground mb-4 text-right">{lastUpdatedString}</p>
                  <Card className="shadow-lg mb-6">
                      <CardHeader>
@@ -1031,7 +975,6 @@
              user={user}
              isAdmin={isAdmin}
              isLoading={isLoading}
-             // onSettingsClick and onManageUsersClick are now handled by TopNavbar
              lastLogin={user?.metadata?.lastSignInTime ? formatDistanceToNow(new Date(user.metadata.lastSignInTime), {addSuffix: true}) : undefined}
            />
            <p className="text-sm text-muted-foreground mb-4 text-right">{lastUpdatedString}</p>
@@ -1110,11 +1053,17 @@
                     </Card>
                </div>
               <div className="lg:col-span-1 space-y-6 flex flex-col">
-                 <ActionsPanel onPhotoSearchClick={() => setIsPhotoSearchOpen(true)} isLoading={isMutating || hasCameraPermission === false || isLoading} frequentlyUsedItems={stockItems.filter(item => item.currentStock < (item.minimumStock ?? adminSettings.lowStockThreshold) && item.currentStock > 0).slice(0,5)} onQuickAction={(action, item) => {
-                        if (action === 'in') handleAddStockSubmit({ itemName: item.itemName, quantity: 1, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location, supplierName: item.supplierName, formId: 'addStockFormDialog' }); 
-                        else if (action === 'restock') handleAddStockSubmit({ itemName: item.itemName, quantity: 10, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location, supplierName: item.supplierName, formId: 'addStockFormDialog' }); 
+                 <ActionsPanel
+                    onPhotoSearchClick={() => setIsPhotoSearchOpen(true)}
+                    isLoading={isMutating || hasCameraPermission === false || isLoading}
+                    frequentlyUsedItems={stockItems.filter(item => item.currentStock < (item.minimumStock ?? adminSettings.lowStockThreshold) && item.currentStock > 0).slice(0,5)}
+                    onQuickAction={(action, item) => {
+                        if (action === 'in') handleAddStockSubmit({ itemName: item.itemName, quantity: 1, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location, supplierName: item.supplierName, formId: 'addStockFormDialog' });
+                        else if (action === 'restock') handleAddStockSubmit({ itemName: item.itemName, quantity: 10, barcode: item.barcode, category: item.category, supplier: item.supplier, location: item.location, supplierName: item.supplierName, formId: 'addStockFormDialog' });
                         else if (action === 'out') handleStockOutSubmit({ itemId: item.id, quantity: 1 });
-                    }} />
+                    }}
+                    onBarcodeScanned={(barcode) => setSearchQuery(barcode)} // Handle scanned barcode
+                  />
                    <ActivityFeed movements={stockMovements} isLoading={isLoadingMovements} />
                 <Card className="shadow-md"><CardHeader><CardTitle className="text-lg flex items-center gap-2"><Clock className="h-5 w-5 text-primary"/>Upcoming Deliveries</CardTitle><CardDescription>Track expected incoming stock.</CardDescription></CardHeader><CardContent><p className="text-sm text-muted-foreground">Feature coming soon.</p></CardContent></Card>
                </div>
@@ -1129,7 +1078,6 @@
                 <Separator className="my-6"/><p className="text-sm text-muted-foreground text-center">More reports and analytics coming soon.</p>
             </section>
 
-           {/* Dialogs for Add/Restock and Stock Out */}
             <Dialog open={isAddStockDialogOpen} onOpenChange={setIsAddStockDialogOpen}>
                 <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
                     <DialogHeader>
@@ -1138,7 +1086,7 @@
                     </DialogHeader>
                     <div className="flex-grow overflow-y-auto pr-2"> {}
                         <AddStockForm
-                            formId="addStockFormDialog" 
+                            formId="addStockFormDialog"
                             onSubmit={(data) => {
                                 handleAddStockSubmit(data);
                                 setIsAddStockDialogOpen(false);
@@ -1150,7 +1098,7 @@
                         <Button variant="outline" onClick={() => setIsAddStockDialogOpen(false)} disabled={addStockMutation.isPending}><XCircle className="mr-2 h-4 w-4"/>Cancel</Button>
                         <Button
                             type="submit"
-                            form="addStockFormDialog" 
+                            form="addStockFormDialog"
                             className="bg-primary hover:bg-primary/90"
                             disabled={addStockMutation.isPending}
                         >
@@ -1183,7 +1131,6 @@
            <ViewItemDialog isOpen={isViewDialogOpen} onClose={() => setIsViewDialogOpen(false)} item={itemToView} />
            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}><DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col"><DialogHeader><DialogTitle>Edit Item: {itemToEdit?.itemName}</DialogTitle><DialogDescription>Make changes to the item details below. Click save when done.</DialogDescription></DialogHeader><div className="flex-grow overflow-y-auto pr-2">{itemToEdit && (<EditItemForm item={itemToEdit} onSubmit={handleEditItemSubmit} isLoading={editItemMutation.isPending} onCancel={() => setIsEditDialogOpen(false)} />)}</div></DialogContent></Dialog>
            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete {itemToDelete?.itemName}. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setIsDeleteDialogOpen(false)} disabled={deleteItemMutation.isPending}>Cancel</AlertDialogCancel><AlertDialogAction onClick={confirmDeleteItem} disabled={deleteItemMutation.isPending} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">{deleteItemMutation.isPending ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</>) : (<><Trash2 className="mr-2 h-4 w-4" /> Delete Item</>)}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-               {/* AdminSettingsDialog and UserManagementDialog are now triggered from TopNavbar */}
                <Dialog open={isPhotoSearchOpen} onOpenChange={setIsPhotoSearchOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Search Item by Photo</DialogTitle><DialogDescription>Center the item in the camera view and capture to search.</DialogDescription></DialogHeader><div className="space-y-4 py-4"><div className="relative aspect-video w-full bg-muted rounded-md overflow-hidden"><video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline /><canvas ref={canvasRef} style={{ display: 'none' }} />{hasCameraPermission === false && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-destructive-foreground p-4"><VideoOff className="h-12 w-12 mb-2" /><p className="text-lg font-semibold">Camera Access Denied</p><p className="text-sm text-center">Please allow camera access in your browser settings.</p></div>)}{hasCameraPermission === null && !photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-muted-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Accessing Camera...</p></div>)}{photoSearchLoading && (<div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-primary-foreground"><Loader2 className="h-8 w-8 animate-spin mb-2" /><p>Analyzing Photo...</p></div>)}</div><Button type="button" onClick={handlePhotoSearchCapture} disabled={photoSearchLoading || hasCameraPermission !== true} className="w-full" size="lg">{photoSearchLoading ? (<Loader2 className="mr-2 h-5 w-5 animate-spin" />) : (<Camera className="mr-2 h-5 w-5" />)}{photoSearchLoading ? 'Searching...' : 'Capture & Search'}</Button></div><ShadDialogFooter><Button variant="outline" onClick={() => setIsPhotoSearchOpen(false)} disabled={photoSearchLoading}><XCircle className="mr-2 h-4 w-4"/> Cancel</Button></ShadDialogFooter></DialogContent></Dialog>
          </div>
        );
@@ -1192,4 +1139,3 @@
      export default function Home() {
          return (<RequireAuth><StockManagementPageContent /></RequireAuth>);
      }
-
