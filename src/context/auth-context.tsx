@@ -24,7 +24,7 @@ const AuthContext = React.createContext<AuthContextType>({
 });
 
 // Define the inactivity timeout duration (e.g., 30 minutes in milliseconds)
-const INACTIVITY_TIMEOUT_DURATION = 30 * 60 * 1000; // 30 minutes
+const INACTIVITY_TIMEOUT_DURATION = 1 * 60 * 1000; // 1 minute for testing
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<AppUser | null>(null);
@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const inactivityTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const handleInactivityLogout = React.useCallback(async () => {
-    if (auth) {
+    if (auth && auth.currentUser) { // Check if user is still logged in before attempting sign out
       try {
         await signOut(auth);
         toast({
@@ -60,10 +60,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (inactivityTimerRef.current) {
       clearTimeout(inactivityTimerRef.current);
     }
-    if (auth && user) { // Only set timer if user is logged in and auth is available
+    // Only set timer if user is logged in (checked by auth.currentUser) and auth is available
+    if (auth && auth.currentUser) { 
       inactivityTimerRef.current = setTimeout(handleInactivityLogout, INACTIVITY_TIMEOUT_DURATION);
     }
-  }, [user, auth, handleInactivityLogout]);
+  }, [auth, handleInactivityLogout]);
 
   React.useEffect(() => {
     if (!isFirebaseConfigValid) {
@@ -102,6 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
              setIsAdmin(false);
              setAssignedLocations([]);
              setLoading(false);
+             resetInactivityTimer(); // Start timer when user logs in
              return;
          }
 
@@ -151,6 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(appUser);
           setIsAdmin(appUser.role === 'admin');
           setAssignedLocations(appUser.assignedLocations || []);
+          resetInactivityTimer(); // Start or reset timer on auth state change to logged in
         } catch (error) {
           console.error("Error fetching or creating user profile in Firestore:", error);
            const errorUser: AppUser = {
@@ -171,7 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
         setIsAdmin(false);
         setAssignedLocations([]);
-        if (inactivityTimerRef.current) { // Clear timer on explicit logout
+        if (inactivityTimerRef.current) { // Clear timer on explicit logout or session end
           clearTimeout(inactivityTimerRef.current);
           inactivityTimerRef.current = null;
         }
@@ -181,18 +184,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, []); // Empty dependency array for onAuthStateChanged
+  }, [resetInactivityTimer]); // resetInactivityTimer is now a dependency of the main auth listener
 
   React.useEffect(() => {
     // Setup or clear activity listeners based on user state
-    if (user && auth) {
-      resetInactivityTimer(); // Start timer when user logs in
-      const activityEvents: (keyof WindowEventMap)[] = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
-      
+    if (auth && auth.currentUser) { // Check auth.currentUser to ensure user is logged in
       const activityListener = () => {
         resetInactivityTimer();
       };
-
+      const activityEvents: (keyof WindowEventMap)[] = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
       activityEvents.forEach(event => {
         window.addEventListener(event, activityListener);
       });
@@ -203,17 +203,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         if (inactivityTimerRef.current) {
           clearTimeout(inactivityTimerRef.current);
-          inactivityTimerRef.current = null;
         }
       };
     } else {
-      // No user, clear any existing timer
+      // No user, clear any existing timer and remove listeners
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
-        inactivityTimerRef.current = null;
       }
+      // Ensure listeners are removed if user logs out
+       const activityEvents: (keyof WindowEventMap)[] = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+       const activityListener = () => { resetInactivityTimer(); }; // Define to remove same listener
+       activityEvents.forEach(event => {
+           window.removeEventListener(event, activityListener);
+       });
     }
-  }, [user, auth, resetInactivityTimer]);
+  }, [auth, resetInactivityTimer]); // auth and resetInactivityTimer as dependencies
 
 
   return (
@@ -224,3 +228,5 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export const useAuth = () => React.useContext(AuthContext);
+
+    
