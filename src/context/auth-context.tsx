@@ -24,7 +24,7 @@ const AuthContext = React.createContext<AuthContextType>({
 });
 
 // Define the inactivity timeout duration (e.g., 30 minutes in milliseconds)
-const INACTIVITY_TIMEOUT_DURATION = 1 * 60 * 1000; // 1 minute for testing
+const INACTIVITY_TIMEOUT_DURATION = 30 * 60 * 1000; // 30 minutes
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = React.useState<AppUser | null>(null);
@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (auth && auth.currentUser) { 
       inactivityTimerRef.current = setTimeout(handleInactivityLogout, INACTIVITY_TIMEOUT_DURATION);
     }
-  }, [auth, handleInactivityLogout]);
+  }, [handleInactivityLogout]); // Removed auth from dependencies as it's stable, handleInactivityLogout depends on toast which is stable
 
   React.useEffect(() => {
     if (!isFirebaseConfigValid) {
@@ -96,11 +96,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     refreshToken: firebaseUser.refreshToken, tenantId: firebaseUser.tenantId, delete: firebaseUser.delete,
                     getIdToken: firebaseUser.getIdToken, getIdTokenResult: firebaseUser.getIdTokenResult,
                     reload: firebaseUser.reload, toJSON: firebaseUser.toJSON,
-                    role: 'user',
-                    assignedLocations: [],
+                    role: 'user', // Default role if DB not available
+                    assignedLocations: [], // Default assigned locations
                  };
              setUser(basicUser);
-             setIsAdmin(false);
+             setIsAdmin(false); // Cannot determine admin status without DB
              setAssignedLocations([]);
              setLoading(false);
              resetInactivityTimer(); // Start timer when user logs in
@@ -124,7 +124,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               role: userData.role || 'user',
               assignedLocations: userData.assignedLocations || [],
             };
-            await updateDoc(userDocRef, { lastLoginAt: serverTimestamp() });
+            // Only update lastLoginAt if it's different or significantly later to avoid frequent writes
+             if (!userData.lastLoginAt || (userData.lastLoginAt && (new Date().getTime() - userData.lastLoginAt.toDate().getTime() > 5 * 60 * 1000))) {
+                await updateDoc(userDocRef, { lastLoginAt: serverTimestamp() });
+             }
             console.log("User document found in Firestore:", appUser);
           } else {
             console.log(`User document for ${firebaseUser.uid} not found. Creating with default role 'user'.`);
@@ -145,8 +148,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 refreshToken: firebaseUser.refreshToken, tenantId: firebaseUser.tenantId, delete: firebaseUser.delete,
                 getIdToken: firebaseUser.getIdToken, getIdTokenResult: firebaseUser.getIdTokenResult,
                 reload: firebaseUser.reload, toJSON: firebaseUser.toJSON,
-                role: 'user',
-                assignedLocations: [],
+                role: 'user', // Newly created user defaults to 'user'
+                assignedLocations: [], // Default assigned locations
              };
             console.log("New user document created in Firestore:", appUser);
           }
@@ -156,18 +159,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           resetInactivityTimer(); // Start or reset timer on auth state change to logged in
         } catch (error) {
           console.error("Error fetching or creating user profile in Firestore:", error);
-           const errorUser: AppUser = {
+           const errorUser: AppUser = { // Fallback user object on error
                 ...firebaseUser, uid: firebaseUser.uid, email: firebaseUser.email,
                 displayName: firebaseUser.displayName, photoURL: firebaseUser.photoURL, emailVerified: firebaseUser.emailVerified,
                 isAnonymous: firebaseUser.isAnonymous, metadata: firebaseUser.metadata, providerData: firebaseUser.providerData,
                 refreshToken: firebaseUser.refreshToken, tenantId: firebaseUser.tenantId, delete: firebaseUser.delete,
                 getIdToken: firebaseUser.getIdToken, getIdTokenResult: firebaseUser.getIdTokenResult,
                 reload: firebaseUser.reload, toJSON: firebaseUser.toJSON,
-                role: 'user',
-                assignedLocations: [],
+                role: 'user', // Default role on error
+                assignedLocations: [], // Default assigned locations
              };
           setUser(errorUser);
-          setIsAdmin(false);
+          setIsAdmin(false); // Default to non-admin on error
           setAssignedLocations([]);
         }
       } else {
@@ -217,7 +220,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
            window.removeEventListener(event, activityListener);
        });
     }
-  }, [auth, resetInactivityTimer]); // auth and resetInactivityTimer as dependencies
+  }, [resetInactivityTimer]); // resetInactivityTimer depends on auth, which is stable, so this is okay.
 
 
   return (
@@ -228,5 +231,3 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export const useAuth = () => React.useContext(AuthContext);
-
-    
