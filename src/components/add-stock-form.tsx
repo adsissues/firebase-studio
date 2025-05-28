@@ -29,7 +29,7 @@ import { useAuth } from '@/context/auth-context';
 interface AddStockFormProps {
   onSubmit: (data: AddStockFormData) => void;
   isLoading?: boolean;
-  formId: string; // Added to link external submit button
+  formId: string;
 }
 
 const formSchema = z.object({
@@ -55,8 +55,6 @@ const formSchema = z.object({
   photoUrl: z.string().url({ message: "Please enter a valid URL or capture a photo." }).optional().or(z.literal('')),
   locationCoords: z.object({ latitude: z.number(), longitude: z.number() }).optional(),
   costPrice: z.coerce.number().nonnegative().optional(),
-
-  // Supplier Details
   supplierName: z.string().max(100).optional().or(z.literal('')),
   supplierContactPerson: z.string().max(100).optional().or(z.literal('')),
   supplierPhone: z.string().max(20).optional().or(z.literal('')),
@@ -120,9 +118,11 @@ export function AddStockForm({ onSubmit, isLoading = false, formId }: AddStockFo
       if (result.isPlaceholder) {
         toast({
             title: "Manual Barcode Entry",
-            description: "Scanner not available. Please type the barcode."
+            description: "Scanner not available. Please type the barcode. Using simulated: " + result.barcode
         });
-        // Optionally focus the barcode input field
+        if(result.barcode) {
+            form.setValue('barcode', result.barcode, { shouldValidate: true });
+        }
         form.setFocus('barcode');
       } else if (result.barcode) {
         form.setValue('barcode', result.barcode, { shouldValidate: true });
@@ -189,10 +189,8 @@ export function AddStockForm({ onSubmit, isLoading = false, formId }: AddStockFo
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleFormSubmit)} id={formId} className="space-y-4 rounded-lg p-1"> {/* Removed border, p-6, shadow */}
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} id={formId} className="space-y-4 rounded-lg p-1">
         <fieldset disabled={isLoading || !user} className="space-y-4">
-            {/* No H3 title here, it's in DialogHeader */}
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField control={form.control} name="itemName" render={({ field }) => (<FormItem><FormLabel>Item Name*</FormLabel><FormControl><Input placeholder="e.g., Large Red Box" {...field} className="input-uppercase" /></FormControl><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="barcode" render={({ field }) => (
@@ -244,7 +242,6 @@ export function AddStockForm({ onSubmit, isLoading = false, formId }: AddStockFo
                 </div>
             </div>
 
-
             <FormItem className="pt-4 border-t mt-4 col-span-full">
                <FormLabel>Product Photo (Optional)</FormLabel>
                <div className="flex flex-col gap-2">
@@ -268,8 +265,9 @@ export function AddStockForm({ onSubmit, isLoading = false, formId }: AddStockFo
                  </div>
              </FormItem>
         </fieldset>
-        {/* Submit button removed from here, will be in DialogFooter */}
       </form>
     </Form>
   );
 }
+
+    
