@@ -110,3 +110,34 @@ body {
 .input-uppercase {
   text-transform: uppercase;
 }
+
+/* Splash Screen Styles */
+.splash-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: hsl(var(--background));
+  z-index: 9999;
+  transition: opacity 0.5s ease-in-out;
+}
+
+.splash-content {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.app-content {
+  opacity: 0;
+  transition: opacity 0.5s ease-in-out;
+}
+
+.app-content.loaded {
+  opacity: 1;
+}
