@@ -7,7 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/firebase'; // Import db
-import { doc, setDoc, getDoc } from 'firebase/firestore'; // Import setDoc and getDoc
+import { doc, setDoc, getDoc, collection, getDocs } from 'firebase/firestore'; // Import collection, getDocs
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -37,7 +37,7 @@ import { ThemeToggle } from './theme-toggle';
 import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
 import { UserManagementDialog } from '@/components/user-management-dialog';
 import type { AdminSettings, StockItem, AlertType } from '@/types';
-import { Menu, LayoutDashboard, PackageSearch, ListOrdered, Bell, UserCircle, LogOut, Settings, Users, Loader2, Briefcase, EyeIcon, AlertTriangle, Info, BellRing as BellRingIcon } from 'lucide-react';
+import { Menu, LayoutDashboard, PackageSearch, ListOrdered, Bell, UserCircle, LogOut, Settings, Users, Loader2, Briefcase, EyeIcon, AlertTriangle, Info, BellRing as BellRingIcon, Activity } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
@@ -58,7 +58,7 @@ const defaultAdminSettings: AdminSettings = {
 
 
 export function TopNavbar() {
-  const { user, isAdmin, loading: authLoading, assignedLocations } = useAuth();
+  const { user, isAdmin, loading: authLoading } = useAuth(); // Removed assignedLocations as it's not directly used here
   const pathname = usePathname();
   const router = useRouter();
   const { toast } = useToast();
@@ -80,12 +80,13 @@ export function TopNavbar() {
     enabled: isAdmin && !!user,
   });
 
+  // Fetch stock items only if admin and notifications popover is open
   const { data: stockItems = [], isLoading: isLoadingStockItemsForNav } = useQuery<StockItem[]>({
-    queryKey: ['allStockItemsForNav', user?.uid, isAdmin, assignedLocations],
+    queryKey: ['allStockItemsForNav', user?.uid, isAdmin], // Simplified key for admin
     queryFn: async () => {
-       if (!user || !isAdmin) return []; // Only fetch for admin for now for notification popover
+       if (!user || !isAdmin) return [];
        const itemsCol = collection(db, 'stockItems');
-       const itemSnapshot = await getDocs(itemsCol); // Admin sees all items
+       const itemSnapshot = await getDocs(itemsCol);
        return itemSnapshot.docs.map(docSnap => ({
           id: docSnap.id,
           ...docSnap.data(),
@@ -105,7 +106,7 @@ export function TopNavbar() {
     },
     onSuccess: (savedSettings) => {
         queryClient.invalidateQueries({ queryKey: ['adminSettings'] });
-        queryClient.invalidateQueries({ queryKey: ['systemAlerts'] });
+        queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); // Invalidate system alerts on main page
         toast({ title: "Settings Saved", description: "Admin settings have been saved successfully."});
         setIsSettingsDialogOpen(false);
     },
@@ -127,41 +128,61 @@ export function TopNavbar() {
       await signOut(auth);
       queryClient.clear();
       toast({ title: "Signed Out", description: "You have been successfully signed out." });
-      router.push('/');
+      router.push('/'); // Redirect to login/home after sign out
     } catch (error) {
       toast({ variant: "destructive", title: "Sign Out Error", description: (error as Error).message });
     }
   };
 
   const generatedAlerts = React.useMemo(() => {
-    if (!isAdmin || isLoadingAdminSettings || isLoadingStockItemsForNav || !isNotificationsOpen) return [];
-    const alerts: AlertType[] = [];
+    console.log("[TopNavbar] Recalculating generatedAlerts...");
+    console.log("[TopNavbar] User email:", user?.email);
+    console.log("[TopNavbar] isAdmin:", isAdmin);
+    console.log("[TopNavbar] isLoadingAdminSettings:", isLoadingAdminSettings);
+    console.log("[TopNavbar] adminSettings:", JSON.stringify(adminSettings)); // Be cautious logging sensitive settings
+    console.log("[TopNavbar] isLoadingStockItemsForNav:", isLoadingStockItemsForNav);
+    console.log("[TopNavbar] stockItems count:", stockItems.length);
+    console.log("[TopNavbar] isNotificationsOpen:", isNotificationsOpen);
+
+    if (!isAdmin || isLoadingAdminSettings || isLoadingStockItemsForNav || !isNotificationsOpen) {
+        if (!isAdmin) console.log("[TopNavbar] Not admin, so no item-specific alerts generated for popover.");
+        if (!isNotificationsOpen) console.log("[TopNavbar] Notifications popover not open, not calculating alerts.");
+        if (isLoadingAdminSettings) console.log("[TopNavbar] Admin settings are loading.");
+        if (isLoadingStockItemsForNav) console.log("[TopNavbar] Stock items for nav are loading.");
+        return [];
+    }
+
+    const newAlerts: AlertType[] = [];
     stockItems.forEach(item => {
         const effectiveMinThreshold = item.minimumStock ?? adminSettings.lowStockThreshold;
         if (item.currentStock > 0 && item.currentStock <= effectiveMinThreshold) {
-            alerts.push({id: `low-${item.id}`, type: "low_stock", title: "Low Stock", message: `${item.itemName} is low (${item.currentStock}/${effectiveMinThreshold}).`, variant: "destructive", item, timestamp: new Date()});
+            newAlerts.push({id: `low-${item.id}`, type: "low_stock", title: "Low Stock", message: `${item.itemName} is low (${item.currentStock}/${effectiveMinThreshold}).`, variant: "destructive", item, timestamp: new Date()});
         }
-        const minStockForOverstock = item.minimumStock ?? adminSettings.lowStockThreshold;
+        
+        const minStockForOverstock = item.minimumStock ?? adminSettings.lowStockThreshold; // Base for overstock calc
         const overstockQtyThreshold = item.overstockThreshold ?? (minStockForOverstock * ( (adminSettings.overstockThresholdPercentage ?? 200) / 100));
-        if (item.currentStock > overstockQtyThreshold && overstockQtyThreshold > 0) {
-             alerts.push({id: `overstock-${item.id}`, type: "overstock", title: "Overstock", message: `${item.itemName} is overstocked (${item.currentStock} > ${overstockQtyThreshold.toFixed(0)}).`, variant: "warning", item, timestamp: new Date()});
+        if (item.currentStock > overstockQtyThreshold && overstockQtyThreshold > 0) { // Ensure overstockQtyThreshold > 0 to avoid alerts for items with 0 min stock
+             newAlerts.push({id: `overstock-${item.id}`, type: "overstock", title: "Overstock", message: `${item.itemName} is overstocked (${item.currentStock} > ${overstockQtyThreshold.toFixed(0)}).`, variant: "warning", item, timestamp: new Date()});
         }
+
         if (adminSettings.inactivityAlertDays && item.lastMovementDate) {
-            const lastMovement = item.lastMovementDate.toDate();
+            const lastMovement = item.lastMovementDate.toDate(); // Assuming lastMovementDate is a Firestore Timestamp
             const daysSinceMovement = (new Date().getTime() - lastMovement.getTime()) / (1000 * 3600 * 24);
             if (daysSinceMovement > adminSettings.inactivityAlertDays) {
-                 alerts.push({id: `inactive-${item.id}`, type: "inactivity", title: "Inactivity", message: `${item.itemName} has not moved in ${Math.floor(daysSinceMovement)} days.`, variant: "info", item, timestamp: new Date()});
+                 newAlerts.push({id: `inactive-${item.id}`, type: "inactivity", title: "Inactivity", message: `${item.itemName} has not moved in ${Math.floor(daysSinceMovement)} days.`, variant: "info", item, timestamp: new Date()});
             }
         }
     });
-    return alerts.sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 5); // Show latest 5
-  }, [isAdmin, stockItems, adminSettings, isLoadingAdminSettings, isLoadingStockItemsForNav, isNotificationsOpen]);
+    const sortedAlerts = newAlerts.sort((a,b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 5);
+    console.log("[TopNavbar] Calculated alerts count:", sortedAlerts.length);
+    return sortedAlerts;
+  }, [isAdmin, stockItems, adminSettings, isLoadingAdminSettings, isLoadingStockItemsForNav, isNotificationsOpen, user]);
 
   const getAlertIcon = (variant?: AlertType['variant']) => {
     switch (variant) {
       case 'destructive': return <AlertTriangle className="h-4 w-4" />;
-      case 'warning': return <AlertTriangle className="h-4 w-4 text-warning-foreground" />; // Adjusted for warning variant text color
-      case 'info': return <Info className="h-4 w-4 text-info-foreground" />; // Adjusted for info variant text color
+      case 'warning': return <AlertTriangle className="h-4 w-4 text-warning-foreground" />;
+      case 'info': return <Info className="h-4 w-4 text-info-foreground" />;
       default: return <BellRingIcon className="h-4 w-4" />;
     }
   };
@@ -295,14 +316,18 @@ export function TopNavbar() {
                 <PopoverContent className="w-80 p-0" align="end">
                     <div className="p-4 border-b">
                         <h4 className="font-medium leading-none text-sm">Notifications</h4>
+                         <p className="text-xs text-muted-foreground">
+                            {isAdmin ? "System-wide alerts." : "Your relevant alerts."}
+                        </p>
                     </div>
                     <ScrollArea className="h-72">
                         <div className="p-4 space-y-3">
-                        {isLoadingStockItemsForNav && <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground"/></div>}
-                        {!isLoadingStockItemsForNav && generatedAlerts.length === 0 && (
-                            <p className="text-sm text-muted-foreground text-center py-4">No new notifications.</p>
+                        {isLoadingStockItemsForNav && isAdmin && <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground"/></div>}
+                        {!isAdmin && <p className="text-sm text-muted-foreground text-center py-4">User-specific notifications coming soon.</p>}
+                        {isAdmin && !isLoadingStockItemsForNav && generatedAlerts.length === 0 && (
+                            <p className="text-sm text-muted-foreground text-center py-4">No new system alerts.</p>
                         )}
-                        {!isLoadingStockItemsForNav && generatedAlerts.map((alert) => (
+                        {isAdmin && !isLoadingStockItemsForNav && generatedAlerts.map((alert) => (
                             <ShadAlert key={alert.id} variant={alert.variant} className="relative text-xs p-3">
                                 {getAlertIcon(alert.variant)}
                                 <ShadAlertTitle className="font-semibold text-xs mb-0.5">{alert.title}</ShadAlertTitle>
@@ -316,10 +341,10 @@ export function TopNavbar() {
                         ))}
                         </div>
                     </ScrollArea>
-                     {generatedAlerts.length > 0 && (
+                     {isAdmin && generatedAlerts.length > 0 && (
                         <div className="p-2 border-t text-center">
                             <Button variant="link" size="sm" className="text-xs" onClick={() => { setIsNotificationsOpen(false); router.push('/#alerts-panel'); }}>
-                                View All Alerts
+                                View All System Alerts
                             </Button>
                         </div>
                     )}
@@ -387,19 +412,23 @@ export function TopNavbar() {
 
 // Using a forwardRef for button that can be a Link
 const SidebarMenuButton = React.forwardRef<
-  HTMLButtonElement,
+  HTMLElement, // Changed to HTMLElement
   React.ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean }
 >(({ className, asChild = false, children, ...props }, ref) => {
-  const Comp = asChild ? 'div' : 'button';
+  const Comp = asChild ? 'div' : 'button'; // If asChild, parent Link will render 'a', otherwise we render button.
+  // If asChild is true, we must ensure children is a single valid React element that can accept a ref.
+  // Here, children will be the <Link> component from next/link.
   if (asChild && React.isValidElement(children)) {
-    return React.cloneElement(children as React.ReactElement, {
-      ref,
-      className: cn(className, (children as React.ReactElement).props.className),
+    // Clone the child (Link component) and pass down the ref and props
+    return React.cloneElement(children, {
+      ref: ref as any, // Cast ref type if necessary for specific Link comp if it has stricter ref typing
+      className: cn(className, children.props.className),
       ...props,
     });
   }
+  // If not asChild, render a regular button
   return (
-    <Comp ref={ref} className={className} {...props}>
+    <Comp ref={ref as React.Ref<HTMLButtonElement>} className={className} {...props}>
       {children}
     </Comp>
   );
