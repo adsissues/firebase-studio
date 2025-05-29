@@ -825,28 +825,6 @@
          const uniqueStockStatuses = ['all', 'Good', 'LowStock', 'OutOfStock', 'Overstock', 'Inactive'];
 
 
-            const topMovingItems = React.useMemo(() => {
-                if (isLoadingMovements || isLoadingItems) return [];
-                const movementCounts: { [itemId: string]: { name: string, count: number, totalMoved: number } } = {};
-                stockMovements.forEach(log => {
-                    const item = stockItems.find(i => i.id === log.itemId);
-                    if (item) {
-                        if (!movementCounts[log.itemId]) {
-                            movementCounts[log.itemId] = { name: item.itemName, count: 0, totalMoved: 0 };
-                        }
-                        movementCounts[log.itemId].count++;
-                        movementCounts[log.itemId].totalMoved += Math.abs(log.quantityChange);
-                    } else {
-                        if (!movementCounts[log.itemId]) {
-                             movementCounts[log.itemId] = { name: log.itemName || "Unknown Item (Deleted?)", count: 0, totalMoved: 0 };
-                        }
-                         movementCounts[log.itemId].count++;
-                         movementCounts[log.itemId].totalMoved += Math.abs(log.quantityChange);
-                    }
-                });
-                return Object.values(movementCounts).sort((a, b) => b.totalMoved - a.totalMoved || b.count - a.count).slice(0, 10);
-            }, [stockMovements, stockItems, isLoadingMovements, isLoadingItems]);
-
             const itemsNotMoving = React.useMemo(() => {
                 if (isLoadingMovements || isLoadingItems) return [];
                 const daysThreshold = adminSettings.inactivityAlertDays || 30;
@@ -1078,7 +1056,7 @@
           </main>
             <section className="mt-12">
                 <h2 className="text-2xl font-semibold mb-4 text-primary">Reports</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6"> 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <Card><CardHeader><CardTitle className="text-lg flex items-center gap-2"><TrendingDown className="h-5 w-5 text-orange-500" />Items Not Moving</CardTitle><CardDescription>Items with no movement in last {adminSettings.inactivityAlertDays || 30} days.</CardDescription></CardHeader><CardContent>{isLoadingItems || isLoadingMovements ? <Skeleton className="h-20 w-full" /> : itemsNotMoving.length > 0 ? (<ul className="space-y-1 text-sm">{itemsNotMoving.map(item => (<li key={item.id} className="flex justify-between"><span>{item.itemName}</span><Badge variant="outline">Qty: {item.currentStock}</Badge></li>))}</ul>) : <p className="text-sm text-muted-foreground">All items have recent activity or are out of stock.</p>}</CardContent></Card>
                 </div>
                 <Separator className="my-6"/><p className="text-sm text-muted-foreground text-center">More reports and analytics coming soon.</p>
