@@ -7,9 +7,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase/firebase'; // Import db
-import { doc, setDoc } from 'firebase/firestore'; // Import setDoc
+import { doc, setDoc, getDoc } from 'firebase/firestore'; // Import setDoc and getDoc
 import { useToast } from '@/hooks/use-toast';
-import { useQueryClient, useMutation } from '@tanstack/react-query'; // Import useMutation
+import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'; // Import useQuery
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -30,7 +30,7 @@ import { ThemeToggle } from './theme-toggle';
 import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
 import { UserManagementDialog } from '@/components/user-management-dialog';
 import type { AdminSettings, StockItem } from '@/types';
-import { Menu, LayoutDashboard, PackageSearch, ListOrdered, Bell, UserCircle, LogOut, Settings, Users, Loader2, Briefcase } from 'lucide-react';
+import { Menu, LayoutDashboard, PackageSearch, ListOrdered, Bell, UserCircle, LogOut, Settings, Users, Loader2, Briefcase, EyeIcon } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
@@ -60,9 +60,28 @@ export function TopNavbar() {
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = React.useState(false);
   const [isUserManagementDialogOpen, setIsUserManagementDialogOpen] = React.useState(false);
 
-  // Attempt to get adminSettings from queryClient, provide default if not found or undefined
-  const { data: adminSettings = defaultAdminSettings } = queryClient.getQueryData<AdminSettings>(['adminSettings']) ?? { data: defaultAdminSettings };
-  const { data: stockItems = [] } = queryClient.getQueryData<StockItem[]>(['allStockItems', user?.uid, isAdmin, user?.assignedLocations]) ?? { data: [] };
+  const { data: adminSettings = defaultAdminSettings, isLoading: isLoadingAdminSettings } = useQuery<AdminSettings>({
+    queryKey: ['adminSettings'],
+    queryFn: async () => {
+        if (!db || !isAdmin) return defaultAdminSettings; // Check db and isAdmin
+        const settingsDocRef = doc(db, 'settings', 'admin');
+        const docSnap = await getDoc(settingsDocRef);
+        return docSnap.exists() ? { ...defaultAdminSettings, ...docSnap.data() } : defaultAdminSettings;
+    },
+    enabled: isAdmin && !!user, // Fetch only if admin and user is loaded
+  });
+
+  const { data: stockItems = [] } = useQuery<StockItem[]>({
+    queryKey: ['allStockItems', user?.uid, isAdmin, user?.assignedLocations],
+    queryFn: async () => { // Basic fetch, can be more specific if needed or rely on page.tsx's fetch
+        if (!db || !user) return [];
+        // This is a simplified fetch. For a complete list, it might be better to rely on the
+        // data fetched by the main page if this navbar doesn't strictly need all items.
+        // For now, we'll keep it minimal to avoid duplicating complex queries.
+        return []; // Or implement a targeted fetch if needed for UserManagementDialog
+    },
+    enabled: isAdmin && !!user && isUserManagementDialogOpen, // Only fetch if dialog is open and user is admin
+});
 
 
   const handleSignOut = async () => {
@@ -72,7 +91,7 @@ export function TopNavbar() {
     }
     try {
       await signOut(auth);
-      queryClient.clear(); // Clear all query cache on sign out
+      queryClient.clear(); 
       toast({ title: "Signed Out", description: "You have been successfully signed out." });
       router.push('/'); 
     } catch (error) {
@@ -83,8 +102,9 @@ export function TopNavbar() {
   const saveSettingsMutation = useMutation({
     mutationFn: async (settings: AdminSettings) => {
         if (!db) throw new Error("Firestore is not available.");
+        if (!isAdmin) throw new Error("Permission denied.");
         const settingsDocRef = doc(db, 'settings', 'admin');
-        await setDoc(settingsDocRef, settings, { merge: true }); // Use setDoc with merge to create or update
+        await setDoc(settingsDocRef, settings, { merge: true }); 
         return settings;
     },
     onSuccess: (savedSettings) => {
@@ -103,7 +123,7 @@ export function TopNavbar() {
   };
 
 
-  if (authLoading) {
+  if (authLoading || (isAdmin && isLoadingAdminSettings)) {
     return (
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-14 items-center justify-between">
@@ -153,12 +173,12 @@ export function TopNavbar() {
                         )}
                         onClick={() => setIsSheetOpen(false)}
                     >
-                        <Link href={item.href}>
-                             <div className="flex items-center gap-3 w-full">
-                                <item.icon className="h-4 w-4" />
-                                {item.label}
-                            </div>
-                        </Link>
+                         <Link href={item.href}>
+                           <div className="flex items-center gap-3 w-full">
+                              <item.icon className="h-4 w-4" />
+                              {item.label}
+                           </div>
+                         </Link>
                     </SidebarMenuButton>
                   ))}
               </nav>
@@ -278,20 +298,18 @@ export function TopNavbar() {
   );
 }
 
-// Removed local Skeleton component definition
-
 // Assuming SidebarMenuButton is either a standard button or Link compatible
 const SidebarMenuButton = React.forwardRef<
-  HTMLElement, // Changed from HTMLButtonElement
-  React.ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean } // Still accept button props for compatibility
+  HTMLElement, 
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean } 
 >(({ className, asChild = false, children, ...props }, ref) => {
-  const Comp = asChild ? 'div' : 'button'; // Render a div if asChild to allow Link to be the interactive element
+  const Comp = asChild ? 'div' : 'button'; 
   if (asChild && React.isValidElement(children)) {
     return React.cloneElement(children, {
       // @ts-ignore
-      ref, // Pass ref to the child (Link)
-      className: cn(className, children.props.className), // Merge classes
-      ...props, // Pass other props like onClick
+      ref, 
+      className: cn(className, children.props.className), 
+      ...props, 
     });
   }
   return (
@@ -302,4 +320,3 @@ const SidebarMenuButton = React.forwardRef<
   );
 });
 SidebarMenuButton.displayName = "SidebarMenuButton";
-
