@@ -6,9 +6,10 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase/firebase';
+import { auth, db } from '@/lib/firebase/firebase'; // Import db
+import { doc, setDoc } from 'firebase/firestore'; // Import setDoc
 import { useToast } from '@/hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useMutation } from '@tanstack/react-query'; // Import useMutation
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -30,8 +31,8 @@ import { AdminSettingsDialog } from '@/components/admin-settings-dialog';
 import { UserManagementDialog } from '@/components/user-management-dialog';
 import type { AdminSettings, StockItem } from '@/types';
 import { Menu, LayoutDashboard, PackageSearch, ListOrdered, Bell, UserCircle, LogOut, Settings, Users, Loader2, Briefcase } from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton'; // Import the global Skeleton component
-import { cn } from '@/lib/utils'; // Import cn if TopNavbar itself uses it, though not strictly needed for Skeleton anymore
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: ['admin', 'user'] },
@@ -59,8 +60,9 @@ export function TopNavbar() {
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = React.useState(false);
   const [isUserManagementDialogOpen, setIsUserManagementDialogOpen] = React.useState(false);
 
-  const { data: adminSettings = defaultAdminSettings } = useQueryClient().getQueryData<AdminSettings>(['adminSettings']) ?? { data: defaultAdminSettings };
-  const { data: stockItems = [] } = useQueryClient().getQueryData<StockItem[]>(['allStockItems', user?.uid, isAdmin, user?.assignedLocations]) ?? { data: [] };
+  // Attempt to get adminSettings from queryClient, provide default if not found or undefined
+  const { data: adminSettings = defaultAdminSettings } = queryClient.getQueryData<AdminSettings>(['adminSettings']) ?? { data: defaultAdminSettings };
+  const { data: stockItems = [] } = queryClient.getQueryData<StockItem[]>(['allStockItems', user?.uid, isAdmin, user?.assignedLocations]) ?? { data: [] };
 
 
   const handleSignOut = async () => {
@@ -70,30 +72,35 @@ export function TopNavbar() {
     }
     try {
       await signOut(auth);
-      queryClient.clear();
-      toast({ title: "Signed Out" });
+      queryClient.clear(); // Clear all query cache on sign out
+      toast({ title: "Signed Out", description: "You have been successfully signed out." });
       router.push('/'); 
     } catch (error) {
       toast({ variant: "destructive", title: "Sign Out Error", description: (error as Error).message });
     }
   };
 
-  const saveSettingsMutation = { 
-    isPending: false,
-    mutate: (settings: AdminSettings) => {
-        console.log("Saving admin settings (placeholder):", settings);
-        
-        const currentAdminSettings = queryClient.getQueryData<AdminSettings>(['adminSettings']) || defaultAdminSettings;
-        const updatedSettings = { ...currentAdminSettings, ...settings };
-        
-        queryClient.setQueryData(['adminSettings'], updatedSettings);
-        queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); // Invalidate alerts if settings change
-        
-        toast({ title: "Settings Saved", description: "Admin settings have been updated locally. Backend save needs implementation."});
+  const saveSettingsMutation = useMutation({
+    mutationFn: async (settings: AdminSettings) => {
+        if (!db) throw new Error("Firestore is not available.");
+        const settingsDocRef = doc(db, 'settings', 'admin');
+        await setDoc(settingsDocRef, settings, { merge: true }); // Use setDoc with merge to create or update
+        return settings;
+    },
+    onSuccess: (savedSettings) => {
+        queryClient.invalidateQueries({ queryKey: ['adminSettings'] });
+        queryClient.invalidateQueries({ queryKey: ['systemAlerts'] }); 
+        toast({ title: "Settings Saved", description: "Admin settings have been saved successfully."});
         setIsSettingsDialogOpen(false);
+    },
+    onError: (error: any) => {
+        toast({ variant: "destructive", title: "Save Error", description: `Could not save admin settings: ${error.message}`});
     }
+  });
+
+  const handleSaveSettings = (settings: AdminSettings) => {
+    saveSettingsMutation.mutate(settings);
   };
-  const handleSaveSettings = (settings: AdminSettings) => saveSettingsMutation.mutate(settings);
 
 
   if (authLoading) {
@@ -137,17 +144,17 @@ export function TopNavbar() {
                 {navItems
                   .filter(item => user && item.roles.includes(isAdmin ? 'admin' : 'user'))
                   .map(item => (
-                    <SidebarMenuButton // Assuming SidebarMenuButton is now Link compatible
+                    <SidebarMenuButton
                         key={item.label}
                         asChild
                         className={cn(
                         "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-accent",
                         (pathname === item.href || (item.href.startsWith("/#") && pathname === "/" && typeof window !== "undefined" && window.location.hash === item.href.substring(1))) && "bg-accent text-primary font-medium"
                         )}
-                        onClick={() => setIsSheetOpen(false)} // onClick on Button, not Link for sheet closing
+                        onClick={() => setIsSheetOpen(false)}
                     >
-                        <Link href={item.href} legacyBehavior={false}>
-                             <div className="flex items-center gap-3 w-full"> {/* Ensure icon and label are wrapped */}
+                        <Link href={item.href}>
+                             <div className="flex items-center gap-3 w-full">
                                 <item.icon className="h-4 w-4" />
                                 {item.label}
                             </div>
@@ -272,23 +279,27 @@ export function TopNavbar() {
 }
 
 // Removed local Skeleton component definition
-// function Skeleton({ className }: { className?: string }) {
-//   return <div className={cn("animate-pulse rounded-md bg-muted", className)} />;
-// }
 
 // Assuming SidebarMenuButton is either a standard button or Link compatible
-// This is a placeholder if SidebarMenuButton is a custom component that needs specific Link integration
 const SidebarMenuButton = React.forwardRef<
-  HTMLButtonElement,
-  React.ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean }
->(({ className, asChild, children, ...props }, ref) => {
-  if (asChild) {
-    return React.cloneElement(children as React.ReactElement, { ref, className, ...props });
+  HTMLElement, // Changed from HTMLButtonElement
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { asChild?: boolean } // Still accept button props for compatibility
+>(({ className, asChild = false, children, ...props }, ref) => {
+  const Comp = asChild ? 'div' : 'button'; // Render a div if asChild to allow Link to be the interactive element
+  if (asChild && React.isValidElement(children)) {
+    return React.cloneElement(children, {
+      // @ts-ignore
+      ref, // Pass ref to the child (Link)
+      className: cn(className, children.props.className), // Merge classes
+      ...props, // Pass other props like onClick
+    });
   }
   return (
-    <button ref={ref} className={className} {...props}>
+    // @ts-ignore
+    <Comp ref={ref} className={className} {...props}>
       {children}
-    </button>
+    </Comp>
   );
 });
 SidebarMenuButton.displayName = "SidebarMenuButton";
+
