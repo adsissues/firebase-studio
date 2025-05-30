@@ -32,34 +32,32 @@ interface EditItemFormProps {
   onCancel: () => void;
 }
 
+// Updated schema: removed z.coerce for optional number fields
 const formSchema = z.object({
   itemName: z.string().min(1, { message: 'Item name is required.' }).max(100),
-  currentStock: z.coerce
+  currentStock: z.coerce // Keep coerce for required number as it handles initial empty string to number for validation
     .number({ invalid_type_error: 'Current stock must be a number.' })
     .int({ message: 'Current stock must be a whole number.' })
     .nonnegative({ message: 'Current stock cannot be negative.' }),
-  minimumStock: z.coerce
-    .number({ invalid_type_error: 'Minimum stock must be a number.' })
+  minimumStock: z.number({invalid_type_error: "Must be a number or empty"})
     .int({ message: 'Minimum stock must be a whole number.' })
     .nonnegative({ message: 'Minimum stock cannot be negative.' })
     .optional(),
-  overstockThreshold: z.coerce 
-    .number({ invalid_type_error: 'Overstock threshold must be a number.' })
+  overstockThreshold: z.number({invalid_type_error: "Must be a number or empty"})
     .int({ message: 'Overstock threshold must be a whole number.' })
     .positive({ message: 'Overstock threshold must be positive.' })
     .optional(),
   barcode: z.string().max(50).optional().or(z.literal('')),
   location: z.string().max(100).optional().or(z.literal('')),
-  rack: z.string().max(50).optional().or(z.literal('')), // New field
-  shelf: z.string().max(50).optional().or(z.literal('')), // New field
+  rack: z.string().max(50).optional().or(z.literal('')),
+  shelf: z.string().max(50).optional().or(z.literal('')),
   description: z.string().max(500).optional().or(z.literal('')),
   category: z.string().max(50).optional().or(z.literal('')),
-  supplier: z.string().max(100).optional().or(z.literal('')), // Legacy field
+  supplier: z.string().max(100).optional().or(z.literal('')),
   photoUrl: z.string().url({ message: "Please enter a valid URL or capture a photo." }).optional().or(z.literal('')),
   locationCoords: z.object({ latitude: z.number(), longitude: z.number(), }).optional(),
-  costPrice: z.coerce.number().nonnegative().optional(),
+  costPrice: z.number({invalid_type_error: "Must be a number or empty"}).nonnegative({message: "Cost price cannot be negative"}).optional(),
 
-  // Supplier Details
   supplierName: z.string().max(100).optional().or(z.literal('')),
   supplierContactPerson: z.string().max(100).optional().or(z.literal('')),
   supplierPhone: z.string().max(20).optional().or(z.literal('')),
@@ -96,11 +94,10 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
       shelf: item.shelf || '',
       description: item.description || '',
       category: item.category || '',
-      supplier: item.supplier || '', // Legacy
+      supplier: item.supplier || '',
       photoUrl: item.photoUrl || '',
       locationCoords: item.locationCoords || undefined,
       costPrice: item.costPrice ?? undefined,
-      // Supplier fields
       supplierName: item.supplierName || '',
       supplierContactPerson: item.supplierContactPerson || '',
       supplierPhone: item.supplierPhone || '',
@@ -140,8 +137,11 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
       if (result.isPlaceholder) {
         toast({ 
             title: "Manual Barcode Entry", 
-            description: "Scanner not available. Please type the barcode." 
+            description: "Scanner not available. Please type the barcode. Using simulated: " + result.barcode 
         });
+         if(result.barcode) {
+            form.setValue('barcode', result.barcode, { shouldValidate: true });
+        }
         form.setFocus('barcode');
       } else if (result.barcode) {
         form.setValue('barcode', result.barcode, { shouldValidate: true });
@@ -217,15 +217,48 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
 
              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField control={form.control} name="currentStock" render={({ field }) => (<FormItem><FormLabel>Current Stock*</FormLabel><FormControl><Input type="number" min="0" step="1" placeholder="0" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? null : parseInt(e.target.value, 10))} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="minimumStock" render={({ field }) => (<FormItem><FormLabel>Min. Stock Level</FormLabel><FormControl><Input type="number" min="0" step="1" placeholder="Optional" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="overstockThreshold" render={({ field }) => (<FormItem><FormLabel>Overstock Threshold</FormLabel><FormControl><Input type="number" min="0" step="1" placeholder="Optional max" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseInt(e.target.value, 10))} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="minimumStock" render={({ field }) => (<FormItem><FormLabel>Min. Stock Level</FormLabel><FormControl><Input type="number" min="0" step="1" placeholder="Optional" {...field} 
+                value={field.value === undefined || field.value === null ? '' : String(field.value)}
+                onChange={e => {
+                    const valStr = e.target.value;
+                    if (valStr === "") {
+                        field.onChange(undefined);
+                    } else {
+                        const num = parseInt(valStr, 10);
+                        field.onChange(isNaN(num) ? undefined : num);
+                    }
+                }} 
+                /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="overstockThreshold" render={({ field }) => (<FormItem><FormLabel>Overstock Threshold</FormLabel><FormControl><Input type="number" min="0" step="1" placeholder="Optional max" {...field} 
+                value={field.value === undefined || field.value === null ? '' : String(field.value)}
+                onChange={e => {
+                    const valStr = e.target.value;
+                    if (valStr === "") {
+                        field.onChange(undefined);
+                    } else {
+                        const num = parseInt(valStr, 10);
+                        field.onChange(isNaN(num) ? undefined : num);
+                    }
+                }} 
+                /></FormControl><FormMessage /></FormItem>)} />
             </div>
 
             <FormField control={form.control} name="description" render={({ field }) => (<FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="Describe the item..." {...field} /></FormControl><FormMessage /></FormItem>)} />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  <FormField control={form.control} name="category" render={({ field }) => (<FormItem><FormLabel>Category</FormLabel><FormControl><Input placeholder="e.g., Electronics" {...field} className="input-uppercase" /></FormControl><FormMessage /></FormItem>)} />
-                 <FormField control={form.control} name="costPrice" render={({ field }) => (<FormItem><FormLabel>Cost Price (per unit)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === '' ? undefined : parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>)} />
+                 <FormField control={form.control} name="costPrice" render={({ field }) => (<FormItem><FormLabel>Cost Price (per unit)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} 
+                 value={field.value === undefined || field.value === null ? '' : String(field.value)}
+                 onChange={e => {
+                     const valStr = e.target.value;
+                     if (valStr === "") {
+                         field.onChange(undefined);
+                     } else {
+                         const num = parseFloat(valStr);
+                         field.onChange(isNaN(num) ? undefined : num);
+                     }
+                 }}
+                 /></FormControl><FormMessage /></FormItem>)} />
             </div>
 
             <FormField control={form.control} name="location" render={({ field }) => (
