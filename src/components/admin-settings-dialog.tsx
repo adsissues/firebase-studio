@@ -157,9 +157,9 @@
                       <Label htmlFor="email-notifications" className="flex items-center gap-2"><Mail className="h-4 w-4"/> Email Low Stock Alerts</Label>
                       <Switch id="email-notifications" checked={emailEnabled} onCheckedChange={setEmailEnabled} aria-label="Toggle email notifications" disabled={isLoading} />
                     </div>
-                    <div className="flex items-center justify-between space-x-2 opacity-50">
-                      <Label htmlFor="push-notifications" className="flex items-center gap-2"><Bell className="h-4 w-4"/> Push Notifications (Coming Soon)</Label>
-                      <Switch id="push-notifications" checked={pushEnabled} onCheckedChange={setPushEnabled} disabled={true} aria-label="Toggle push notifications (disabled)" />
+                    <div className="flex items-center justify-between space-x-2">
+                      <Label htmlFor="push-notifications" className="flex items-center gap-2"><Bell className="h-4 w-4"/> Push Notifications</Label>
+                      <Switch id="push-notifications" checked={pushEnabled} onCheckedChange={setPushEnabled} disabled={isLoading} aria-label="Toggle push notifications" />
                      </div>
                 </div>
             </div>
