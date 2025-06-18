@@ -222,7 +222,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                 onChange={e => {
                     const valStr = e.target.value;
                     if (valStr === "") {
-                        field.onChange(undefined);
+ field.onChange(undefined);
                     } else {
                         const num = parseInt(valStr, 10);
                         field.onChange(isNaN(num) ? undefined : num);
@@ -234,7 +234,7 @@ export function EditItemForm({ item, onSubmit, isLoading = false, onCancel }: Ed
                 onChange={e => {
                     const valStr = e.target.value;
                     if (valStr === "") {
-                        field.onChange(undefined);
+ field.onChange(undefined);
                     } else {
                         const num = parseInt(valStr, 10);
                         field.onChange(isNaN(num) ? undefined : num);
