@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from 'react';
@@ -51,7 +52,7 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
   });
 
   const handleAuthError = (authError: AuthError) => {
-    console.error(`Sign In Error:`, authError);
+    console.error(`Sign In Error Details:`, authError);
     let message = 'An unexpected error occurred. Please try again.';
     switch (authError.code) {
       case 'auth/invalid-api-key':
@@ -66,7 +67,7 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
         message = 'This user account has been disabled.';
         break;
       case 'auth/user-not-found':
-      case 'auth/invalid-credential': 
+      case 'auth/invalid-credential':
         message = 'Invalid credentials. Please check your email and password.';
          break;
       case 'auth/wrong-password':
@@ -88,6 +89,7 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
     const { email, password } = values;
 
     try {
+      console.log(`Attempting to sign in with email: ${email}`); // Added console log
       await signInWithEmailAndPassword(auth, email, password);
       console.log('User signed in successfully');
       onSuccess?.();
@@ -151,9 +153,9 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
                )}
                {isLoading ? 'Signing In...' : 'Sign In with Email'}
              </Button>
-            
+
              {/* Biometric buttons removed */}
-             
+
            </form>
          </Form>
       </CardContent>
