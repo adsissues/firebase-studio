@@ -20,7 +20,7 @@ const firebaseConfig: FirebaseOptions = {
   apiKey: "AIzaSyAr3ZqN5w1xOYYiSZEk12Cak74Ar_dR0Cs",
   authDomain: "shipshape-wbwno.firebaseapp.com",
   projectId: "shipshape-wbwno",
-  storageBucket: "shipshape-wbwno.firebasestorage.app",
+  storageBucket: "shipshape-wbwno.appspot.com",
   messagingSenderId: "151363841939",
   appId: "1:151363841939:web:e682165aa874215bed8266"
 };
@@ -35,20 +35,25 @@ const missingKeys: string[] = [];
 // Include common placeholder patterns
 const requiredKeys: (keyof FirebaseOptions)[] = ['apiKey', 'authDomain', 'projectId'];
 const placeholderPatterns = [/YOUR_/, /\[?YOUR/, /<YOUR/, /example/i, /__/]; // Common placeholder patterns
-const knownPlaceholderApiKey = "AIzaSyB7rFf67wX4iSZEk12Cak74Ar_dR0Cs"; // The specific known placeholder
+// Add all known placeholder keys here
+const knownPlaceholderApiKeys = [
+    "AIzaSyB7rFf67wX4iSZEk12Cak74Ar_dR0Cs", // An old known placeholder
+    "AIzaSyAr3ZqN5w1xOYYiSZEk12Cak74Ar_dR0Cs"  // The placeholder currently in the file
+];
+
 
 for (const key of requiredKeys) {
   const value = firebaseConfig[key];
   if (!value || typeof value !== 'string' || value.trim() === '') {
     missingKeys.push(`NEXT_PUBLIC_FIREBASE_${key.toUpperCase()}`);
     isFirebaseConfigValid = false;
-  } else if (key === 'apiKey' && value === knownPlaceholderApiKey) {
-       // Explicitly check for the known placeholder key
+  } else if (key === 'apiKey' && knownPlaceholderApiKeys.includes(value)) {
+       // Explicitly check for known placeholder keys
        if (!missingKeys.includes(`NEXT_PUBLIC_FIREBASE_API_KEY (Placeholder)`)) {
           console.error(`***********************************************************`);
           console.error(`! FIREBASE CONFIGURATION ERROR !`);
-          console.error(`NEXT_PUBLIC_FIREBASE_API_KEY is using the placeholder value "${value}".`);
-          console.error(`This is NOT a valid key. You MUST replace it with your actual Firebase API Key.`);
+          console.error(`The Firebase API Key is a placeholder value ("${value}") and WILL NOT WORK.`);
+          console.error(`You MUST replace it with your actual Firebase API Key from the Firebase Console.`);
           console.error(`Firebase services cannot be initialized.`);
           console.error(`***********************************************************`);
           missingKeys.push(`NEXT_PUBLIC_FIREBASE_API_KEY (Placeholder)`);
