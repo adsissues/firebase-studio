@@ -1,0 +1,65 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to check if a user is an admin
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper function to check if a user owns a specific item
+    function isOwner(itemOwnerId) {
+      return request.auth.uid == itemOwnerId;
+    }
+
+    // Helper function to check if user is assigned to an item's location
+    function isAssignedToLocation(itemLocation) {
+      // Ensure the user's assignedLocations list is not null and the item's location exists in it
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.assignedLocations.hasAny([itemLocation]);
+    }
+
+    // /users collection rules
+    match /users/{userId} {
+      // Admins can read/write any user document (for role management)
+      // Users can only read/write their own document
+      allow read, write: if isAdmin() || isOwner(userId);
+    }
+
+    // /stockItems collection rules
+    match /stockItems/{itemId} {
+      // Allow read access if:
+      // 1. User is an admin.
+      // 2. User owns the item.
+      // 3. User is assigned to the item's location.
+      allow read: if request.auth != null && (isAdmin() || isOwner(resource.data.userId) || isAssignedToLocation(resource.data.location));
+
+      // Allow create access if user is authenticated
+      allow create: if request.auth != null;
+
+      // Allow update/delete if:
+      // 1. User is an admin.
+      // 2. User owns the item.
+      // 3. User is assigned to the item's location.
+      allow update, delete: if request.auth != null && (isAdmin() || isOwner(resource.data.userId) || isAssignedToLocation(resource.data.location));
+    }
+
+    // /stockMovements collection rules
+    match /stockMovements/{movementId} {
+      // Allow read access if admin or the user who created the log entry
+      allow read: if request.auth != null && (isAdmin() || isOwner(resource.data.userId));
+      
+      // Allow any authenticated user to create movement logs
+      allow create: if request.auth != null;
+
+      // Generally, movement logs should not be updated or deleted by users
+      allow update, delete: if false; 
+    }
+
+    // /settings collection rules
+    match /settings/{docId} {
+      // Only admins can read or write global settings
+      allow read, write: if isAdmin();
+    }
+  }
+}

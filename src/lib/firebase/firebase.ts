@@ -17,7 +17,7 @@ import { getAuth, Auth } from 'firebase/auth';
 // Failure to do so will result in "auth/api-key-not-valid" errors and prevent Firebase services from working.
 // ========================================================================
 const firebaseConfig: FirebaseOptions = {
-  apiKey: "REPLACE_WITH_YOUR_REAL_API_KEY", // <-- PASTE YOUR REAL API KEY HERE
+  apiKey: "AIzaSyAr3ZqN5w1xOYYiSZEk12Cak74Ar_dR0Cs", // <-- PASTE YOUR REAL API KEY HERE
   authDomain: "shipshape-wbwno.firebaseapp.com",
   projectId: "shipshape-wbwno",
   storageBucket: "shipshape-wbwno.appspot.com",
