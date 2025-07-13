@@ -22,12 +22,6 @@ const baseConfig: NextConfig = {
       },
     ],
   },
-  experimental: {
-    allowedDevOrigins: [
-      'https://6000-idx-studio-1746452029838.cluster-6frnii43o5blcu522sivebzpii.cloudworkstations.dev',
-      'https://9000-idx-studio-1746452029838.cluster-6frnii43o5blcu522sivebzpii.cloudworkstations.dev',
-    ],
-  },
   // Add other existing configurations here if any
 };
 
