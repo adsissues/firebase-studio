@@ -166,22 +166,22 @@ export function StockDashboard({ items, onView, onEdit, onDelete, onReorder, isA
   return (
     <div className="rounded-lg border shadow-sm overflow-hidden">
       <Table>
-        <TableCaption key="caption" className="py-4">Overview of current stock levels. Critical items are highlighted.</TableCaption>
-        <TableHeader key="header">
+        <TableCaption>Overview of current stock levels. Critical items are highlighted.</TableCaption>
+        <TableHeader>
           <TableRow>
-            <TableHead key="name" className="w-[12%] min-w-[100px]">Item</TableHead>
-            <TableHead key="photo" className="hidden xl:table-cell text-center w-[40px]">Photo</TableHead>
-            <TableHead key="category" className="hidden md:table-cell w-[8%] min-w-[70px]">Category</TableHead>
-            <TableHead key="supplier" className="hidden md:table-cell w-[15%] min-w-[120px]">Supplier</TableHead>
-            <TableHead key="location" className="hidden sm:table-cell w-[12%] min-w-[90px]">Location</TableHead>
-            {isAdmin && <TableHead key="owner" className="hidden lg:table-cell w-[8%] min-w-[70px]">Owner</TableHead>}
-            <TableHead key="current" className="text-right w-[50px]">Qty</TableHead>
-            <TableHead key="min" className="text-right w-[40px]">Min</TableHead>
-            <TableHead key="status" className="text-center w-[100px]">Status</TableHead>
-            <TableHead key="actions" className="text-center w-[120px]">Actions</TableHead>
+            <TableHead className="w-[12%] min-w-[100px]">Item</TableHead>
+            <TableHead className="hidden xl:table-cell text-center w-[40px]">Photo</TableHead>
+            <TableHead className="hidden md:table-cell w-[8%] min-w-[70px]">Category</TableHead>
+            <TableHead className="hidden md:table-cell w-[15%] min-w-[120px]">Supplier</TableHead>
+            <TableHead className="hidden sm:table-cell w-[12%] min-w-[90px]">Location</TableHead>
+            {isAdmin && <TableHead className="hidden lg:table-cell w-[8%] min-w-[70px]">Owner</TableHead>}
+            <TableHead className="text-right w-[50px]">Qty</TableHead>
+            <TableHead className="text-right w-[40px]">Min</TableHead>
+            <TableHead className="text-center w-[100px]">Status</TableHead>
+            <TableHead className="text-center w-[120px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody key="body">
+        <TableBody>
           {sortedItems.length === 0 ? (
             <TableRow><TableCell colSpan={isAdmin ? 10 : 9} className="h-24 text-center text-muted-foreground">No stock items found.</TableCell></TableRow>
           ) : (
@@ -189,10 +189,10 @@ export function StockDashboard({ items, onView, onEdit, onDelete, onReorder, isA
                 const statusInfo = getItemStatusInfo(item, globalLowStockThreshold, adminSettings);
                return (
                  <TableRow key={item.id} className={cn(statusInfo.rowClass)}>
-                    <TableCell key="name" className="font-medium">{item.itemName}</TableCell>
-                    <TableCell key="photo" className="hidden xl:table-cell text-center">{renderPhoto(item)}</TableCell>
-                    <TableCell key="category" className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(Tag, item.category, 'Category')}</TableCell>
-                    <TableCell key="supplier" className="hidden md:table-cell text-muted-foreground text-xs">
+                    <TableCell className="font-medium">{item.itemName}</TableCell>
+                    <TableCell className="hidden xl:table-cell text-center">{renderPhoto(item)}</TableCell>
+                    <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{renderDetail(Tag, item.category, 'Category')}</TableCell>
+                    <TableCell className="hidden md:table-cell text-muted-foreground text-xs">
                           {item.supplierName ? (
                               <TooltipProvider delayDuration={100}>
                                   <Tooltip>
@@ -206,12 +206,12 @@ export function StockDashboard({ items, onView, onEdit, onDelete, onReorder, isA
                               </TooltipProvider>
                           ) : (item.supplier ? renderDetail(Building, item.supplier, 'Supplier (Legacy)') : <span className="text-muted-foreground">-</span>)}
                     </TableCell>
-                    <TableCell key="location" className="hidden sm:table-cell text-muted-foreground text-xs">{renderLocation(item)}</TableCell>
-                    {isAdmin && <TableCell key="owner" className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(UserCircle, item.userId ? item.userId.substring(0,8)+'...' : 'N/A', 'User ID', item.userId)}</TableCell>}
-                    <TableCell key="current" className="text-right font-mono">{item.currentStock}</TableCell>
-                    <TableCell key="min" className="text-right font-mono text-muted-foreground">{item.minimumStock ?? '-'}</TableCell>
-                    <TableCell key="status" className="text-center">{getStatusBadge(item)}</TableCell>
-                    <TableCell key="actions" className="text-center">
+                    <TableCell className="hidden sm:table-cell text-muted-foreground text-xs">{renderLocation(item)}</TableCell>
+                    {isAdmin && <TableCell className="hidden lg:table-cell text-muted-foreground text-xs">{renderDetail(UserCircle, item.userId ? item.userId.substring(0,8)+'...' : 'N/A', 'User ID', item.userId)}</TableCell>}
+                    <TableCell className="text-right font-mono">{item.currentStock}</TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">{item.minimumStock ?? '-'}</TableCell>
+                    <TableCell className="text-center">{getStatusBadge(item)}</TableCell>
+                    <TableCell className="text-center">
                         {canPerformAction(item) ? (
                           <div className="flex justify-center gap-0.5">
                             <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:text-blue-700" onClick={() => onView(item)}><Eye className="h-4 w-4" /><span className="sr-only">View</span></Button></TooltipTrigger><TooltipContent>View</TooltipContent></Tooltip></TooltipProvider>
