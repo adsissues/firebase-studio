@@ -138,7 +138,7 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
                    <FormItem>
                      <FormLabel>Password</FormLabel>
                      <FormControl>
-                       <Input type="password" placeholder="••••••••" {...field} />
+                       <Input type="text" placeholder="••••••••" {...field} />
                      </FormControl>
                      <FormMessage />
                    </FormItem>
