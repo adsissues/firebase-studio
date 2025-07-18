@@ -23,7 +23,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, Loader2, LogIn, Fingerprint, UserPlus } from 'lucide-react';
+import { AlertTriangle, Loader2, LogIn, Eye, EyeOff } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 
 // Schema remains the same for email/password sign-in
@@ -41,6 +41,7 @@ interface AuthFormProps {
 export function AuthForm({ onSuccess }: AuthFormProps) {
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [showPassword, setShowPassword] = React.useState(false);
   const { toast } = useToast();
 
   const form = useForm<AuthFormData>({
@@ -137,9 +138,19 @@ export function AuthForm({ onSuccess }: AuthFormProps) {
                  render={({ field }) => (
                    <FormItem>
                      <FormLabel>Password</FormLabel>
-                     <FormControl>
-                       <Input type="text" placeholder="••••••••" {...field} />
-                     </FormControl>
+                     <div className="relative">
+                        <FormControl>
+                           <Input type={showPassword ? 'text' : 'password'} placeholder="••••••••" {...field} />
+                        </FormControl>
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
                      <FormMessage />
                    </FormItem>
                  )}
