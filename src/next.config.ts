@@ -30,17 +30,14 @@ const baseConfig: NextConfig = {
   // Add other existing configurations here if any
 };
 
-let nextConfig: NextConfig = baseConfig;
+// Conditionally wrap the config with next-pwa only in production
+const withPWA = createNextPwa({
+  dest: 'public',
+  register: true,
+  skipWaiting: true,
+  disable: process.env.NODE_ENV === 'development', // Explicitly disable in development
+});
 
-// Only apply PWA configuration in production
-if (process.env.NODE_ENV === 'production') {
-  const withPWA = createNextPwa({
-    dest: 'public',
-    register: true, // Register the service worker
-    skipWaiting: true, // Immediately activate new service worker
-    // The disable flag is effectively handled by this conditional application.
-  });
-  nextConfig = withPWA(baseConfig);
-}
+const nextConfig = process.env.NODE_ENV === 'production' ? withPWA(baseConfig) : baseConfig;
 
 export default nextConfig;
