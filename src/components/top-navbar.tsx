@@ -299,7 +299,7 @@ export function TopNavbar() {
 
 
           <div className="flex flex-1 items-center justify-end space-x-2">
-            <ThemeToggle />
+            {user && <ThemeToggle />}
             {user && (
               <Popover open={isNotificationsOpen} onOpenChange={setIsNotificationsOpen}>
                   <PopoverTrigger asChild>
