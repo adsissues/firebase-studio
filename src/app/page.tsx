@@ -106,10 +106,18 @@
         queryFn: async () => {
            if (!user) return [];
            const itemsCol = collection(db, 'stockItems');
-           // Admins and simple users both fetch all items.
-           // Permissions are handled in the UI (e.g., enabling/disabling edit/delete buttons).
-           // Firestore rules will provide the final layer of security.
-           let q = query(itemsCol);
+           let q;
+           if (isAdmin) {
+               q = query(itemsCol);
+           } else {
+               const ownerCondition = where("userId", "==", user.uid);
+               if (assignedLocations && assignedLocations.length > 0) {
+                  const locationCondition = where("location", "in", assignedLocations);
+                  q = query(itemsCol, or(ownerCondition, locationCondition));
+               } else {
+                  q = query(itemsCol, ownerCondition);
+               }
+           }
 
            try {
                const itemSnapshot = await getDocs(q);
