@@ -1,7 +1,7 @@
 'use client'; // Required because we'll use useState and useEffect for the splash screen
 
 // import type { Metadata } from 'next'; // Removed as metadata object is removed
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { AppProviders } from '@/components/providers';
@@ -9,15 +9,7 @@ import { TopNavbar } from '@/components/top-navbar';
 import { SplashScreen } from '@/components/splash-screen'; // Import SplashScreen
 import { useState, useEffect } from 'react'; // Import useState and useEffect
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
+const inter = Inter({ subsets: ['latin'] });
 
 // Metadata export removed as it's not allowed in client components.
 // PWA-related tags are manually added in the <head> below.
@@ -53,7 +45,7 @@ export default function RootLayout({
         <meta name="description" content="Manage your stock efficiently with StockWatch" />
         However, it's better to let pages control these for SEO. */}
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={inter.className}>
         {/* Conditionally render SplashScreen or AppProviders based on appLoading state */}
         {appLoading ? (
           <SplashScreen isLoading={appLoading} />
