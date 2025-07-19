@@ -383,9 +383,7 @@ export function TopNavbar() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            ) : (
-              <Button onClick={() => router.push('/')} variant="outline" size="sm">Sign In</Button>
-            )}
+            ) : null}
           </div>
         </div>
       </header>
