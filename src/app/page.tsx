@@ -1,3 +1,4 @@
+
  'use client';
 
     import * as React from 'react';
@@ -106,26 +107,45 @@
         queryFn: async () => {
            if (!user) return [];
            const itemsCol = collection(db, 'stockItems');
-           let q;
-           if (isAdmin) {
-               q = query(itemsCol);
-           } else {
-               const ownerCondition = where("userId", "==", user.uid);
-               if (assignedLocations && assignedLocations.length > 0) {
-                  const locationCondition = where("location", "in", assignedLocations);
-                  q = query(itemsCol, or(ownerCondition, locationCondition));
-               } else {
-                  q = query(itemsCol, ownerCondition);
-               }
-           }
-
+           
            try {
-               const itemSnapshot = await getDocs(q);
-               const itemsList = itemSnapshot.docs.map(docSnap => ({
-                  id: docSnap.id,
-                  ...docSnap.data(),
-              } as StockItem));
-              setLastDataFetchTime(new Date());
+                let itemsList: StockItem[] = [];
+                if (isAdmin) {
+                    const q = query(itemsCol);
+                    const itemSnapshot = await getDocs(q);
+                    itemsList = itemSnapshot.docs.map(docSnap => ({
+                        id: docSnap.id,
+                        ...docSnap.data(),
+                    } as StockItem));
+                } else {
+                    // Fetch items owned by the user
+                    const ownerQuery = query(itemsCol, where("userId", "==", user.uid));
+                    const ownerSnapshot = await getDocs(ownerQuery);
+                    const ownedItems = ownerSnapshot.docs.map(docSnap => ({
+                        id: docSnap.id,
+                        ...docSnap.data(),
+                    } as StockItem));
+
+                    let locationItems: StockItem[] = [];
+                    // Fetch items in assigned locations, if any
+                    if (assignedLocations && assignedLocations.length > 0) {
+                        const locationQuery = query(itemsCol, where("location", "in", assignedLocations));
+                        const locationSnapshot = await getDocs(locationQuery);
+                        locationItems = locationSnapshot.docs.map(docSnap => ({
+                            id: docSnap.id,
+                            ...docSnap.data(),
+                        } as StockItem));
+                    }
+                    
+                    // Combine and remove duplicates
+                    const combinedItems = new Map<string, StockItem>();
+                    [...ownedItems, ...locationItems].forEach(item => {
+                        combinedItems.set(item.id, item);
+                    });
+                    itemsList = Array.from(combinedItems.values());
+                }
+
+               setLastDataFetchTime(new Date());
 
               return itemsList.map((item: StockItem) => ({
                   ...item,
