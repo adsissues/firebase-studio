@@ -3,7 +3,7 @@ import type {NextConfig} from 'next';
 // Correct import for ESM/TypeScript
 import createNextPwa from 'next-pwa';
 
-// Base Next.js configuration for all environments
+// Original Next.js configuration
 const baseConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
@@ -27,18 +27,20 @@ const baseConfig: NextConfig = {
       },
     ],
   },
-  // Add other configurations that apply to both dev and prod here
+  // Add other existing configurations here if any
 };
 
-// PWA configuration is wrapped and applied only for production
-const withPWA = createNextPwa({
-  dest: 'public',
-  register: true,
-  skipWaiting: true,
-  disable: process.env.NODE_ENV === 'development', // Explicitly disable for development
-});
+let nextConfig: NextConfig = baseConfig;
 
-// Export the final configuration
-const nextConfig: NextConfig = withPWA(baseConfig);
+// Only apply PWA configuration in production
+if (process.env.NODE_ENV === 'production') {
+  const withPWA = createNextPwa({
+    dest: 'public',
+    register: true, // Register the service worker
+    skipWaiting: true, // Immediately activate new service worker
+    // The disable flag is effectively handled by this conditional application.
+  });
+  nextConfig = withPWA(baseConfig);
+}
 
 export default nextConfig;
