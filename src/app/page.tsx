@@ -1,4 +1,3 @@
-
  'use client';
 
     import * as React from 'react';
@@ -845,7 +844,7 @@
 
                 if (item.supplierEmail) {
                     const subject = `Reorder Request for ${item.itemName}`;
-                    const body = `Hello ${item.supplierName || 'Supplier'},%0D%0A%0D%0APlease reorder ${item.itemName} (ID: ${item.id}).%0D%0A%0D%0ACurrent Stock: ${item.currentStock}%0D%0AMinimum Stock: ${item.minimumStock ?? adminSettings.lowStockThreshold}%0D%0A%0D%0AThank you.`;
+                    const body = `Hello ${item.supplierName || 'Supplier'},\n\nPlease reorder ${item.itemName} (ID: ${item.id}).\n\nCurrent Stock: ${item.currentStock}\nMinimum Stock: ${item.minimumStock ?? adminSettings.lowStockThreshold}\n\nThank you.`;
                     window.location.href = `mailto:${item.supplierEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
                     toast({ title: "Reorder Email Initiated", description: `Drafting email to ${item.supplierEmail} for ${item.itemName}.` });
                 } else if (item.supplierPhone) {
@@ -880,75 +879,59 @@
       if (!isAdmin && user) {
         return (
              <div className="container mx-auto p-4 md:p-6 lg:p-8">
+                <PageHeader
+                    user={user}
+                    isAdmin={isAdmin}
+                    isLoading={isLoading}
+                    lastLogin={user?.metadata?.lastSignInTime ? formatDistanceToNow(new Date(user.metadata.lastSignInTime), {addSuffix: true}) : undefined}
+                />
                  <p className="text-sm text-muted-foreground mb-4 text-right">{lastUpdatedString}</p>
-                 <Card className="shadow-lg mb-6">
-                     <CardHeader>
-                         <CardTitle>Search Stock</CardTitle>
-                         <CardDescription>Find items by name, barcode, or description. You can view items you own or items in your assigned locations: {assignedLocations.join(', ') || 'None'}</CardDescription>
-                     </CardHeader>
-                     <CardContent>
-                         <ItemSearch searchQuery={searchQuery} onSearchChange={handleSearchChange} placeholder="Search for items..." />
-                     </CardContent>
-                 </Card>
+                 
+                 <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 space-y-6">
+                        <Card className="shadow-md">
+                            <CardHeader>
+                                <CardTitle className="text-2xl">Inventory View</CardTitle>
+                                <CardDescription>Find items by name, barcode, or description. You can view items you own or items in your assigned locations: {assignedLocations.join(', ') || 'None'}</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="flex-grow">
+                                    <ItemSearch searchQuery={searchQuery} onSearchChange={handleSearchChange} placeholder="Search for items..." />
+                                </div>
+                                {isLoadingItems && <div className="space-y-2 pt-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div>}
+                                {fetchError && <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><ShadAlertTitle>Error</ShadAlertTitle><ShadAlertDescription>Could not load stock items. {(fetchError as Error).message.includes('index required') ? 'A database index is required for this query. Admins, please check Firestore console.' : (fetchError as Error).message}</ShadAlertDescription></Alert>}
 
-                 {isLoadingItems && <div className="space-y-2 pt-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-24 w-full" /><Skeleton className="h-24 w-full" /></div>}
-                 {fetchError && <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><ShadAlertTitle>Error</ShadAlertTitle><ShadAlertDescription>Could not load stock items. {(fetchError as Error).message.includes('index required') ? 'A database index is required for this query. Admins, please check Firestore console.' : (fetchError as Error).message}</ShadAlertDescription></Alert>}
-
-                 {!isLoadingItems && !fetchError && (
-                    <>
-                        {filteredItems.length === 0 && searchQuery === '' && stockItems.length === 0 && (
-                            <Card><CardContent className="pt-6"><p className="text-center text-muted-foreground">No stock items are currently assigned to you or available for your access. Please add stock or contact an administrator if you believe this is an error.</p></CardContent></Card>
-                        )}
-                        {filteredItems.length === 0 && searchQuery !== '' && (
-                            <Card><CardContent className="pt-6"><p className="text-center text-muted-foreground">No items match your search: "{searchQuery}".</p></CardContent></Card>
-                        )}
-                         {filteredItems.length === 0 && searchQuery === '' && stockItems.length > 0 && (
-                            <Card><CardContent className="pt-6"><p className="text-center text-muted-foreground">No items match your current filters. Try adjusting search or filter criteria.</p></CardContent></Card>
-                        )}
-                    </>
-                 )}
-
-                 {!isLoadingItems && !fetchError && filteredItems.length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filteredItems.map(item => (
-                            <Card key={item.id} className="shadow-md hover:shadow-lg transition-shadow">
-                                <CardHeader>
-                                    <CardTitle className="flex justify-between items-start">
-                                        {item.itemName}
-                                        {getItemStatusInfo(item, adminSettings.lowStockThreshold, adminSettings).label !== 'Good' && (
-                                          <Badge variant={getItemStatusInfo(item, adminSettings.lowStockThreshold, adminSettings).variant} className="ml-2 text-xs">
-                                            {getItemStatusInfo(item, adminSettings.lowStockThreshold, adminSettings).label}
-                                          </Badge>
-                                        )}
-                                    </CardTitle>
-                                     <CardDescription>{item.category}</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-2">
-                                    {item.photoUrl && <img data-ai-hint="product photo" src={item.photoUrl} alt={item.itemName} className="rounded-md max-h-40 w-full object-contain mb-2"/>}
-                                    <p className="text-lg font-semibold">Quantity: {item.currentStock}</p>
-                                    {item.location && <p className="text-sm text-muted-foreground flex items-center gap-1"><MapPin className="h-4 w-4" /> {item.location}</p>}
-                                    {item.locationCoords && <p className="text-xs text-muted-foreground">Lat: {item.locationCoords.latitude.toFixed(4)}, Lon: {item.locationCoords.longitude.toFixed(4)}</p>}
-                                    {item.barcode && <p className="text-sm text-muted-foreground flex items-center gap-1"><Barcode className="h-4 w-4" /> {item.barcode}</p>}
-                                    {item.description && <p className="text-sm text-muted-foreground truncate" title={item.description}>{item.description}</p>}
-                                </CardContent>
-                                <CardFooter>
-                                    <Button className="w-full" onClick={() => { setItemToView(item); setIsViewDialogOpen(true); }}><ExternalLink className="mr-2 h-4 w-4"/>View Details</Button>
-                                </CardFooter>
-                            </Card>
-                        ))}
+                                {!isLoadingItems && !fetchError && (
+                                    <StockDashboard
+                                        items={filteredItems}
+                                        onView={handleViewClick}
+                                        onEdit={handleEditClick}
+                                        onDelete={handleDeleteClick}
+                                        onReorder={handleReorderClick}
+                                        isAdmin={isAdmin}
+                                        globalLowStockThreshold={adminSettings.lowStockThreshold}
+                                        adminSettings={adminSettings}
+                                    />
+                                )}
+                            </CardContent>
+                        </Card>
+                        <Card className="shadow-md">
+                            <CardHeader>
+                                <CardTitle>Stock Actions</CardTitle>
+                                <CardDescription>Log items that you have taken from stock.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Button onClick={() => setIsStockOutDialogOpen(true)} className="w-full sm:w-auto">
+                                    <MinusCircle className="mr-2 h-4 w-4" /> Log Stock Out
+                                </Button>
+                            </CardContent>
+                        </Card>
                     </div>
-                 )}
 
-                <div className="mt-6">
-                    <Button onClick={() => setIsStockOutDialogOpen(true)} className="w-full sm:w-auto">
-                        <MinusCircle className="mr-2 h-4 w-4" /> Log Stock Out
-                    </Button>
-                </div>
-
-                <div className="mt-6">
-                    <ActivityFeed movements={stockMovements} isLoading={isLoadingMovements} />
-                </div>
-
+                    <div className="lg:col-span-1 space-y-6 flex flex-col">
+                        <ActivityFeed movements={stockMovements} isLoading={isLoadingMovements} />
+                    </div>
+                </main>
              </div>
         );
       }

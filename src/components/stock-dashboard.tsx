@@ -166,7 +166,9 @@ export function StockDashboard({ items, onView, onEdit, onDelete, onReorder, isA
   return (
     <div className="rounded-lg border shadow-sm overflow-hidden">
       <Table>
-        <TableCaption>Overview of current stock levels. Critical items are highlighted.</TableCaption>
+        <TableCaption>
+          {isAdmin ? "Overview of current stock levels. Critical items are highlighted." : "Inventory listing. Contact an admin to modify items you don't own."}
+        </TableCaption>
         <TableHeader>
           <TableRow>
             <TableHead className="w-[12%] min-w-[100px]">Item</TableHead>
@@ -187,6 +189,7 @@ export function StockDashboard({ items, onView, onEdit, onDelete, onReorder, isA
           ) : (
             sortedItems.map((item) => {
                 const statusInfo = getItemStatusInfo(item, globalLowStockThreshold, adminSettings);
+                const itemIsEditable = canPerformAction(item);
                return (
                  <TableRow key={item.id} className={cn(statusInfo.rowClass)}>
                     <TableCell className="font-medium">{item.itemName}</TableCell>
@@ -212,16 +215,14 @@ export function StockDashboard({ items, onView, onEdit, onDelete, onReorder, isA
                     <TableCell className="text-right font-mono text-muted-foreground">{item.minimumStock ?? '-'}</TableCell>
                     <TableCell className="text-center">{getStatusBadge(item)}</TableCell>
                     <TableCell className="text-center">
-                        {canPerformAction(item) ? (
-                          <div className="flex justify-center gap-0.5">
+                        <div className="flex justify-center gap-0.5">
                             <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:text-blue-700" onClick={() => onView(item)}><Eye className="h-4 w-4" /><span className="sr-only">View</span></Button></TooltipTrigger><TooltipContent>View</TooltipContent></Tooltip></TooltipProvider>
-                            <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(item)}><Pencil className="h-4 w-4" /><span className="sr-only">Edit</span></Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip></TooltipProvider>
-                            {(statusInfo.priority <= 3 && (item.supplierName || item.supplierEmail || item.supplierPhone)) && // Show reorder if low/out of stock AND supplier info exists
+                            {itemIsEditable && <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(item)}><Pencil className="h-4 w-4" /><span className="sr-only">Edit</span></Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip></TooltipProvider>}
+                            {itemIsEditable && (statusInfo.priority <= 3 && (item.supplierName || item.supplierEmail || item.supplierPhone)) &&
                                 <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-green-600 hover:text-green-700" onClick={() => onReorder(item)}><ShoppingCart className="h-4 w-4" /><span className="sr-only">Reorder</span></Button></TooltipTrigger><TooltipContent>Reorder/Contact Supplier</TooltipContent></Tooltip></TooltipProvider>
                             }
-                            <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(item)}><Trash2 className="h-4 w-4" /><span className="sr-only">Delete</span></Button></TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip></TooltipProvider>
-                          </div>
-                        ) : (<span className="text-muted-foreground text-xs">-</span>)}
+                            {itemIsEditable && <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(item)}><Trash2 className="h-4 w-4" /><span className="sr-only">Delete</span></Button></TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip></TooltipProvider>}
+                        </div>
                     </TableCell>
                   </TableRow>
                );
