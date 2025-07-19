@@ -63,23 +63,57 @@ function InventoryPageContent() {
     queryFn: async () => {
        if (!user) return [];
        const itemsCol = collection(db, 'stockItems');
-       let q;
-       if (isAdmin) {
-           q = query(itemsCol);
-       } else {
-           const ownerCondition = where("userId", "==", user.uid);
-           if (assignedLocations && assignedLocations.length > 0) {
-              const locationCondition = where("location", "in", assignedLocations);
-              q = query(itemsCol, or(ownerCondition, locationCondition));
-           } else {
-              q = query(itemsCol, ownerCondition);
-           }
-       }
-       const itemSnapshot = await getDocs(q);
-       return itemSnapshot.docs.map(docSnap => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-       } as StockItem)).map((item: StockItem) => ({
+       
+        let itemsList: StockItem[] = [];
+        if (isAdmin) {
+            const q = query(itemsCol);
+            const itemSnapshot = await getDocs(q);
+            itemsList = itemSnapshot.docs.map(docSnap => ({
+                id: docSnap.id,
+                ...docSnap.data(),
+            } as StockItem));
+        } else {
+            // Fetch items owned by the user
+            const ownerQuery = query(itemsCol, where("userId", "==", user.uid));
+            const ownerSnapshot = await getDocs(ownerQuery);
+            const ownedItems = ownerSnapshot.docs.map(docSnap => ({
+                id: docSnap.id,
+                ...docSnap.data(),
+            } as StockItem));
+
+            let locationItems: StockItem[] = [];
+            // Fetch items in assigned locations, if any
+            if (assignedLocations && assignedLocations.length > 0) {
+                // Firestore 'in' query supports up to 30 elements per query.
+                // We chunk the assignedLocations array to handle more than 30 locations safely.
+                const locationChunks: string[][] = [];
+                for (let i = 0; i < assignedLocations.length; i += 30) {
+                    locationChunks.push(assignedLocations.slice(i, i + 30));
+                }
+
+                const locationPromises = locationChunks.map(chunk => {
+                    const locationQuery = query(itemsCol, where("location", "in", chunk));
+                    return getDocs(locationQuery);
+                });
+
+                const locationSnapshots = await Promise.all(locationPromises);
+                locationItems = locationSnapshots.flatMap(snapshot => 
+                    snapshot.docs.map(docSnap => ({
+                        id: docSnap.id,
+                        ...docSnap.data(),
+                    } as StockItem))
+                );
+            }
+            
+            // Combine and remove duplicates using a Map
+            const combinedItems = new Map<string, StockItem>();
+            [...ownedItems, ...locationItems].forEach(item => {
+                combinedItems.set(item.id, item);
+            });
+            itemsList = Array.from(combinedItems.values());
+        }
+
+       return itemsList.map((item: StockItem) => ({
           ...item,
           currentStock: Number(item.currentStock ?? 0),
           minimumStock: item.minimumStock !== undefined ? Number(item.minimumStock) : undefined,
@@ -310,3 +344,5 @@ function InventoryPageContent() {
 export default function InventoryPage() {
   return (<RequireAuth><InventoryPageContent /></RequireAuth>);
 }
+
+    
