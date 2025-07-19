@@ -300,56 +300,58 @@ export function TopNavbar() {
 
           <div className="flex flex-1 items-center justify-end space-x-2">
             <ThemeToggle />
-             <Popover open={isNotificationsOpen} onOpenChange={setIsNotificationsOpen}>
-                <PopoverTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                        <Bell className="h-5 w-5" />
-                        {generatedAlerts.length > 0 && (
-                            <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                            </span>
-                        )}
-                        <span className="sr-only">Notifications</span>
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80 p-0" align="end">
-                    <div className="p-4 border-b">
-                        <h4 className="font-medium leading-none text-sm">Notifications</h4>
-                         <p className="text-xs text-muted-foreground">
-                            {isAdmin ? "System-wide alerts." : "Your relevant alerts."}
-                        </p>
-                    </div>
-                    <ScrollArea className="h-72">
-                        <div className="p-4 space-y-3">
-                        {isLoadingStockItemsForNav && isAdmin && <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground"/></div>}
-                        {!isAdmin && <p className="text-sm text-muted-foreground text-center py-4">User-specific notifications coming soon.</p>}
-                        {isAdmin && !isLoadingStockItemsForNav && generatedAlerts.length === 0 && (
-                            <p className="text-sm text-muted-foreground text-center py-4">No new system alerts.</p>
-                        )}
-                        {isAdmin && !isLoadingStockItemsForNav && generatedAlerts.map((alert) => (
-                            <ShadAlert key={alert.id} variant={alert.variant} className="relative text-xs p-3">
-                                {getAlertIcon(alert.variant)}
-                                <ShadAlertTitle className="font-semibold text-xs mb-0.5">{alert.title}</ShadAlertTitle>
-                                <ShadAlertDescription className="text-xs">
-                                {alert.message}
-                                <span className="block text-muted-foreground mt-0.5 text-[10px]">
-                                    {formatDistanceToNow(alert.timestamp, { addSuffix: true })}
-                                </span>
-                                </ShadAlertDescription>
-                            </ShadAlert>
-                        ))}
-                        </div>
-                    </ScrollArea>
-                     {isAdmin && generatedAlerts.length > 0 && (
-                        <div className="p-2 border-t text-center">
-                            <Button variant="link" size="sm" className="text-xs" onClick={() => { setIsNotificationsOpen(false); router.push('/#alerts-panel'); }}>
-                                View All System Alerts
-                            </Button>
-                        </div>
-                    )}
-                </PopoverContent>
-            </Popover>
+            {user && (
+              <Popover open={isNotificationsOpen} onOpenChange={setIsNotificationsOpen}>
+                  <PopoverTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                          <Bell className="h-5 w-5" />
+                          {generatedAlerts.length > 0 && (
+                              <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                              </span>
+                          )}
+                          <span className="sr-only">Notifications</span>
+                      </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80 p-0" align="end">
+                      <div className="p-4 border-b">
+                          <h4 className="font-medium leading-none text-sm">Notifications</h4>
+                          <p className="text-xs text-muted-foreground">
+                              {isAdmin ? "System-wide alerts." : "Your relevant alerts."}
+                          </p>
+                      </div>
+                      <ScrollArea className="h-72">
+                          <div className="p-4 space-y-3">
+                          {isLoadingStockItemsForNav && isAdmin && <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground"/></div>}
+                          {!isAdmin && <p className="text-sm text-muted-foreground text-center py-4">User-specific notifications coming soon.</p>}
+                          {isAdmin && !isLoadingStockItemsForNav && generatedAlerts.length === 0 && (
+                              <p className="text-sm text-muted-foreground text-center py-4">No new system alerts.</p>
+                          )}
+                          {isAdmin && !isLoadingStockItemsForNav && generatedAlerts.map((alert) => (
+                              <ShadAlert key={alert.id} variant={alert.variant} className="relative text-xs p-3">
+                                  {getAlertIcon(alert.variant)}
+                                  <ShadAlertTitle className="font-semibold text-xs mb-0.5">{alert.title}</ShadAlertTitle>
+                                  <ShadAlertDescription className="text-xs">
+                                  {alert.message}
+                                  <span className="block text-muted-foreground mt-0.5 text-[10px]">
+                                      {formatDistanceToNow(alert.timestamp, { addSuffix: true })}
+                                  </span>
+                                  </ShadAlertDescription>
+                              </ShadAlert>
+                          ))}
+                          </div>
+                      </ScrollArea>
+                      {isAdmin && generatedAlerts.length > 0 && (
+                          <div className="p-2 border-t text-center">
+                              <Button variant="link" size="sm" className="text-xs" onClick={() => { setIsNotificationsOpen(false); router.push('/#alerts-panel'); }}>
+                                  View All System Alerts
+                              </Button>
+                          </div>
+                      )}
+                  </PopoverContent>
+              </Popover>
+            )}
 
             {user ? (
               <DropdownMenu>
