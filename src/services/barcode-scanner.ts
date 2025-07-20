@@ -10,10 +10,25 @@ export interface BarcodeScanResult {
 }
 
 /**
+ * Generates a random alphanumeric string to simulate a unique barcode.
+ * @param length The length of the barcode string to generate.
+ * @returns A random barcode string.
+ */
+function generateRandomBarcode(length: number = 12): string {
+  const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+
+/**
  * Simulates scanning a barcode.
  * In a real application, this would interface with camera hardware and barcode decoding libraries.
  * This placeholder version simulates a scenario where a real scanner is not available
- * and returns a predefined test barcode.
+ * and returns a randomly generated test barcode.
  *
  * @returns A promise that resolves to a BarcodeScanResult.
  */
@@ -21,10 +36,11 @@ export async function scanBarcode(): Promise<BarcodeScanResult> {
   return new Promise((resolve) => {
     // Simulate a delay as if a scanner is working
     setTimeout(() => {
-      console.log("Barcode scanner service: Placeholder invoked. Returning a test barcode.");
-      // Simulate a successful scan with a test barcode
+      const randomBarcode = generateRandomBarcode();
+      console.log(`Barcode scanner service: Placeholder invoked. Returning a random test barcode: ${randomBarcode}`);
+      // Simulate a successful scan with a random test barcode
       resolve({
-        barcode: "TESTBARCODE123", // Predefined test barcode
+        barcode: randomBarcode,
         isPlaceholder: true, // Indicate it's still a simulation
       });
     }, 500); // 0.5 second delay
@@ -42,7 +58,7 @@ export async function scanBatchBarcodes(): Promise<string[]> {
     // Simulate returning a couple of placeholder barcodes after a delay
     return new Promise(resolve => {
         setTimeout(() => {
-            resolve(["BATCH_CODE_1", "BATCH_CODE_2"]);
+            resolve([generateRandomBarcode(), generateRandomBarcode()]);
         }, 1000);
     });
 }
