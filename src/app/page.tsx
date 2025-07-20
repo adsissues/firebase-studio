@@ -952,6 +952,7 @@
                         <ActivityFeed movements={stockMovements} isLoading={isLoadingMovements} />
                     </div>
                 </main>
+                <ViewItemDialog isOpen={isViewDialogOpen} onClose={() => setIsViewDialogOpen(false)} item={itemToView} />
              </div>
         );
       }
