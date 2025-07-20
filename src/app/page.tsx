@@ -953,6 +953,23 @@
                     </div>
                 </main>
                 <ViewItemDialog isOpen={isViewDialogOpen} onClose={() => setIsViewDialogOpen(false)} item={itemToView} />
+                <Dialog open={isStockOutDialogOpen} onOpenChange={setIsStockOutDialogOpen}>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Log Stock Out</DialogTitle>
+                            <DialogDescription>Select an item and quantity to log stock out.</DialogDescription>
+                        </DialogHeader>
+                        <StockOutForm
+                            items={stockItems.filter(item => item.currentStock > 0)}
+                            onSubmit={(data) => {
+                                handleStockOutSubmit(data);
+                                setIsStockOutDialogOpen(false);
+                            }}
+                            isLoading={stockOutMutation.isPending}
+                            currentUser={user}
+                        />
+                    </DialogContent>
+                </Dialog>
              </div>
         );
       }
